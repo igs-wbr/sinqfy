@@ -1,6 +1,6 @@
 # Rastro: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0, 1 e 2 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 3 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -17,7 +17,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 3 KB) é minificado à mão e servido aos sites pelo Worker.
-- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0015`), fluxo com skills.
+- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0016`), fluxo com skills.
 
 ## Regras
 - Toda consulta é `await db.…`; consultas independentes vão em `Promise.all`/`awaitAll`.
@@ -27,7 +27,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - Nada de estado em memória que precise valer entre instâncias serverless. Use o banco; o cache de `sites` é a exceção, com validade de 10 s.
 - Trabalho assíncrono de um webhook (ex.: Conversions API) é **aguardado** antes de responder.
 - Escape por padrão: monte HTML com o template `html`; `raw()` só para HTML gerado pelo próprio código.
-- Nunca grave IP, e-mail ou telefone. PII do webhook só segue em hash para a Conversions API. Exceção: IP e user agent no payload da fila `deliveries` enquanto o envio está pendente ([ADR 0014](docs/adr/0014-fila-de-envio-server-side.md)). (Muda na etapa 5, ver [ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md).)
+- Nunca grave IP, e-mail ou telefone. PII do webhook só segue em hash para a Conversions API. Exceções: IP e user agent no payload da fila `deliveries` enquanto o envio está pendente ([ADR 0014](docs/adr/0014-fila-de-envio-server-side.md)); user agent, domínio e client_id do GA4 no evento, com consentimento, para casar a venda com o clique ([ADR 0015](docs/adr/0015-venda-casada-pelo-clique.md)). (Muda na etapa 5, ver [ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md).)
 - Chaves vindas da query string que indexam objetos passam por `Object.hasOwn`. Nomes de coluna em SQL vêm de whitelists (`FILTERS`, `SALE_FILTERS`, `LEVELS`, `ATTR_DIMS`).
 - Ao desestruturar um import dinâmico, `sites` perde o live binding. Use o namespace (`DB.sites`).
 - Anúncios: só Meta ([ADR 0007](docs/adr/0007-anuncios-so-meta.md)), somente leitura ([ADR 0004](docs/adr/0004-meta-somente-leitura-e-csv.md)).

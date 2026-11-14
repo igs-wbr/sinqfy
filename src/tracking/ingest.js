@@ -54,8 +54,8 @@ export function allowedHost(site, host) {
   const list = String(site.domains || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
   return !list.length || list.some(d => host === d || host.endsWith('.' + d));
 }
-const INSERT = `INSERT INTO events(site,date,ts,visitor,session,name,path,referrer,channel,${UTM},screen,browser,os,country,props,revenue,rid,event_id,fbc,fbp,${CLICKS})
-  VALUES (${Array(28).fill('?')})`;
+const INSERT = `INSERT INTO events(site,date,ts,visitor,session,name,path,referrer,channel,${UTM},screen,browser,os,country,props,revenue,rid,event_id,fbc,fbp,${CLICKS},ua,host,ga_cid)
+  VALUES (${Array(31).fill('?')})`;
 const CLICK_RE = /^[\w.-]{1,255}$/;
 export const fbcOf = (fbclid, now) => CLICK_RE.test(fbclid || '') ? `fb.1.${now}.${fbclid}` : '';
 
@@ -102,14 +102,15 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   const eventId = typeof e.i === 'string' && /^[\w-]{8,64}$/.test(e.i) ? e.i : randomUUID();
   // Sem consentimento (snippet com data-consent="required" e c:0): só a estatística, sem IDs de anúncio e sem envio a terceiros.
   const consent = e.c !== 0;
+  const clientId = typeof e.g === 'string' && /^\d{1,12}\.\d{1,12}$/.test(e.g) ? e.g : null; // cookie _ga, lido pelo snippet
   const ev = { name, ts: now, rid: consent && edge?.rid || null, visitor, event_id: eventId,
     fbc: consent && (edge?.fbc || fbcOf(q.get('fbclid'), now)) || null, fbp: consent && edge?.fbp || null,
     revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null };
   await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
-    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null)]);
+    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null),
+    consent ? ua.slice(0, 300) : null, url.host.slice(0, 253), consent ? clientId : null]);
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
-  const clientId = typeof e.g === 'string' && /^\d{1,12}\.\d{1,12}$/.test(e.g) ? e.g : null; // cookie _ga, lido pelo snippet
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
   if (consent && name !== 'Purchase') await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
   return 202;

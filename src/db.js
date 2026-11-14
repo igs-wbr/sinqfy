@@ -113,9 +113,16 @@ async function migrate() {
       next_at BIGINT NOT NULL, created BIGINT NOT NULL, sent_at BIGINT, payload TEXT, response TEXT);
     CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries(next_at) WHERE status IN ('pending','sending');
     CREATE INDEX IF NOT EXISTS deliveries_event ON deliveries(site, event_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS deliveries_once ON deliveries(site, dest, event_id);
     CREATE INDEX IF NOT EXISTS events_site_visitor_ts ON events(site, visitor, ts);
     -- Domínios aceitos no beacon (separados por vírgula; vazio aceita qualquer um) e o token do Hotmart (etapa 3).
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS domains TEXT;
+    -- Etapa 3: dados do clique para casar a venda (só com consentimento), regra de casamento da venda,
+    -- segredos de assinatura dos webhooks e o mapa de campos do webhook personalizado.
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS ua TEXT, ADD COLUMN IF NOT EXISTS host TEXT, ADD COLUMN IF NOT EXISTS ga_cid TEXT;
+    CREATE INDEX IF NOT EXISTS events_site_rid_ts ON events(site, rid, ts) WHERE rid IS NOT NULL;
+    ALTER TABLE sales ADD COLUMN IF NOT EXISTS rid TEXT, ADD COLUMN IF NOT EXISTS match_rule TEXT NOT NULL DEFAULT 'none';
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS hook_secrets TEXT, ADD COLUMN IF NOT EXISTS custom_map TEXT;
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS ga4_id TEXT, ADD COLUMN IF NOT EXISTS ga4_secret TEXT, ADD COLUMN IF NOT EXISTS meta_test_code TEXT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);

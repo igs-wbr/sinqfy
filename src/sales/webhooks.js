@@ -1,11 +1,13 @@
 // Recebe webhooks de plataformas de venda, normaliza para um formato único e grava em `sales`.
 // Dados pessoais do comprador nunca são gravados; e-mail/telefone só seguem (em hash) para a Conversions API.
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
-import { enqueue, metaPurchase, metaReady } from '../dispatch.js';
+import { enqueue, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
 
-export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', generic: 'Genérico' };
+export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
+/** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
+export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)' };
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
 export const METHODS = { pix: 'Pix', card: 'Cartão', boleto: 'Boleto', other: 'Outros' };
 
@@ -31,6 +33,10 @@ export const method = m => {
   return /pix/.test(m) ? 'pix' : /card|cart|credit|cr[eé]dit|debit|d[eé]bito/.test(m) ? 'card' : /boleto|billet|bank_?slip|bankslip/.test(m) ? 'boleto' : 'other';
 };
 const utm = o => ({ source: str(o.source), medium: str(o.medium), campaign: str(o.campaign), content: str(o.content), term: str(o.term) });
+/** Id do visitante gravado pelo Worker (_rid, 16 bytes em base64url). O snippet o põe no link de checkout. */
+export const RID_RE = /^[\w-]{22}$/;
+const ridOf = v => RID_RE.test(String(v || '')) ? String(v) : null;
+const qs = u => { try { return new URL(u, 'https://x.invalid').searchParams; } catch { return new URLSearchParams(); } };
 
 /**
  * Parsers: payload da plataforma → venda normalizada, ou null para eventos que não são vendas.
@@ -51,7 +57,7 @@ export const PARSERS = {
     return {
       order_id: str(p.transaction), status, method: method(p.payment?.type), gross, net: producer ? num(producer.value) : gross,
       currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date),
-      utm: utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone,
+      utm: utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, rid: ridOf(o.xcod),
     };
   },
   // Kiwify: valores em centavos; UTMs completas em TrackingParameters.
@@ -63,8 +69,8 @@ export const PARSERS = {
     return {
       order_id: str(b.order_id), status, method: method(b.payment_method), gross, net: c.my_commission != null ? num(c.my_commission) / 100 : gross,
       currency: str(c.currency || 'BRL', 3), product: str(b.Product?.product_name), ts: time(b.created_at),
-      utm: utm({ source: t.utm_source || t.src, medium: t.utm_medium, campaign: t.utm_campaign || t.sck, content: t.utm_content, term: t.utm_term }),
-      email: b.Customer?.email, phone: b.Customer?.mobile,
+      utm: utm({ source: t.utm_source || t.src, medium: t.utm_medium, campaign: t.utm_campaign || (ridOf(t.sck) ? '' : t.sck), content: t.utm_content, term: t.utm_term }),
+      email: b.Customer?.email, phone: b.Customer?.mobile, rid: ridOf(t.rid) || ridOf(t.sck),
     };
   },
   // Eduzz: aceita o webhook novo (JSON com `data`) e o legado (form com trans_*). Valide com um pedido de teste.
@@ -96,10 +102,120 @@ export const PARSERS = {
       order_id: str(b.order_id), status, method: method(b.method), gross, net: b.net != null ? num(b.net) : gross,
       currency: str(b.currency || 'BRL', 3), product: str(b.product), ts: time(b.created_at),
       utm: utm({ source: b.utm_source, medium: b.utm_medium, campaign: b.utm_campaign, content: b.utm_content, term: b.utm_term }),
-      email: b.email, phone: b.phone,
+      email: b.email, phone: b.phone, rid: ridOf(b.rid),
+    };
+  },
+  // Shopify (webhooks orders/create, orders/paid, orders/updated). UTMs, fbclid e rid vêm do landing_site; o user agent, de client_details.
+  shopify(b) {
+    const fs = String(b.financial_status || '').toLowerCase();
+    const status = { paid: 'paid', partially_paid: 'pending', pending: 'pending', authorized: 'pending', refunded: 'refunded', partially_refunded: 'paid', voided: 'refused' }[fs];
+    if (!status || b.id == null) return null;
+    const q = qs(b.landing_site);
+    const gross = num(b.total_price);
+    return {
+      order_id: str(b.id), status, method: method(b.payment_gateway_names?.[0] || b.gateway), gross, net: gross, currency: str(b.currency || 'BRL', 3),
+      product: str(b.line_items?.[0]?.title), ts: time(b.created_at),
+      utm: utm({ source: q.get('utm_source'), medium: q.get('utm_medium'), campaign: q.get('utm_campaign'), content: q.get('utm_content'), term: q.get('utm_term') }),
+      email: b.email || b.contact_email, phone: b.phone || b.billing_address?.phone || b.customer?.phone, rid: ridOf(q.get('rid')),
+      fbclid: q.get('fbclid'), ua: b.client_details?.user_agent, url: (() => { try { return new URL(b.order_status_url).origin; } catch { return null; } })(),
+    };
+  },
+  // WooCommerce (webhook de pedido). UTMs da atribuição nativa do WooCommerce (8.5+), em meta_data.
+  woocommerce(b) {
+    const status = { processing: 'paid', completed: 'paid', pending: 'pending', 'on-hold': 'pending', refunded: 'refunded', cancelled: 'refused', failed: 'refused' }[b.status];
+    if (!status || b.id == null) return null;
+    const meta = Object.fromEntries((b.meta_data || []).map(m => [m.key, m.value]));
+    const a = k => meta[`_wc_order_attribution_${k}`];
+    const gross = num(b.total);
+    return {
+      order_id: str(b.id), status, method: method(b.payment_method_title || b.payment_method), gross, net: gross, currency: str(b.currency || 'BRL', 3),
+      product: str(b.line_items?.[0]?.name), ts: time(b.date_created_gmt ? b.date_created_gmt + 'Z' : b.date_created),
+      utm: utm({ source: a('utm_source'), medium: a('utm_medium'), campaign: a('utm_campaign'), content: a('utm_content'), term: a('utm_term') }),
+      email: b.billing?.email, phone: b.billing?.phone, rid: ridOf(meta.rastro_rid), ua: a('user_agent'),
+    };
+  },
+  // Stripe (Checkout e Payment Links). O snippet põe o rid em client_reference_id; o pedido é o payment_intent.
+  stripe(b) {
+    const o = b.data?.object || {};
+    const status = { 'checkout.session.completed': o.payment_status === 'paid' ? 'paid' : 'pending', 'checkout.session.async_payment_succeeded': 'paid',
+      'checkout.session.async_payment_failed': 'refused', 'charge.refunded': o.amount_refunded >= o.amount ? 'refunded' : null, 'charge.dispute.created': 'chargeback' }[b.type];
+    const id = o.payment_intent || o.id;
+    if (!status || !id) return null;
+    const zero = /^(bif|clp|djf|gnf|jpy|kmf|krw|mga|pyg|rwf|ugx|vnd|vuv|xaf|xof|xpf)$/.test(String(o.currency).toLowerCase()); // moedas sem centavos
+    const gross = num(o.amount_total ?? o.amount) / (zero ? 1 : 100), md = o.metadata || {};
+    return {
+      order_id: str(id), status, method: method(o.payment_method_types?.[0] || o.payment_method_details?.type), gross, net: gross,
+      currency: str(o.currency || 'brl', 3).toUpperCase(), product: str(md.product), ts: o.created ? o.created * 1000 : null,
+      utm: utm({ source: md.utm_source, medium: md.utm_medium, campaign: md.utm_campaign, content: md.utm_content, term: md.utm_term }),
+      email: o.customer_details?.email || o.billing_details?.email, phone: o.customer_details?.phone || o.billing_details?.phone, rid: ridOf(o.client_reference_id || md.rid),
     };
   },
 };
+
+// ---------- assinatura dos webhooks ----------
+const eq = (a, b) => { const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || '')); return x.length > 0 && x.length === y.length && timingSafeEqual(x, y); };
+const hmac = (alg, key, data, enc) => createHmac(alg, key).update(data).digest(enc);
+/** Confere a assinatura quando o site tem segredo para a plataforma. Retorna null se ok, ou o motivo. */
+export function verify(platform, secret, raw, h, now = Date.now()) {
+  if (!secret) return null;
+  if (platform === 'hotmart') return eq(h['x-hotmart-hottok'], secret) ? null : 'Hottok não confere';
+  if (platform === 'shopify') return eq(h['x-shopify-hmac-sha256'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura da Shopify não confere';
+  if (platform === 'woocommerce') return eq(h['x-wc-webhook-signature'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura do WooCommerce não confere';
+  if (platform === 'stripe') {
+    const parts = Object.fromEntries(String(h['stripe-signature'] || '').split(',').map(x => x.split('=')));
+    const t = Number(parts.t);
+    if (!t || Math.abs(now / 1000 - t) > 300) return 'Assinatura da Stripe ausente ou vencida';
+    const want = hmac('sha256', secret, `${t}.${raw}`, 'hex');
+    return String(h['stripe-signature']).split(',').some(x => x.startsWith('v1=') && eq(x.slice(3), want)) ? null : 'Assinatura da Stripe não confere';
+  }
+  return null;
+}
+
+// ---------- webhook personalizado (mapa de campos) ----------
+export const CUSTOM_FIELDS = { order_id: 'Id do pedido', status: 'Status', amount: 'Valor pago', net: 'Valor líquido', currency: 'Moeda', method: 'Forma de pagamento',
+  product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', rid: 'Id do visitante (rid)',
+  utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term' };
+export const CUSTOM_STATUSES = ['paid', 'pending', 'refused', 'refunded', 'chargeback'];
+/** Lê "data.items.0.name" de um objeto; também aceita "data.items[0].name". */
+export const pick = (o, path) => !path ? undefined : String(path).replace(/\[(\d+)\]/g, '.$1').split('.').reduce((x, k) => x == null || !Object.hasOwn(Object(x), k) ? undefined : x[k], o);
+export function parseCustom(b, map) {
+  const f = map?.fields || {}, v = k => pick(b, f[k]);
+  const raw = String(v('status') ?? '').trim().toLowerCase();
+  const status = CUSTOM_STATUSES.find(st => String(map?.status?.[st] || '').toLowerCase().split(',').map(x => x.trim()).filter(Boolean).includes(raw))
+    || (raw === '' && !f.status ? 'paid' : null);
+  if (!status) return null;
+  const k = map?.cents ? 100 : 1, gross = num(v('amount')) / k;
+  return {
+    order_id: str(v('order_id')), status, method: method(v('method')), gross, net: v('net') != null ? num(v('net')) / k : gross,
+    currency: str(v('currency') || 'BRL', 3).toUpperCase(), product: str(v('product')), ts: time(v('created_at')),
+    utm: utm({ source: v('utm_source'), medium: v('utm_medium'), campaign: v('utm_campaign'), content: v('utm_content'), term: v('utm_term') }),
+    email: v('email'), phone: v('phone'), rid: ridOf(v('rid')),
+  };
+}
+
+// ---------- Google Sheets (Apps Script envia as linhas; cabeçalho da planilha em português ou inglês) ----------
+const norm = h => String(h).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const SHEET_COLS = {
+  order_id: ['pedido', 'id_do_pedido', 'order_id', 'id', 'transacao', 'codigo'], status: ['status', 'situacao'], amount: ['valor', 'valor_pago', 'valor_bruto', 'total', 'amount'],
+  net: ['liquido', 'valor_liquido', 'net', 'comissao'], currency: ['moeda', 'currency'], method: ['pagamento', 'forma_de_pagamento', 'metodo', 'method'],
+  product: ['produto', 'product', 'oferta'], created_at: ['data', 'data_da_venda', 'created_at', 'date'], email: ['email', 'e_mail'], phone: ['telefone', 'celular', 'whatsapp', 'phone'],
+  rid: ['rid'], utm_source: ['utm_source'], utm_medium: ['utm_medium'], utm_campaign: ['utm_campaign'], utm_content: ['utm_content'], utm_term: ['utm_term'],
+};
+const SHEET_STATUS = { paid: ['pago', 'paga', 'aprovado', 'aprovada', 'paid', 'confirmado', 'confirmada', 'concluido', 'concluida', ''], pending: ['pendente', 'aguardando', 'pending'],
+  refunded: ['reembolsado', 'reembolsada', 'devolvido', 'refunded'], refused: ['cancelado', 'cancelada', 'recusado', 'recusada', 'refused'], chargeback: ['chargeback', 'contestado'] };
+const DATE_BR = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/;
+export function parseSheetRow(values) {
+  const byNorm = Object.fromEntries(Object.entries(values || {}).map(([k, v]) => [norm(k), v]));
+  const fields = {};
+  for (const [f, names] of Object.entries(SHEET_COLS)) { const n = names.find(x => Object.hasOwn(byNorm, x)); if (n) fields[f] = n; }
+  if (fields.status && String(byNorm[fields.status] ?? '').trim() === '') delete fields.status; // status vazio: a linha é uma venda paga
+  const status = Object.fromEntries(Object.entries(SHEET_STATUS).map(([k, v]) => [k, v.join(',')]));
+  const s = parseCustom(byNorm, { fields, status });
+  const d = DATE_BR.exec(String(byNorm[fields.created_at] || ''));
+  if (s && d) s.ts = Date.parse(`${d[3]}-${d[2]}-${d[1]}T${d[4] || '12'}:${d[5] || '00'}:00-03:00`);
+  if (s && !(s.gross > 0)) return { error: 'Valor vazio' }; // linha ainda sendo digitada
+  return s;
+}
 
 /** "Nome da campanha|123456" (template de UTM da Meta) → "123456"; senão o próprio valor. */
 export const adKey = v => { const m = /\|\s*([\w-]+)\s*$/.exec(v || ''); return m ? m[1] : (v || '').trim(); };
@@ -109,42 +225,118 @@ const log = (site, platform, s, ok, message) => db.batch([
   ['DELETE FROM webhook_log WHERE site=? AND id NOT IN (SELECT id FROM webhook_log WHERE site=? ORDER BY id DESC LIMIT 50)', [site, site]],
 ]);
 
+// Ordem de status: um evento atrasado (pendente depois de pago, pago depois de reembolso) não desfaz o que já aconteceu.
+const RANK = c => `CASE ${c} WHEN 'chargeback' THEN 4 WHEN 'refunded' THEN 3 WHEN 'paid' THEN 2 ELSE 1 END`;
 const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gross, net, currency, product, ts, date, updated,
-    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  ON CONFLICT(site, platform, order_id) DO UPDATE SET status=excluded.status, updated=excluded.updated,
+    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key, rid, match_rule)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ON CONFLICT(site, platform, order_id) DO UPDATE SET status=CASE WHEN ${RANK('excluded.status')} >= ${RANK('sales.status')} THEN excluded.status ELSE sales.status END, updated=excluded.updated,
     method=CASE WHEN excluded.method<>'other' THEN excluded.method ELSE sales.method END,
     gross=CASE WHEN excluded.gross>0 THEN excluded.gross ELSE sales.gross END, net=CASE WHEN excluded.net>0 THEN excluded.net ELSE sales.net END,
     product=COALESCE(NULLIF(sales.product,''), excluded.product),
     utm_source=COALESCE(NULLIF(sales.utm_source,''), excluded.utm_source), utm_medium=COALESCE(NULLIF(sales.utm_medium,''), excluded.utm_medium),
     utm_campaign=COALESCE(NULLIF(sales.utm_campaign,''), excluded.utm_campaign), utm_content=COALESCE(NULLIF(sales.utm_content,''), excluded.utm_content),
     utm_term=COALESCE(NULLIF(sales.utm_term,''), excluded.utm_term), campaign_key=COALESCE(NULLIF(sales.campaign_key,''), excluded.campaign_key),
-    adset_key=COALESCE(NULLIF(sales.adset_key,''), excluded.adset_key), ad_key=COALESCE(NULLIF(sales.ad_key,''), excluded.ad_key)`;
+    adset_key=COALESCE(NULLIF(sales.adset_key,''), excluded.adset_key), ad_key=COALESCE(NULLIF(sales.ad_key,''), excluded.ad_key),
+    rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule='rid' THEN sales.match_rule ELSE excluded.match_rule END
+  RETURNING status`;
 
 /** Processa um webhook. Retorna o status HTTP para a plataforma. `now` é injetável para testes. */
-export async function handleWebhook(token, platform, raw, now = Date.now()) {
+/**
+ * Token da URL por plataforma, derivado do token do site: com a assinatura da Hotmart ligada, a URL da Hotmart
+ * não serve para criar venda pelo /generic. "Gerar novo token" troca todos.
+ */
+export const hookToken = (site, platform) => createHash('sha256').update(`${site.webhook_token}:${platform}`).digest('base64url').slice(0, 32);
+const siteByToken = (token, platform) => {
   const t = Buffer.from(String(token));
-  const site = [...sites.values()].find(s => s.webhook_token && s.webhook_token.length === t.length && timingSafeEqual(Buffer.from(s.webhook_token), t));
-  if (!site || !Object.hasOwn(PARSERS, platform)) return 404;
+  return [...sites.values()].find(x => { if (!x.webhook_token) return false; const w = Buffer.from(hookToken(x, platform)); return w.length === t.length && timingSafeEqual(w, t); });
+};
+const jsonOr = (v, d) => { try { return JSON.parse(v) ?? d; } catch { return d; } };
+export const secretsOf = site => jsonOr(site.hook_secrets, {});
+
+/**
+ * Casa a venda com o clique (ordem: rid do link de checkout, depois UTMs). Com o rid, herda as UTMs da última visita
+ * com campanha quando a venda chega sem elas, e traz fbc, fbp, user agent e a página para a compra ir à Meta como 'website'.
+ */
+export async function matchSale(site, s) {
+  const out = { rule: 'none', click: null, utm: s.utm };
+  if (s.rid) {
+    // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
+    const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
+    const [last, fb, ga, paid] = await Promise.all([
+      db.get(`SELECT ua, host, path, fbp FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
+      db.get(`SELECT fbc FROM events WHERE ${W} AND fbc IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
+      db.get(`SELECT ga_cid FROM events WHERE ${W} AND ga_cid IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
+      db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts DESC LIMIT 1`, a),
+    ]);
+    if (last) {
+      out.rule = 'rid';
+      out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
+      if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
+        content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
+    }
+  }
+  if (out.rule === 'none' && (out.utm.campaign || out.utm.source)) out.rule = 'utm';
+  // Sem rid, mas a plataforma trouxe fbclid e user agent (Shopify): ainda dá para mandar o clique à Meta.
+  if (!out.click && (s.fbclid || s.ua)) out.click = { fbc: /^[\w.-]{1,255}$/.test(s.fbclid || '') ? `fb.1.${s.ts ?? Date.now()}.${s.fbclid}` : null, ua: s.ua || null, url: s.url || null };
+  return out;
+}
+
+export const MATCH_PT = { rid: 'Clique (rid)', utm: 'UTM', none: 'Sem origem' };
+
+/** Grava a venda normalizada, casa com o clique e enfileira a compra para Meta e GA4. */
+export async function ingestSale(site, platform, s, now = Date.now()) {
+  if (!s.order_id) { await log(site.id, platform, s, false, 'Pedido sem identificador'); return { ok: false, message: 'Pedido sem identificador' }; }
+  const ts = s.ts ?? now;
+  const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
+  const m = await matchSale(site, { ...s, ts }), u = m.utm;
+  const { rows: [saved] } = await db.run(UPSERT, [site.id, platform, s.order_id, s.status, s.method, Math.max(0, s.gross), Math.max(0, s.net), s.currency.toUpperCase() || site.currency,
+    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || null, m.rule]);
+  const message = `${before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[saved.status]}` : 'Nova venda'} · origem: ${MATCH_PT[m.rule]}`;
+  await log(site.id, platform, s, true, message);
+
+  // Compra aprovada vai para a fila (src/dispatch.js), uma vez só.
+  if (saved.status === 'paid' && before?.status !== 'paid' && s.gross > 0) {
+    const sale = { ...s, ts, platform };
+    if (metaReady(site)) {
+      const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, click: m.click }, now);
+      if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); await log(site.id, platform, s, true, `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'})`); }
+      else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail, telefone nem clique, não enviada');
+    }
+    const g = ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
+    if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
+  }
+  return { ok: true, message };
+}
+
+/** Webhook de plataforma. Retorna o status HTTP. `req` = { headers } para conferir assinaturas. */
+export async function handleWebhook(token, platform, raw, now = Date.now(), req = { headers: {} }) {
+  if (!Object.hasOwn(PARSERS, platform) && platform !== 'custom') return 404;
+  const site = siteByToken(token, platform);
+  if (!site) return 404;
+  const bad = verify(platform, secretsOf(site)[platform], raw, req.headers || {}, now);
+  if (bad) { await log(site.id, platform, null, false, bad); return 401; }
   let body;
   try { body = JSON.parse(raw); } catch { body = Object.fromEntries(new URLSearchParams(raw)); }
   let s;
-  try { s = PARSERS[platform](body || {}); } catch { await log(site.id, platform, null, false, 'Payload em formato inesperado'); return 400; }
+  try { s = platform === 'custom' ? parseCustom(body || {}, jsonOr(site.custom_map, null)) : PARSERS[platform](body || {}); }
+  catch { await log(site.id, platform, null, false, 'Payload em formato inesperado'); return 400; }
   if (!s) { await log(site.id, platform, null, true, 'Evento ignorado (não é venda)'); return 200; }
-  if (!s.order_id) { await log(site.id, platform, s, false, 'Pedido sem identificador'); return 400; }
+  return (await ingestSale(site, platform, s, now)).ok ? 200 : 400;
+}
 
-  const ts = s.ts ?? now;
-  const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
-  const u = s.utm;
-  await db.run(UPSERT, [site.id, platform, s.order_id, s.status, s.method, Math.max(0, s.gross), Math.max(0, s.net), s.currency.toUpperCase() || site.currency,
-    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content)]);
-  await log(site.id, platform, s, true, before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[s.status]}` : 'Nova venda');
-
-  // Compra aprovada vai para a fila da Conversions API (src/dispatch.js), uma vez só.
-  if (s.status === 'paid' && before?.status !== 'paid' && metaReady(site)) {
-    const ev = metaPurchase(site, { ...s, ts, platform }, { email: s.email, phone: s.phone }, now);
-    if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); await log(site.id, platform, s, true, 'Na fila da Conversions API da Meta'); }
-    else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail nem telefone, não enviada');
+/** Linhas enviadas pelo Apps Script da planilha: { rows: [{ row, values: { cabeçalho: valor } }] }. Até 200 por chamada. */
+export async function handleSheet(token, raw, now = Date.now()) {
+  const site = siteByToken(token, 'sheets');
+  if (!site) return { status: 404 };
+  const rows = jsonOr(raw, {}).rows;
+  if (!Array.isArray(rows) || rows.length > 200) return { status: 400, body: { error: 'Envie { rows: [...] } com até 200 linhas' } };
+  const results = [];
+  for (const r of rows) {
+    const s = parseSheetRow(r?.values);
+    if (!s || s.error) { results.push({ row: r?.row, ok: false, message: s?.error || 'Status não reconhecido' }); continue; }
+    const out = await ingestSale(site, 'sheets', s, now);
+    results.push({ row: r?.row, ok: out.ok, message: out.ok ? 'enviado' : out.message });
   }
-  return 200;
+  return { status: 200, body: { results } };
 }

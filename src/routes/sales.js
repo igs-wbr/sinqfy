@@ -4,7 +4,7 @@ import { period } from '../time.js';
 import { route, send, redirect, form, readBody, origin, sitePath, HttpError } from '../http.js';
 import { siteCtx } from '../auth.js';
 import * as S from '../sales/stats.js';
-import { handleWebhook } from '../sales/webhooks.js';
+import { handleWebhook, handleSheet, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, parseCustom, secretsOf } from '../sales/webhooks.js';
 import { syncMeta } from '../ads/meta.js';
 import * as V from '../views/sales.js';
 
@@ -42,9 +42,9 @@ route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
 // --- integrações ---
 const MSG = {
   rotate: 'Novo token gerado. Atualize a URL do webhook nas plataformas.', meta_add: 'Conta conectada e sincronizada.',
-  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.',
+  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.', secrets: 'Segredos dos webhooks salvos.', custom_map: 'Mapa do webhook personalizado salvo.',
 };
-async function integrationsView(r, msg, err) {
+async function integrationsView(r, msg, err, extra = {}) {
   const d = await awaitAll({
     accounts: db.all("SELECT id, account_id, name, currency, last_sync, last_error FROM ad_accounts WHERE site=? AND platform='meta' ORDER BY id", [r.site.id]),
     logs: S.lastWebhooks(r.site.id), edgeUrl: env.EDGE_URL || origin(r.req), // subdomínio t. do Worker da borda
@@ -52,7 +52,7 @@ async function integrationsView(r, msg, err) {
     deliveries: db.all(`SELECT dest, COUNT(*) FILTER (WHERE status='sent') sent, COUNT(*) FILTER (WHERE status='failed') failed,
       COUNT(*) FILTER (WHERE status IN ('pending','sending')) pending, MAX(sent_at) last_sent FROM deliveries WHERE site=? AND created>? GROUP BY dest`, [r.site.id, Date.now() - 864e5]),
   });
-  send(r, err ? 400 : 200, V.integrationsPage(await siteCtx(r, '/integrations'), origin(r.req), d, msg, err));
+  send(r, err ? 400 : 200, V.integrationsPage(await siteCtx(r, '/integrations'), origin(r.req), { ...d, ...extra }, msg, err));
 }
 route('GET', '/sites/:id/integrations', { site: 'edit' }, r => integrationsView(r, Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null));
 route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
@@ -104,12 +104,41 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
       await loadSites();
       return done();
     }
+    case 'secrets': { // segredos de assinatura por plataforma; campo vazio mantém o atual, "-" apaga
+      const cur = secretsOf(site);
+      for (const k of Object.keys(SIGNED)) {
+        const v = (f.get('secret_' + k) || '').trim();
+        if (v === '-') delete cur[k]; else if (v) cur[k] = v.slice(0, 200);
+      }
+      await db.run('UPDATE sites SET hook_secrets=? WHERE id=?', [Object.keys(cur).length ? JSON.stringify(cur) : null, site.id]);
+      await loadSites();
+      return done();
+    }
+    case 'custom_map': case 'custom_preview': {
+      const map = { fields: {}, status: {}, cents: f.get('cents') === '1' };
+      for (const k of Object.keys(CUSTOM_FIELDS)) { const v = (f.get('f_' + k) || '').trim().slice(0, 200); if (v) map.fields[k] = v; }
+      for (const k of CUSTOM_STATUSES) { const v = (f.get('s_' + k) || '').trim().slice(0, 300); if (v) map.status[k] = v; }
+      if (!map.fields.order_id || !map.fields.amount) return integrationsView(r, null, 'Informe pelo menos onde estão o id do pedido e o valor.', { customDraft: map });
+      if (action === 'custom_preview') {
+        let sample, parsed = null, error = null;
+        try { sample = JSON.parse(f.get('sample') || ''); } catch (e) { error = `O exemplo não é um JSON válido (${String(e.message).replace(/^.*?JSON[^:]*: ?/, '').slice(0, 120)}).`; }
+        if (sample) { parsed = parseCustom(sample, map); if (!parsed) error = 'Com esse mapa, o exemplo não vira venda (confira o campo e os valores de status).'; }
+        return integrationsView(r, null, null, { customDraft: map, preview: { sample: f.get('sample') || '', parsed, error } });
+      }
+      await db.run('UPDATE sites SET custom_map=? WHERE id=?', [JSON.stringify(map), site.id]);
+      await loadSites();
+      return done();
+    }
     default: throw new HttpError(400, 'Ação inválida.');
   }
 });
 
 // --- webhooks das plataformas (público; o token na URL identifica o site) ---
+route('POST', '/hooks/:token/sheets', { auth: false }, async r => { // Apps Script da planilha (lote de linhas)
+  const out = await handleSheet(r.params.token, await readBody(r.req, 1024 * 1024));
+  r.res.writeHead(out.status, { 'content-type': 'application/json' }).end(JSON.stringify(out.body || { ok: out.status === 200 }));
+});
 route('POST', '/hooks/:token/:platform', { auth: false }, async r => {
-  const status = await handleWebhook(r.params.token, r.params.platform, await readBody(r.req, 256 * 1024));
+  const status = await handleWebhook(r.params.token, r.params.platform, await readBody(r.req, 256 * 1024), Date.now(), { headers: r.req.headers });
   r.res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: status === 200 }));
 });

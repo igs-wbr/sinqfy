@@ -31,19 +31,36 @@ export function metaWebEvent(site, ev, { ip, ua, url }) {
   return out;
 }
 
-/** Compra aprovada vinda do webhook. E-mail e telefone chegam aqui e só seguem em SHA-256. */
-export function metaPurchase(site, sale, { email, phone } = {}, now = Date.now()) {
+/**
+ * Compra aprovada vinda do webhook. E-mail e telefone chegam aqui e só seguem em SHA-256.
+ * Com o clique casado (etapa 3: rid do link de checkout), vai como 'website' com fbc, fbp, user agent e a página;
+ * sem ele, como 'other' (sem user agent a Meta recusa 'website').
+ */
+export function metaPurchase(site, sale, { email, phone, click } = {}, now = Date.now()) {
   const user_data = {};
   if (email) user_data.em = [sha(String(email).trim().toLowerCase())];
   if (phone) { let d = String(phone).replace(/\D/g, ''); if (d.length === 10 || d.length === 11) d = '55' + d; user_data.ph = [sha(d)]; } // a Meta exige o DDI
+  if (click?.fbc) user_data.fbc = click.fbc;
+  if (click?.fbp) user_data.fbp = click.fbp;
+  if (click?.rid) user_data.external_id = [sha(click.rid)];
   if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador
+  const web = !!(click?.ua && click?.url);
+  if (web) user_data.client_user_agent = click.ua;
   const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;
   return {
     event_name: 'Purchase', event_time: Math.floor(ts / 1000), event_id: `${sale.platform}-${sale.order_id}`,
-    // 'other': sem user agent e URL da página a Meta recusa 'website'. Na etapa 3 a venda casa com o clique e passa a ir como 'website'.
-    action_source: 'other', user_data,
+    action_source: web ? 'website' : 'other', ...(web && { event_source_url: click.url }), user_data,
     custom_data: { currency: sale.currency || site.currency, value: sale.gross, content_name: sale.product || undefined, order_id: sale.order_id },
   };
+}
+
+/** Compra para o GA4: só com o clique casado (sem client_id do navegador, a venda viraria um usuário inventado). */
+export function ga4Purchase(site, sale, click, now = Date.now()) {
+  if (!click?.rid) return null;
+  const ts = now - sale.ts > 71 * 3600e3 ? now : sale.ts; // o GA4 descarta eventos com mais de 72 h
+  return { client_id: click.gaCid || click.rid, timestamp_micros: ts * 1000, events: [{ name: 'purchase', params: {
+    transaction_id: `${sale.platform}-${sale.order_id}`, value: sale.gross, currency: sale.currency || site.currency, engagement_time_msec: 1,
+    items: [{ item_name: sale.product || 'Produto' }] } }] };
 }
 
 /** Evento do site para o GA4. client_id vem do cookie _ga (campo `g` do snippet); sem ele, do visitante. */
@@ -56,7 +73,8 @@ export function ga4WebEvent(site, ev, { url, clientId }) {
 
 // ---------- fila ----------
 export const enqueue = (site, dest, eventId, name, payload, now = Date.now()) => db.run(
-  `INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload) VALUES (?,?,?,?,'pending',0,?,?,?)`,
+  `INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload) VALUES (?,?,?,?,'pending',0,?,?,?)
+   ON CONFLICT(site, dest, event_id) DO NOTHING`,
   [site, dest, eventId, name, now, now, JSON.stringify(payload)]);
 
 /** Enfileira um evento do site para os destinos configurados. */

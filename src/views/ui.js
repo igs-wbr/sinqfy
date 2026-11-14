@@ -180,6 +180,11 @@ svg:not(.ic){display:block;width:100%;height:auto}svg text{fill:var(--muted);fon
 @media (hover:hover){.tabs>label:hover{color:var(--ink);background:var(--hover)}}
 .tabs>input:checked+label{background:var(--surface2);color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1px var(--line)}.tabs>input:focus-visible+label{outline:2px solid var(--ring);outline-offset:2px}
 .pane{display:none;flex-basis:100%;margin-top:12px}${[1, 2, 3, 4, 5].map(i => `.tabs>input:nth-of-type(${i}):checked~.pane:nth-of-type(${i})`).join(',')}{display:block}
+.pop form.stack{display:grid}.pop>summary::after{content:"";display:inline-block;width:6px;height:6px;margin-left:8px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translateY(-2px);transition:transform .12s}.pop[open]>summary::after{transform:rotate(225deg)}
+pre{font-variant-ligatures:none}pre.code{white-space:pre;word-break:normal;max-height:420px;overflow:auto}
+table.txt th,table.txt td{text-align:left}table.txt .num{text-align:right}table.txt td:first-child{white-space:nowrap}
+.grid>.card.full{grid-column:1/-1}.platform pre{border:0;background:var(--surface)}
+.steps{margin:10px 0 12px;padding-left:20px;display:grid;gap:6px;color:var(--ink2)}textarea{font:500 12.5px/1.5 var(--mono)}
 .tag.ok{color:var(--ok);background:var(--ok-bg);border-color:transparent}.tag.bad{color:var(--bad);background:var(--bad-bg);border-color:transparent}.tag.warn{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 details.dl{display:inline-block}details.dl>summary{list-style:none;cursor:pointer}details.dl>summary::-webkit-details-marker{display:none}details.dl[open]>div{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-size:12px;max-width:360px;white-space:normal}
 .tag{display:inline-block;font:600 10px/1 var(--mono);padding:4px 7px;margin:1px 4px 1px 0;border:1px solid var(--line2);border-radius:999px;background:var(--surface2);color:var(--link);text-transform:uppercase;letter-spacing:.04em}

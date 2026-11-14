@@ -42,7 +42,7 @@ const admin = await login();
 await req('/sites', { cookie: admin, form: { id: 'loja', name: 'Loja', timezone: 'America/Sao_Paulo', currency: 'BRL' } });
 await req('/sites/loja/settings', { cookie: admin, form: { action: 'save', name: 'Loja', timezone: 'America/Sao_Paulo', currency: 'BRL', tax_rate: '6' } });
 const token = (await db.get("SELECT webhook_token FROM sites WHERE id='loja'")).webhook_token;
-const hook = (platform, body, t = token) => req(`/hooks/${t}/${platform}`, { body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'content-type': typeof body === 'string' ? 'application/x-www-form-urlencoded' : 'application/json' } });
+const hook = (platform, body, t) => req(`/hooks/${t ?? W.hookToken(DB.sites.get('loja'), platform)}/${platform}`, { body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'content-type': typeof body === 'string' ? 'application/x-www-form-urlencoded' : 'application/json' } });
 const sale = id => db.get("SELECT * FROM sales WHERE site='loja' AND order_id=?", [id]);
 const today = localDate(Date.now(), 'America/Sao_Paulo'), p = { from: today, to: today };
 const hotmart = (tx, extra = {}) => ({
@@ -65,7 +65,7 @@ test('webhooks: Hotmart, Kiwify, Eduzz (legado) e genérico', async () => {
   assert.equal((await hook('hotmart', { event: 'PURCHASE_PROTEST', data: {} })).status, 200, 'evento ignorado responde 200');
   assert.equal((await hook('generic', { status: 'paid', amount: 1 })).status, 400);
   assert.equal((await hook('hotmart', hotmart('X'), 'token-errado')).status, 404);
-  assert.equal((await hook('shopify', {})).status, 404);
+  assert.equal((await hook('naoexiste', {})).status, 404);
 
   const [hp, k, e, g] = await Promise.all(['HP1', 'K1', 'E1', 'G1'].map(sale));
   assert.deepEqual([hp.status, hp.method, hp.gross, hp.net, hp.utm_source, hp.campaign_key, hp.product], ['paid', 'pix', 197, 180.5, 'FB', 'c1', 'Curso']);
@@ -151,8 +151,9 @@ test('páginas de vendas: números, auto-refresh de hora em hora e indicador do 
   assert.match((await req('/sites/loja/campaigns?level=adset', { cookie: admin })).text, /Lookalike/);
   const refunded = await req('/sites/loja/orders?f_status=refunded', { cookie: admin });
   assert.ok(refunded.text.includes('K1') && !refunded.text.includes('HP1'));
-  assert.match((await req('/sites/loja/integrations', { cookie: admin })).text, new RegExp(`/hooks/${token}/kiwify`));
+  assert.match((await req('/sites/loja/integrations', { cookie: admin })).text, new RegExp(`/hooks/${W.hookToken(DB.sites.get('loja'), 'kiwify')}/kiwify`));
+  const oldToken = W.hookToken(DB.sites.get('loja'), 'generic');
   assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'rotate' } })).status, 303);
-  assert.equal((await hook('generic', { order_id: 'G2', status: 'paid', amount: 1 })).status, 404, 'token antigo para de funcionar');
+  assert.equal((await hook('generic', { order_id: 'G2', status: 'paid', amount: 1 }, oldToken)).status, 404, 'token antigo para de funcionar');
   assert.equal(period(new URLSearchParams('range=today'), 'America/Sao_Paulo').from, today);
 });

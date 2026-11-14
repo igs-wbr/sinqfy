@@ -44,34 +44,57 @@ O Rastro usa o trecho depois do último `|` como chave:
 Sem `|`, ele usa o texto inteiro e compara com o **nome** da campanha.
 
 
-## 3. Webhooks de plataformas de venda
+## 3. Vendas: plataformas, webhook personalizado e planilha
 
 Cada site tem um token. As URLs aparecem prontas em Integrações:
 
 ```
-https://stats.seudominio.com/hooks/<token>/hotmart
-https://stats.seudominio.com/hooks/<token>/kiwify
-https://stats.seudominio.com/hooks/<token>/eduzz
-https://stats.seudominio.com/hooks/<token>/generic
+https://app.seudominio.com.br/hooks/<token>/hotmart      (também kiwify, eduzz, shopify, woocommerce, stripe)
+https://app.seudominio.com.br/hooks/<token>/generic      formato próprio do Rastro
+https://app.seudominio.com.br/hooks/<token>/custom       qualquer JSON, com mapa de campos
+https://app.seudominio.com.br/hooks/<token>/sheets       Google Sheets (script pronto na tela)
 ```
 
-- Respostas: `200` (processado ou ignorado), `400` (payload inválido) ou `404` (token ou plataforma desconhecidos).
-- Os últimos 50 resultados aparecem em Integrações → Últimos webhooks. Só o resultado fica registrado; o payload, não.
+- Respostas: `200` (processado ou ignorado), `400` (payload inválido), `401` (assinatura não confere) ou `404` (token ou plataforma desconhecidos).
+- Os últimos 50 resultados aparecem em Integrações, Últimos webhooks, com a origem que a venda recebeu. Só o resultado fica registrado; o payload, não.
 - **Gerar novo token** invalida as URLs antigas.
 - Dados pessoais do comprador **nunca** são gravados. E-mail e telefone só seguem em hash para a Conversions API (seção 5).
 
-| Plataforma | Eventos tratados | Valores | UTMs |
-|---|---|---|---|
-| Hotmart (Webhook 2.0) | `PURCHASE_APPROVED/COMPLETE` → aprovada; `BILLET_PRINTED/DELAYED` → pendente; `CANCELED/EXPIRED` → recusada; `REFUNDED`; `CHARGEBACK`. Os demais são ignorados | `purchase.price.value`; líquido = comissão `PRODUCER` | `purchase.origin.src` → source, `sck` → campaign |
-| Kiwify | `order_status`: `paid`, `waiting_payment`, `refused`, `refunded`, `chargedback` | `Commissions.charge_amount` e `my_commission` (centavos) | `TrackingParameters.utm_*` |
-| Eduzz | Webhook novo (JSON com `data`) e legado (form `trans_*`, status numérico) | `price.value` / `trans_value` | `data.utm.*` / `utm_*` |
-| Genérico | campo `status` | campos `amount` e `net` | campos `utm_*` |
+### Como a venda é ligada ao clique
 
-> O formato da Eduzz varia por versão. Depois de configurar, faça um pedido de teste e confira o resultado em "Últimos webhooks". Se a sua versão não for reconhecida, use o formato genérico via Zapier ou Make.
+A tela Pedidos mostra a regra que valeu em cada venda (coluna Origem):
+
+1. **Clique (rid):** o snippet põe o id do visitante (`rid`) no link de checkout. A plataforma devolve esse valor no webhook e o Rastro acha o clique: herda as UTMs da última visita com campanha (quando o checkout perdeu as UTMs), e a compra vai à Meta como `website` com `fbc`, `fbp`, user agent e a página, e ao GA4 na sessão do navegador.
+2. **UTM:** sem rid, valem as UTMs que a plataforma mandou.
+3. **Sem origem:** nenhum dos dois. A compra ainda vai à Meta (como `other`, com e-mail e telefone em hash).
+
+| Plataforma | Onde vai o rid | Eventos tratados | UTMs |
+|---|---|---|---|
+| Hotmart (Webhook 2.0) | `xcod` (o snippet preenche) | aprovada, pendente, recusada, reembolso, chargeback | `origin.src` e `sck` |
+| Kiwify | `sck` (o snippet preenche quando o link não tem) | `paid`, `waiting_payment`, `refused`, `refunded`, `chargedback` | `TrackingParameters.utm_*` |
+| Eduzz | não repassa: vale a UTM | webhook novo e legado | `utm.*` |
+| Shopify | (loja é o próprio site) `fbclid` e UTMs do `landing_site`, user agent do pedido | `orders/paid` e `orders/updated` (`financial_status`) | do `landing_site` |
+| WooCommerce | meta `rastro_rid`, se o tema gravar | `processing`/`completed` pago, `on-hold` pendente, `refunded`, `cancelled`/`failed` | atribuição nativa (`_wc_order_attribution_*`, WooCommerce 8.5+) |
+| Stripe (Checkout e Payment Links) | `client_reference_id` (o snippet preenche) | `checkout.session.completed`, `async_payment_*`, `charge.refunded`, `charge.dispute.created` | `metadata.utm_*` |
+
+> Confira cada plataforma com um pedido de teste: a linha em Últimos webhooks mostra se a venda casou pelo clique. O campo exato que algumas plataformas devolvem (`xcod` na Hotmart, `sck` na Kiwify) foi conferido pela documentação disponível, não com pedido real.
+
+### Assinatura dos webhooks
+
+Com o segredo cadastrado em Integrações, Segredos de assinatura, o Rastro recusa (`401`) o que vier sem a assinatura da plataforma. Sem segredo, vale só o token da URL.
+
+| Plataforma | O que conferimos | Onde pegar o segredo |
+|---|---|---|
+| Hotmart | cabeçalho `X-HOTMART-HOTTOK` | Ferramentas, Webhook, Autenticação (hottok) |
+| Shopify | `X-Shopify-Hmac-Sha256` (HMAC-SHA256 do corpo, base64) | Configurações, Notificações, Webhooks |
+| WooCommerce | `X-WC-Webhook-Signature` (HMAC-SHA256 do corpo, base64) | WooCommerce, Configurações, Avançado, Webhooks |
+| Stripe | `Stripe-Signature` (`t` e `v1`, até 5 min) | Desenvolvedores, Webhooks, Segredo de assinatura (`whsec_...`) |
+
+A Kiwify e a Eduzz não têm assinatura documentada para o webhook de vendas; nelas vale o token da URL.
 
 ### Formato genérico
 
-Use com Stripe, Zapier, Make, n8n ou qualquer checkout:
+Use com Zapier, Make, n8n ou um sistema próprio:
 
 ```json
 {
@@ -83,23 +106,33 @@ Use com Stripe, Zapier, Make, n8n ou qualquer checkout:
   "currency": "BRL",
   "product": "Curso X",
   "created_at": "2026-10-07T14:30:00-03:00",
+  "rid": "id do visitante (parâmetro rid do link), opcional",
   "utm_source": "FB",
-  "utm_medium": "Lookalike|120200001",
   "utm_campaign": "Black Friday|120200000",
-  "utm_content": "Vídeo 1|120200002",
-  "utm_term": "feed",
   "email": "opcional, só para a Conversions API",
   "phone": "opcional"
 }
 ```
-
-Campos aceitos:
 
 - `status`: `paid`, `pending`, `refused`, `refunded` ou `chargeback`.
 - `method`: `pix`, `card`, `boleto` ou `other`.
 - `amount` e `net`: aceitam número ou texto como `"R$ 1.234,56"`.
 
 Reenvios do mesmo `order_id` atualizam a venda existente. O status muda e os valores só são substituídos quando o novo é maior que zero.
+
+### Webhook personalizado
+
+Para um checkout que não está na lista e manda JSON no formato dele: em Integrações, diga o caminho de cada campo (`data.order.id`, `items[0].name`) e quais valores de status contam como aprovada, pendente, recusada, reembolsada e chargeback. Cole um exemplo do JSON e use **Testar com o exemplo** para ver a venda lida antes de salvar. Status fora da lista é ignorado (responde `200`).
+
+### Google Sheets
+
+Para vendas registradas à mão (WhatsApp, boleto, outro checkout). A tela traz um Apps Script pronto:
+
+1. Aba **Vendas** com cabeçalho na 1ª linha. Colunas reconhecidas (com ou sem acento): `Pedido`, `Status`, `Valor`, `Líquido`, `Moeda`, `Pagamento`, `Produto`, `Data` (dd/mm/aaaa hh:mm), `E-mail`, `Telefone`, `rid`, `utm_*`.
+2. Extensões, Apps Script, colar o código e executar `rastroConfigurar` (cria o gatilho de 5 minutos).
+3. O script envia as linhas sem "enviado" na coluna **Rastro** e escreve o resultado de cada uma. Para reenviar, apague a célula da coluna Rastro.
+
+Status aceitos: pago, aprovado, confirmado (ou vazio) como aprovada; pendente, aguardando; reembolsado; cancelado, recusado; chargeback.
 
 ## 4. Meta Ads (Marketing API, somente leitura)
 
