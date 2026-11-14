@@ -12,8 +12,12 @@ O script e os webhooks precisam responder rápido, gravar cookie primário no do
 ## Decisão
 - Um Worker atende `s.js`, `/e`, `/hooks/:token/:plataforma`, `/w/:slug` e os webhooks da Meta e do WhatsApp.
 - Cada cliente aponta `t.dominiodele` por CNAME; o domínio é registrado no **Cloudflare for SaaS**, que emite o SSL.
-- Todo payload recebido vai antes para o **R2** (30 dias). Se o banco falhar, o evento é reprocessado a partir dali.
+- O Worker é fino: grava os cookies, responde na hora e repassa o beacon ao painel na Oracle (pelo túnel) com o `EDGE_SECRET`. A ingestão continua no Node, num código só.
+- Beacons que a origem não recebeu (fora do ar ou 5xx) vão para o **R2** em `failed/` para reprocessar. Na etapa 3, todo webhook de checkout também é arquivado.
 - O envio para as plataformas não acontece no Worker: ele cria linhas em `deliveries` e o despachante na Oracle envia com reenvio.
+
+## Revisão (etapa 1, 2026-11-14)
+A ideia inicial era o Worker gravar direto no Postgres por Hyperdrive. Ficou para depois: repassar ao painel evita portar a ingestão para o runtime do Workers e manter dois códigos. Hyperdrive volta se a origem virar gargalo.
 
 ## Consequências
 - O código de normalização (parsers, hash, `fbc`) vai para `src/core/` sem dependência de Node, para rodar nos dois lados.

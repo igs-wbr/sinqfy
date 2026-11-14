@@ -1,0 +1,16 @@
+# Worker da borda do Rastro. Deploy: na pasta edge/, `npx wrangler deploy`.
+# Segredo (o mesmo EDGE_SECRET do painel): `npx wrangler secret put EDGE_SECRET`.
+name = "rastro-edge"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Etapa 1: o seu próprio subdomínio. Na etapa 4 entra o "*/*" do Cloudflare for SaaS para os domínios dos clientes.
+routes = [{ pattern = "t.seudominio.com.br", custom_domain = true }]
+
+[vars]
+ORIGIN = "https://app.seudominio.com.br"
+
+# Beacons que a origem não conseguiu receber ficam aqui para reprocessar (crie o bucket antes: `npx wrangler r2 bucket create rastro-raw`).
+[[r2_buckets]]
+binding = "RAW"
+bucket_name = "rastro-raw"

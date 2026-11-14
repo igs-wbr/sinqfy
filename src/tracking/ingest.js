@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
@@ -47,11 +47,18 @@ export function channel({ referrer: ref, utm_source, utm_medium, utm_campaign })
   return 'Direto';
 }
 
-const INSERT = `INSERT INTO events(site,date,ts,visitor,session,name,path,referrer,channel,${UTM},screen,browser,os,country,props,revenue)
-  VALUES (${Array(20).fill('?')})`;
+const CLICKS = ['gclid', 'gbraid', 'wbraid', 'ttclid'];
+const INSERT = `INSERT INTO events(site,date,ts,visitor,session,name,path,referrer,channel,${UTM},screen,browser,os,country,props,revenue,rid,event_id,fbc,fbp,${CLICKS})
+  VALUES (${Array(28).fill('?')})`;
+const CLICK_RE = /^[\w.-]{1,255}$/;
+export const fbcOf = (fbclid, now) => CLICK_RE.test(fbclid || '') ? `fb.1.${now}.${fbclid}` : '';
 
-/** Grava um beacon. Retorna o status HTTP. `now` é injetável para testes. */
-export async function record({ body, ua, ip, country }, now = Date.now()) {
+/**
+ * Grava um beacon. Retorna o status HTTP. `now` é injetável para testes.
+ * `edge` vem do Worker da borda (ADR 0011/0012): { rid, fbp, fbc } lidos ou criados nos cookies do domínio do cliente.
+ * Com `rid`, o visitante é o cookie (atribuição entre dias); sem ele, o hash diário de IP + navegador (ADR 0002).
+ */
+export async function record({ body, ua, ip, country, edge }, now = Date.now()) {
   let e;
   try { e = JSON.parse(body); } catch { return 400; }
   const site = typeof e?.s === 'string' && sites.get(e.s);
@@ -62,7 +69,7 @@ export async function record({ body, ua, ip, country }, now = Date.now()) {
   const name = e.n == null || e.n === 'pageview' ? 'pageview' : String(e.n).trim().slice(0, 64);
   if (!name) return 400;
 
-  const visitor = createHash('sha256').update(await dailySalt(new Date(now).toISOString().slice(0, 10)))
+  const visitor = edge?.rid || createHash('sha256').update(await dailySalt(new Date(now).toISOString().slice(0, 10)))
     .update(`${site.id}|${ip}|${ua}`).digest('hex').slice(0, 16);
   // Sessão: continua se o último evento do visitante foi há ≤ 30 min, herdando a origem da visita.
   const last = await db.get('SELECT * FROM events WHERE visitor=? ORDER BY ts DESC LIMIT 1', [visitor]);
@@ -84,8 +91,11 @@ export async function record({ body, ua, ip, country }, now = Date.now()) {
   }
   const v = typeof e.v === 'number' || (typeof e.v === 'string' && e.v.trim()) ? Number(e.v) : NaN;
   const { browser, os } = parseUA(ua);
+  const q = url.searchParams, click = k => CLICK_RE.test(q.get(k) || '') ? q.get(k) : null;
+  const eventId = typeof e.i === 'string' && /^[\w-]{8,64}$/.test(e.i) ? e.i : randomUUID();
   await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
-    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null]);
+    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null,
+    edge?.rid || null, eventId, edge?.fbc || fbcOf(q.get('fbclid'), now) || null, edge?.fbp || null, ...CLICKS.map(click)]);
   return 202;
 }

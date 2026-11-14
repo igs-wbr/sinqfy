@@ -1,6 +1,6 @@
 # Rastro: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapa 0 concluída). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 e 1 concluídas). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -9,12 +9,13 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 ## Estrutura
 - `src/app.js`: handler único (estáticos, beacon `/e`, despacho, CSRF). É usado por `src/server.js` (Docker e local) e ainda por `api/index.js` (Vercel, legado).
 - `src/db.js`: pool `pg` com `db.all/get/run/exec/batch` (todos **assíncronos**; SQL com `?`, convertido para `$N`), schema em `ready`, cache `sites` recarregado a cada 10 s.
+- `edge/`: Worker da Cloudflare (`worker.js`, `wrangler.toml`): cookies primários e repasse do beacon com `EDGE_SECRET`. Testado em `tests/edge.test.js` sem wrangler.
 - `deploy/`: `docker-compose.yml` (postgres, app, cloudflared) e `backup.sh` (pg_dump para o R2).
 - `src/http.js` (rotas e respostas) · `src/auth.js` (sessão, papéis, força bruta no banco) · `src/time.js` (fusos e períodos).
 - `src/tracking/`, `src/sales/`, `src/ads/meta.js`: domínio. `src/jobs.js`: `runJobs()`, chamado por `GET /cron` (Bearer `CRON_SECRET`).
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
-- `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 2 KB) é minificado à mão.
+- `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 2 KB) é minificado à mão e servido aos sites pelo Worker.
 - `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0014`), fluxo com skills.
 
 ## Regras

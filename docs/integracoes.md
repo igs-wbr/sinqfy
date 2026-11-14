@@ -5,8 +5,15 @@ Na interface, este guia corresponde à tela **Integrações** de cada site. Só 
 ## 1. Snippet de rastreamento
 
 ```html
-<script defer data-site="SEU_ID" src="https://stats.seudominio.com/s.js"></script>
+<script defer data-site="SEU_ID" src="https://t.seudominio.com.br/s.js"></script>
 ```
+
+Use o subdomínio `t.` servido pelo Worker da borda (veja [deploy](deploy-oracle.md#6-worker-da-borda)). Assim os cookies `_rid`, `_fbp` e `_fbc` são gravados pelo servidor no seu domínio e duram 400 dias, inclusive no Safari. Apontar o snippet direto para o painel ainda funciona, mas sem cookie (visitante por hash diário).
+
+- **Consentimento (LGPD):** com `data-consent="required"` no `<script>`, nenhum cookie é gravado até o banner chamar `rastro('consent')`.
+- **Cada evento leva um id** (`event_id`), usado na etapa 2 para deduplicar com o Pixel.
+- **Links externos** (checkout) recebem `rid=<id do visitante>`, que liga a venda ao clique na etapa 3.
+- A aba **Tráfego → Eventos** mostra cada evento com o visitante e os IDs de clique (fbc, fbp, gclid, gbraid, wbraid, ttclid).
 
 O snippet:
 

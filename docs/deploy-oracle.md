@@ -44,6 +44,18 @@ chmod +x ~/rastro/deploy/backup.sh && ~/rastro/deploy/backup.sh   # teste manual
 ```
 Para restaurar: `gunzip -c rastro-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
 
+## 6. Worker da borda
+O Worker grava os cookies no seu domínio e repassa os eventos ao painel.
+```bash
+openssl rand -hex 32   # gere o EDGE_SECRET e coloque também no deploy/.env do painel
+cd edge
+npx wrangler login
+npx wrangler r2 bucket create rastro-raw
+npx wrangler secret put EDGE_SECRET
+npx wrangler deploy     # antes, troque t.seudominio.com.br e ORIGIN no wrangler.toml
+```
+Confira: abra `https://t.seudominio.com.br/s.js` (precisa mostrar o snippet) e, depois de colar o snippet no site, veja os eventos chegando em Tráfego → Eventos com o selo `fbc` ao abrir uma URL com `?fbclid=teste123`.
+
 ## Atualizar
 ```bash
 cd rastro && git pull && cd deploy && docker compose up -d --build app

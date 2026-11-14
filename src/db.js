@@ -100,6 +100,12 @@ async function migrate() {
       meta_purchases BIGINT NOT NULL DEFAULT 0, meta_purchase_value DOUBLE PRECISION NOT NULL DEFAULT 0, meta_leads BIGINT NOT NULL DEFAULT 0,
       PRIMARY KEY(site, platform, date, campaign_id, adset_id, ad_id));
     CREATE INDEX IF NOT EXISTS ad_spend_site_date ON ad_spend(site, date);
+
+    -- Etapa 1 (ADR 0012): id do visitante vindo do cookie da borda, id do evento e identificadores de clique.
+    ALTER TABLE events ADD COLUMN IF NOT EXISTS rid TEXT, ADD COLUMN IF NOT EXISTS event_id TEXT,
+      ADD COLUMN IF NOT EXISTS fbc TEXT, ADD COLUMN IF NOT EXISTS fbp TEXT, ADD COLUMN IF NOT EXISTS gclid TEXT,
+      ADD COLUMN IF NOT EXISTS gbraid TEXT, ADD COLUMN IF NOT EXISTS wbraid TEXT, ADD COLUMN IF NOT EXISTS ttclid TEXT;
+    CREATE INDEX IF NOT EXISTS events_site_ts ON events(site, ts DESC);
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

@@ -105,6 +105,7 @@ svg{display:block;width:100%;height:auto}svg text{fill:var(--muted);font:10.5px 
 .tabs{display:flex;flex-wrap:wrap;align-items:center;gap:2px}.tabs h2{margin-right:auto}.tabs>input{position:absolute;opacity:0;pointer-events:none}
 .tabs>label{cursor:pointer;padding:4px 9px;color:var(--ink2);font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid transparent}.tabs>input:checked+label{color:var(--ink);border-color:var(--acid)}.tabs>input:focus-visible+label{outline:2px solid var(--acid)}
 .pane{display:none;flex-basis:100%;margin-top:10px}${[1, 2, 3, 4, 5].map(i => `.tabs>input:nth-of-type(${i}):checked~.pane:nth-of-type(${i})`).join(',')}{display:block}
+.tag{display:inline-block;font:500 10px/1 var(--mono);padding:3px 5px;margin:1px 3px 1px 0;border:1px solid var(--line2);color:var(--acid);text-transform:uppercase;letter-spacing:.04em}
 /* tabelas */
 .tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th{text-align:left;color:var(--ink2);font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;padding:6px 0;border-bottom:1px solid var(--line2)}th+th,td+td{text-align:right;padding-left:14px;white-space:nowrap}
@@ -150,7 +151,7 @@ export function layout(ctx, title, body, { bare = false, refresh = 0 } = {}) {
 
 const SECTIONS = [
   { label: 'Vendas', tabs: [['', 'Resumo'], ['/campaigns', 'Campanhas'], ['/orders', 'Pedidos']] },
-  { label: 'Tráfego', tabs: [['/traffic', 'Visão geral'], ['/realtime', 'Tempo real'], ['/funnels', 'Funis'], ['/journeys', 'Jornadas'], ['/attribution', 'Atribuição']] },
+  { label: 'Tráfego', tabs: [['/traffic', 'Visão geral'], ['/realtime', 'Tempo real'], ['/events', 'Eventos'], ['/funnels', 'Funis'], ['/journeys', 'Jornadas'], ['/attribution', 'Atribuição']] },
   { label: 'Integrações', tabs: [['/integrations', 'Integrações']], edit: true },
   { label: 'Configurações', tabs: [['/settings', 'Configurações']], edit: true },
 ];

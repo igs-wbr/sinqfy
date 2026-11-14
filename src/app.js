@@ -1,8 +1,8 @@
 // Handler HTTP único (painel + beacons + webhooks + cron). Usado pela função da Vercel (api/index.js)
 // e pelo servidor local (src/server.js).
 import { readFileSync, readdirSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { ready, refreshSites, sites } from './db.js';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { ready, refreshSites, sites, env } from './db.js';
 import { routes, readBody, send, redirect, clientIp, HttpError } from './http.js';
 import { ctx, currentUser, canView, canEdit } from './auth.js';
 import { record } from './tracking/ingest.js';
@@ -24,6 +24,18 @@ try {
   for (const f of readdirSync(new URL('fonts/', PUBLIC)).filter(f => f.endsWith('.woff2'))) add(`/fonts/${f}`, `fonts/${f}`, 'font/woff2', 'public, max-age=31536000, immutable');
 } catch {}
 
+/**
+ * Beacon repassado pelo Worker da borda (edge/worker.js): só confia nos cabeçalhos x-rastro-* com o segredo certo.
+ * Retorna { rid, fbp, fbc, ip } ou null.
+ */
+const ID_RE = /^[\w-]{8,64}$/, FB_RE = /^fb\.\d\.\d{10,13}\.[\w.-]{1,255}$/;
+export function edgeInfo(h) {
+  const want = Buffer.from(env.EDGE_SECRET || ''), got = Buffer.from(String(h['x-edge-secret'] || ''));
+  if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  const ok = (v, re) => re.test(v || '') ? v : null;
+  return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null };
+}
+
 async function handle(r) {
   const { req, res } = r;
   r.url = new URL(req.url, 'http://x');
@@ -39,7 +51,8 @@ async function handle(r) {
   if (path === '/e' && req.method === 'POST') { // beacon do snippet
     const body = await readBody(req, 4096);
     const country = String(req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || req.headers['x-country-code'] || '').toUpperCase();
-    return res.writeHead(await record({ body, ua: req.headers['user-agent'] || '', ip: clientIp(req), country }), CORS).end();
+    const edge = edgeInfo(req.headers);
+    return res.writeHead(await record({ body, ua: req.headers['user-agent'] || '', ip: edge?.ip || clientIp(req), country, edge }), CORS).end();
   }
   // CSRF: além do cookie SameSite=Lax, recusa POSTs que o navegador marca como vindos de outro site.
   // (Webhooks vêm de servidores, que não enviam Sec-Fetch-Site.)

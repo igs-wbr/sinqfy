@@ -21,6 +21,11 @@ route('GET', '/share/:token', { auth: false }, async r => {
   send(r, 200, V.overviewPage(ctx(r, { site, share: true, user: null }), p, f, await S.overview(site, p, f)), { 'x-robots-tag': 'noindex' });
 });
 
+route('GET', '/sites/:id/events', { site: 'view' }, async r => {
+  const [c, d] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id)]);
+  send(r, 200, r.q.has('partial') ? V.eventsBody(c, d) : V.eventsPage(c, d));
+});
+
 route('GET', '/sites/:id/realtime', { site: 'view' }, async r => {
   const [c, d] = await Promise.all([siteCtx(r, '/realtime'), S.realtime(r.site)]);
   send(r, 200, r.q.has('partial') ? V.realtimeBody(c, d) : V.realtimePage(c, d));

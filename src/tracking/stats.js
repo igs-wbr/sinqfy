@@ -122,6 +122,11 @@ export async function realtime(site, now = Date.now()) {
   });
 }
 
+// ---------- eventos (auditoria) ----------
+/** Últimos eventos com os identificadores que vão para as plataformas de anúncio. */
+export const recentEvents = (site, limit = 100) => all(`SELECT ts, name, path, channel, referrer, utm_source, utm_campaign, utm_content,
+  visitor, rid, event_id, fbc, fbp, gclid, gbraid, wbraid, ttclid, revenue FROM events WHERE site=? ORDER BY ts DESC LIMIT ${limit}`, [site]);
+
 // ---------- funis ----------
 const globRe = g => new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
 export function parseSteps(text) {

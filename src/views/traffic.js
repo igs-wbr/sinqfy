@@ -53,6 +53,26 @@ export function realtimePage(ctx, r) {
 <script nonce="${ctx.nonce}">setInterval(function(){if(document.hidden)return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)document.getElementById('rt').innerHTML=h})},5000)</script>`);
 }
 
+const short = (v, n = 10) => v && v.length > n ? v.slice(0, n) + '…' : v;
+const campaignName = v => (v || '').replace(/\|[\w-]+$/, '').trim();
+export function eventsBody(ctx, rows) {
+  const time = ts => new Date(ts).toLocaleString('pt-BR', { timeZone: ctx.site.timezone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  if (!rows.length) return html`<p class="empty">Nenhum evento ainda. Cole o snippet no site (tela Integrações) e abra uma página.</p>`;
+  const ids = e => [['fbc', 'Meta (clique)'], ['fbp', 'Meta (navegador)'], ['gclid', 'Google'], ['gbraid', 'Google'], ['wbraid', 'Google'], ['ttclid', 'TikTok']]
+    .filter(([k]) => e[k]).map(([k, t]) => html`<span class="tag" title="${t}: ${e[k]}">${k}</span>`);
+  return html`<div class="tw"><table class="list events"><thead><tr><th scope="col">Quando</th><th scope="col">Evento</th><th scope="col">Página</th>
+<th scope="col">Origem</th><th scope="col">Visitante</th><th scope="col">IDs para anúncios</th></tr></thead><tbody>${rows.map(e => html`<tr>
+<td><time>${time(e.ts)}</time></td><td>${e.name === 'pageview' ? 'PageView' : e.name}${e.revenue ? html` <small>${num(e.revenue)}</small>` : ''}<br><small title="ID do evento (deduplicação com o Pixel)">${short(e.event_id, 12) || '–'}</small></td>
+<td>${e.path}</td><td>${e.channel}${e.utm_campaign ? html`<br><small>${campaignName(e.utm_campaign)}${e.utm_content ? ` · ${campaignName(e.utm_content)}` : ''}</small>` : ''}</td>
+<td>${e.rid ? html`<span title="Cookie primário _rid: ${e.rid}">${short(e.rid)}</span>` : html`<small title="Sem cookie: hash diário de IP e navegador">sem cookie</small>`}</td>
+<td>${ids(e).length ? ids(e) : html`<small>nenhum</small>`}</td></tr>`)}</tbody></table></div>`;
+}
+export function eventsPage(ctx, rows) {
+  return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead('Tráfego · eventos', raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos recebidos, do mais novo para o mais antigo.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
+<section class="card" id="ev" aria-live="polite">${eventsBody(ctx, rows)}</section>
+<script nonce="${ctx.nonce}">setInterval(function(){if(document.hidden)return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)document.getElementById('ev').innerHTML=h})},5000)</script>`);
+}
+
 export function funnelsPage(ctx, p, f, funnels, err) {
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/funnels`;
   return layout(ctx, `Funis · ${ctx.site.name}`, html`${pageHead('Tráfego · funis', raw('Onde as visitas <em>desistem</em>'), 'Quantas visitas passam por cada etapa, em ordem, dentro da mesma visita.')}
