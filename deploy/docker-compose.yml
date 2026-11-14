@@ -1,0 +1,32 @@
+# Rastro na VM da Oracle: banco, painel e túnel da Cloudflare. Nenhuma porta fica aberta na internet.
+# Uso: na pasta deploy/, `docker compose up -d --build` (variáveis em deploy/.env, veja docs/deploy-oracle.md).
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rastro
+      POSTGRES_DB: rastro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "rastro"], interval: 10s, retries: 5 }
+
+  app:
+    build: ..
+    restart: unless-stopped
+    depends_on: { postgres: { condition: service_healthy } }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://rastro:${POSTGRES_PASSWORD}@postgres:5432/rastro
+      TRUST_PROXY: "1"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN}
+    depends_on: [app]
+
+volumes:
+  pgdata:

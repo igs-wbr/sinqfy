@@ -1,0 +1,14 @@
+# Dispara as tarefas do Rastro (sync da Meta, relatórios por e-mail, limpeza) de hora em hora.
+# Configure em Settings → Secrets and variables → Actions:
+#   RASTRO_URL   → https://stats.seudominio.com (sem barra no final)
+#   CRON_SECRET  → o mesmo valor da variável CRON_SECRET na Vercel
+name: Rastro cron
+on:
+  schedule:
+    - cron: '7 * * * *' # minuto 7 de toda hora (o GitHub pode atrasar alguns minutos)
+  workflow_dispatch: {}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl --fail-with-body -sS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ secrets.RASTRO_URL }}/cron"

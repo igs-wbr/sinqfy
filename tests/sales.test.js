@@ -1,0 +1,155 @@
+// Vendas e anúncios: webhooks, Conversions API, sync da Meta (fetch simulado), métricas e campanhas.
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { boot } from './helpers.js';
+
+// A Graph API da Meta é simulada; todo o resto do fetch é real (servidor local).
+const graphCalls = [], capiBodies = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  const u = new URL(String(url));
+  if (u.host !== 'graph.facebook.com') return realFetch(url, opts);
+  graphCalls.push(u);
+  const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
+  if (u.pathname.endsWith('/events')) { capiBodies.push(JSON.parse(opts.body)); return json({ events_received: 1 }); }
+  if (u.searchParams.get('access_token') === 'BAD') return json({ error: { message: 'Invalid OAuth access token' } }, 400);
+  const p = u.pathname.replace(/^\/v[\d.]+\/act_12345/, '');
+  if (p === '') return json({ name: 'Conta X', currency: 'BRL' });
+  if (p === '/campaigns' && !u.searchParams.has('after')) return json({ data: [{ id: 'c1', name: 'Black Friday', effective_status: 'ACTIVE', daily_budget: '10000' }], paging: { next: u.href + '&after=2' } });
+  if (p === '/campaigns') return json({ data: [{ id: 'c2', name: 'Antiga', effective_status: 'PAUSED' }] });
+  if (p === '/adsets') return json({ data: [{ id: 's1', name: 'Lookalike', campaign_id: 'c1', effective_status: 'ACTIVE', daily_budget: '5000' }] });
+  if (p === '/ads') return json({ data: [{ id: 'a1', name: 'Video 1', adset_id: 's1', effective_status: 'ACTIVE' }] });
+  if (p === '/insights') {
+    const day = JSON.parse(u.searchParams.get('time_range')).until;
+    return json({ data: [{ date_start: day, campaign_id: 'c1', campaign_name: 'Black Friday', adset_id: 's1', adset_name: 'Lookalike', ad_id: 'a1', ad_name: 'Video 1', spend: '100.50', impressions: '1000', clicks: '50',
+      actions: [{ action_type: 'link_click', value: '50' }, { action_type: 'omni_purchase', value: '3' }, { action_type: 'purchase', value: '3' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '3' }, { action_type: 'lead', value: '5' }],
+      action_values: [{ action_type: 'omni_purchase', value: '591' }, { action_type: 'purchase', value: '591' }] }] });
+  }
+  return json({ error: { message: 'rota não simulada ' + p } }, 404);
+};
+
+const { req, login, close } = await boot();
+const DB = await import('../src/db.js'), { db } = DB;
+const W = await import('../src/sales/webhooks.js');
+const S = await import('../src/sales/stats.js');
+const { period, localDate } = await import('../src/time.js');
+const { action } = await import('../src/ads/meta.js');
+after(close);
+
+const admin = await login();
+await req('/sites', { cookie: admin, form: { id: 'loja', name: 'Loja', timezone: 'America/Sao_Paulo', currency: 'BRL' } });
+await req('/sites/loja/settings', { cookie: admin, form: { action: 'save', name: 'Loja', timezone: 'America/Sao_Paulo', currency: 'BRL', tax_rate: '6' } });
+const token = (await db.get("SELECT webhook_token FROM sites WHERE id='loja'")).webhook_token;
+const hook = (platform, body, t = token) => req(`/hooks/${t}/${platform}`, { body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'content-type': typeof body === 'string' ? 'application/x-www-form-urlencoded' : 'application/json' } });
+const sale = id => db.get("SELECT * FROM sales WHERE site='loja' AND order_id=?", [id]);
+const today = localDate(Date.now(), 'America/Sao_Paulo'), p = { from: today, to: today };
+const hotmart = (tx, extra = {}) => ({
+  event: 'PURCHASE_APPROVED', data: {
+    product: { name: 'Curso' }, buyer: { email: 'Comprador@Exemplo.com ', checkout_phone: '+55 (11) 99999-0000' },
+    purchase: { transaction: tx, order_date: Date.now(), price: { value: 197, currency_value: 'BRL' }, payment: { type: 'PIX' }, origin: { src: 'FB', sck: 'Black Friday|c1' } }, ...extra,
+  },
+});
+
+test('webhooks: Hotmart, Kiwify, Eduzz (legado) e genérico', async () => {
+  assert.equal((await hook('hotmart', hotmart('HP1', { commissions: [{ value: 180.5, source: 'PRODUCER' }] }))).status, 200);
+  assert.equal((await hook('kiwify', {
+    order_id: 'K1', order_status: 'paid', payment_method: 'credit_card', Product: { product_name: 'Ebook' }, Customer: { email: 'k@k.com' },
+    Commissions: { charge_amount: '9700', my_commission: '8900', currency: 'BRL' }, created_at: new Date().toISOString(),
+    TrackingParameters: { utm_source: 'FB', utm_medium: 'Lookalike|s1', utm_campaign: 'Black Friday|c1', utm_content: 'Video 1|a1' },
+  })).status, 200);
+  assert.equal((await hook('kiwify', { order_id: 'K1', order_status: 'refunded', Commissions: {} })).status, 200);
+  assert.equal((await hook('eduzz', 'trans_cod=E1&trans_status=3&trans_value=47%2C00&trans_paymentmethod=boleto&content_title=Mentoria')).status, 200);
+  assert.equal((await hook('generic', { order_id: 'G1', status: 'pending', amount: 'R$ 1.234,56', method: 'pix' })).status, 200);
+  assert.equal((await hook('hotmart', { event: 'PURCHASE_PROTEST', data: {} })).status, 200, 'evento ignorado responde 200');
+  assert.equal((await hook('generic', { status: 'paid', amount: 1 })).status, 400);
+  assert.equal((await hook('hotmart', hotmart('X'), 'token-errado')).status, 404);
+  assert.equal((await hook('shopify', {})).status, 404);
+
+  const [hp, k, e, g] = await Promise.all(['HP1', 'K1', 'E1', 'G1'].map(sale));
+  assert.deepEqual([hp.status, hp.method, hp.gross, hp.net, hp.utm_source, hp.campaign_key, hp.product], ['paid', 'pix', 197, 180.5, 'FB', 'c1', 'Curso']);
+  assert.deepEqual([k.status, k.method, k.gross, k.net, k.adset_key, k.ad_key, k.product], ['refunded', 'card', 97, 89, 's1', 'a1', 'Ebook'], 'reembolso preserva valores e UTMs');
+  assert.deepEqual([e.status, e.method, e.gross, e.product], ['paid', 'boleto', 47, 'Mentoria']);
+  assert.deepEqual([g.status, g.gross], ['pending', 1234.56]);
+  assert.equal((await db.get("SELECT COUNT(*) n FROM sales WHERE site='loja'")).n, 4);
+  assert.ok(!JSON.stringify(await db.all('SELECT * FROM sales')).includes('@'), 'nenhum e-mail gravado');
+  assert.equal(W.adKey('Nome da campanha|120200'), '120200');
+  assert.deepEqual(['1.234,56', '1,234.56', '10.000', 'R$ 97,90', '1.5', 10].map(W.num), [1234.56, 1234.56, 10000, 97.9, 1.5, 10]);
+});
+
+test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
+  assert.equal(capiBodies.length, 0, 'sem pixel configurado, nada é enviado');
+  assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'capi', pixel: '555001', capi_token: 'CAPI' } })).status, 303);
+  await hook('hotmart', hotmart('HP2'));
+  await hook('hotmart', hotmart('HP2')); // reenvio do mesmo evento
+  assert.equal(capiBodies.length, 1);
+  const ev = capiBodies[0].data[0];
+  assert.deepEqual([ev.event_name, ev.event_id, ev.custom_data.value, ev.action_source], ['Purchase', 'hotmart-HP2', 197, 'website']);
+  assert.equal(ev.user_data.em[0], createHash('sha256').update('comprador@exemplo.com').digest('hex'));
+  assert.equal(ev.user_data.ph[0], createHash('sha256').update('5511999990000').digest('hex'));
+  assert.ok(!JSON.stringify(capiBodies).includes('Comprador@'), 'e-mail só em hash');
+  assert.ok(graphCalls.at(-1).pathname.endsWith('/555001/events'));
+  assert.ok((await S.lastWebhooks('loja')).some(l => l.message.includes('Conversions API')));
+});
+
+test('Meta: sincroniza contas, entidades e gasto (com paginação) e registra erros', async () => {
+  const bad = await req('/sites/loja/integrations', { cookie: admin, form: { action: 'meta_add', account_id: 'act_99999', token: 'BAD' } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.text, /Invalid OAuth access token/);
+  assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'meta_add', account_id: 'act_12345', token: 'TOKEN' } })).status, 303);
+  const acc = await db.get("SELECT * FROM ad_accounts WHERE account_id='12345'");
+  assert.ok(acc.last_sync && !acc.last_error);
+  assert.deepEqual([acc.name, acc.currency], ['Conta X', 'BRL']);
+  assert.equal((await db.get("SELECT COUNT(*) n FROM ad_entities WHERE site='loja' AND level='campaign'")).n, 2, 'duas páginas de campanhas');
+  assert.equal((await db.get("SELECT budget FROM ad_entities WHERE id='c1'")).budget, 100);
+  assert.deepEqual(await db.get("SELECT date, spend, clicks, meta_purchases, meta_purchase_value, meta_leads FROM ad_spend WHERE platform='meta'"),
+    { date: today, spend: 100.5, clicks: 50, meta_purchases: 3, meta_purchase_value: 591, meta_leads: 5 }, 'conversões da Meta sem contar a mesma compra 3x');
+  assert.equal(action([{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' }], ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase']), 2, 'cai para o tipo do pixel');
+  assert.equal(action(undefined, ['lead']), 0);
+  assert.ok(!(await req('/sites/loja/integrations', { cookie: admin })).text.includes('TOKEN'), 'token nunca é exibido');
+});
+
+test('métricas: faturamento líquido, imposto, lucro, ROAS, reembolso', async () => {
+  const t = await S.salesTotals(DB.sites.get('loja'), p);
+  // aprovadas: HP1 (197 / 180,50), HP2 (197 / 197), E1 (47 / 47); K1 reembolsada; G1 pendente; gasto Meta 100,50
+  assert.deepEqual([t.paid, t.gross, t.net, t.spend, t.pending_value, t.refunded], [3, 441, 424.5, 100.5, 1234.56, 1]);
+  assert.equal(Math.round(t.tax * 100), 2646);
+  assert.equal(Math.round(t.profit * 100), Math.round((424.5 - 100.5 - 26.46) * 100));
+  assert.equal(t.roas.toFixed(4), (424.5 / 100.5).toFixed(4));
+  assert.equal(t.refund_rate, 0.25);
+  assert.equal(t.cpa, 33.5);
+  assert.deepEqual([t.metaPurchases, t.metaValue, t.metaLeads, t.metaRoas.toFixed(4)], [3, 591, 5, (591 / 100.5).toFixed(4)]);
+  const m = await S.byMethod(DB.sites.get('loja'), p, {});
+  assert.deepEqual(m.map(x => [x.k, x.n]), [['pix', 2], ['boleto', 1]]);
+});
+
+test('campanhas: gasto × vendas pela chave da UTM', async () => {
+  const rows = await S.campaigns(DB.sites.get('loja'), p, 'campaign');
+  const bf = rows.find(r => r.id === 'c1'), none = rows.find(r => r.unmatched);
+  assert.deepEqual([bf.name, bf.spend, bf.sales, bf.net, bf.statusPt, bf.budget, bf.roas], ['Black Friday', 100.5, 2, 377.5, 'Ativo', 100, 377.5 / 100.5]);
+  assert.deepEqual([bf.metaPurchases, bf.metaValue, bf.metaLeads, bf.metaRoas], [3, 591, 5, 591 / 100.5], 'Meta diz 3 compras; webhooks confirmam 2');
+  assert.deepEqual([none.sales, none.net], [1, 47], 'venda sem UTM aparece separada');
+  assert.ok(!rows.some(r => r.id === 'c2'), 'pausada e sem gasto não aparece');
+  const ads = (await S.campaigns(DB.sites.get('loja'), p, 'ad')).filter(r => !r.unmatched);
+  assert.deepEqual(ads.map(r => [r.id, r.spend, r.sales]), [['a1', 100.5, 0]], 'K1 foi reembolsada');
+});
+
+test('páginas de vendas: números, auto-refresh de hora em hora e indicador do sync', async () => {
+  const dash = await req('/sites/loja', { cookie: admin });
+  assert.equal(dash.status, 200);
+  assert.match(dash.text, /id="net">R\$\s?424,50</);
+  assert.match(dash.text, /Vendas por pagamento/);
+  assert.match(dash.text, /id="meta-purchases">3</);
+  assert.match(dash.text, /id="meta-leads">5</);
+  assert.match(dash.text, /<meta http-equiv="refresh" content="3600">/, 'recarrega a cada hora');
+  assert.match(dash.text, /Meta atualizada às \d{2}:\d{2}/);
+  assert.match((await req('/sites/loja?f_platform=hotmart', { cookie: admin })).text, /id="net">R\$\s?377,50</);
+  assert.match((await req('/sites/loja/campaigns', { cookie: admin })).text, /Black Friday/);
+  assert.match((await req('/sites/loja/campaigns?level=adset', { cookie: admin })).text, /Lookalike/);
+  const refunded = await req('/sites/loja/orders?f_status=refunded', { cookie: admin });
+  assert.ok(refunded.text.includes('K1') && !refunded.text.includes('HP1'));
+  assert.match((await req('/sites/loja/integrations', { cookie: admin })).text, new RegExp(`/hooks/${token}/kiwify`));
+  assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'rotate' } })).status, 303);
+  assert.equal((await hook('generic', { order_id: 'G2', status: 'paid', amount: 1 })).status, 404, 'token antigo para de funcionar');
+  assert.equal(period(new URLSearchParams('range=today'), 'America/Sao_Paulo').from, today);
+});

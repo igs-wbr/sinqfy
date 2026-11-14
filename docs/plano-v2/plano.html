@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rastro v2: plano</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== Tokens do produto (os mesmos que vão para src/views/ui.js) ===== */
+:root{
+  --blue-900:#062F73; --blue-800:#083C95; --blue-700:#0B4DB4; --blue-600:#0E58DB; --blue-500:#2F74EA; --blue-300:#8DB4F5; --blue-100:#DCE7FB; --blue-50:#ECF1FB;
+  --bg:var(--blue-50); --surface:#FFFFFF; --surface2:#F5F8FE; --line:#DCE4F2; --ink:#0B1530; --ink2:#34405E; --muted:#5B6785;
+  --side:var(--blue-700); --side-ink:#FFFFFF; --side-muted:#B9CDF3; --side-active:rgba(255,255,255,.16);
+  --hero:var(--blue-700); --primary:var(--blue-600); --primary-ink:#FFFFFF; --link:var(--blue-600);
+  --ok:#0F7A55; --ok-bg:#E3F5EC; --bad:#C2372F; --bad-bg:#FCE9E7; --warn:#9A6200; --warn-bg:#FDF1DC;
+  --r-lg:18px; --r-md:12px; --r-sm:8px;
+  --font:'Figtree',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+.dark{
+  --bg:#070D1C; --surface:#0E1730; --surface2:#13203F; --line:#1F2D52; --ink:#E8EEFC; --ink2:#B7C4E4; --muted:#8392B8;
+  --side:#0A1838; --side-ink:#E8EEFC; --side-muted:#8392B8; --side-active:var(--blue-700);
+  --hero:var(--blue-700); --primary:var(--blue-600); --link:var(--blue-300);
+  --ok:#4FD1A0; --ok-bg:#0E3328; --bad:#FF8A80; --bad-bg:#3A1716; --warn:#F2C15E; --warn-bg:#352711;
+}
+/* ===== Documento ===== */
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;background:#fff;color:#0B1530;font:400 13.5px/1.55 var(--font)}
+.doc{max-width:860px;margin:0 auto;padding:48px 40px}
+h1{font-size:34px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px;font-weight:800}
+h1 b{color:var(--blue-600);font-weight:800}
+h2{font-size:22px;letter-spacing:-.01em;margin:36px 0 8px;font-weight:800;break-after:avoid}
+h3{font-size:15.5px;margin:22px 0 6px;font-weight:700;break-after:avoid}
+p{margin:6px 0 10px}
+.eyebrow{font:600 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--blue-600)}
+.lead{font-size:15px;color:#34405E}
+.box{border:1px solid #DCE4F2;border-radius:12px;padding:14px 16px;margin:12px 0;background:#F5F8FE;break-inside:avoid}
+.box.blue{background:var(--blue-700);color:#fff;border:0}
+.box.blue .eyebrow{color:#B9CDF3}
+table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:12.5px;break-inside:auto}
+th,td{text-align:left;vertical-align:top;padding:7px 9px;border-bottom:1px solid #DCE4F2}
+th{font:600 10px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#5B6785;background:#F5F8FE}
+tr{break-inside:avoid}
+code,.mono{font-family:var(--mono);font-size:11.5px;background:#ECF1FB;padding:1px 5px;border-radius:5px}
+ul,ol{margin:6px 0 10px;padding-left:20px}
+li{margin:3px 0}
+.page{break-before:page}
+.stage{border-left:3px solid var(--blue-600);padding:2px 0 2px 16px;margin:18px 0}
+.stage h3{margin-top:4px}
+.tag{display:inline-block;font:600 10px/1 var(--mono);letter-spacing:.06em;padding:4px 7px;border-radius:99px;background:#DCE7FB;color:#083C95;margin-right:4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cap{font-size:11.5px;color:#5B6785;margin:6px 0 18px}
+.flow{font:500 11.5px/1.7 var(--mono);background:#0B1530;color:#DCE7FB;border-radius:12px;padding:14px 16px;white-space:pre;overflow:hidden;break-inside:avoid}
+
+/* ===== Mockup do painel ===== */
+.app{display:grid;grid-template-columns:200px 1fr;background:var(--bg);color:var(--ink);border-radius:16px;overflow:hidden;border:1px solid var(--line);font-size:12px;break-inside:avoid;box-shadow:0 18px 40px -24px rgba(6,47,115,.45)}
+.side{background:var(--side);color:var(--side-ink);padding:14px 10px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px;padding:4px 8px 12px}
+.brand i{width:22px;height:22px;border-radius:7px;background:#fff;display:block;position:relative}
+.brand i:after{content:"";position:absolute;inset:6px;border-radius:3px;background:var(--blue-700)}
+.proj{margin:0 4px 12px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.1);font-size:11px;color:var(--side-muted)}
+.proj b{display:block;color:var(--side-ink);font-size:12px}
+.grp{font:600 9px/1 var(--mono);letter-spacing:.14em;color:var(--side-muted);padding:12px 9px 6px;text-transform:uppercase}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-radius:8px;color:var(--side-ink);opacity:.9}
+.nav.on{background:var(--side-active);opacity:1;font-weight:600}
+.nav s{text-decoration:none;font:600 9.5px/1 var(--mono);background:rgba(255,255,255,.16);padding:3px 6px;border-radius:99px}
+.main{padding:16px 18px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.top h4{font-size:24px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 4px;font-weight:800}
+.top h4 b{color:var(--link)}
+.sub{color:var(--muted);font-size:11.5px}
+.seg{display:flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:2px}
+.seg span{padding:5px 8px;border-radius:7px;font-weight:600;color:var(--muted);font-size:11px}
+.seg span.on{background:var(--surface2);color:var(--ink);box-shadow:0 1px 0 var(--line)}
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--primary);color:var(--primary-ink);border-radius:9px;padding:7px 11px;font-weight:700;font-size:11px;white-space:nowrap}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:10px;margin-top:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.card.hero{background:var(--hero);color:#fff;border:0}
+.card h5{margin:0;font-size:12.5px;font-weight:700}
+.card .k{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:8px 0 0;font-variant-numeric:tabular-nums}
+.card .l{font:600 8.5px/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;opacity:.7}
+.pill{font:600 9.5px/1 var(--mono);padding:4px 6px;border-radius:99px;background:var(--ok-bg);color:var(--ok)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.w{background:rgba(255,255,255,.18);color:#fff}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.bars{display:flex;align-items:flex-end;gap:5px;height:46px;margin-top:10px}
+.bars i{flex:1;background:rgba(255,255,255,.35);border-radius:4px 4px 0 0}
+.bars i.on{background:#fff}
+.vs{display:flex;gap:10px;margin-top:10px}
+.vs div{flex:1}
+.meter{height:7px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:5px}
+.meter i{display:block;height:100%;background:var(--primary);border-radius:99px}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:10px;margin-top:10px}
+.ev{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:11px}
+.ev:first-of-type{border-top:0}
+.ev .t{font-family:var(--mono);color:var(--muted);font-size:10px}
+.ev .d{color:var(--muted);font-size:10px}
+.dest{display:flex;gap:3px}
+.dest b{font:600 8.5px/1 var(--mono);padding:3px 4px;border-radius:5px;background:var(--ok-bg);color:var(--ok)}
+.dest b.x{background:var(--bad-bg);color:var(--bad)}
+.ask{margin-top:8px;display:flex;gap:6px}
+.ask span{flex:1;border:1px solid var(--line);background:var(--surface2);border-radius:9px;padding:7px 9px;color:var(--muted);font-size:11px}
+.alert{padding:8px 9px;border-radius:9px;background:var(--warn-bg);color:var(--warn);font-size:11px;margin-top:8px}
+
+@page{size:A4;margin:14mm 12mm}
+@media print{.doc{padding:0}}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="eyebrow">Tracking System · Rastro v2 · 14/11/2026</div>
+<h1>Rastro v2: tracking completo, <b>do clique à venda</b>, para vender como serviço.</h1>
+<p class="lead">Plano para transformar o Rastro (hoje de uso pessoal, na Vercel com Turso) num produto multi-cliente que rastreia site, checkout externo, lead, WhatsApp e CRM, devolve cada conversão para Meta, Google e TikTok pelo servidor e tem um agente 24 horas vigiando tudo. Dividido em 11 etapas que entram no ar uma de cada vez.</p>
+
+<div class="box blue">
+<div class="eyebrow">Conclusão</div>
+<p style="margin:6px 0 0;font-size:14.5px">Reaproveite o Rastro como painel e motor de vendas, coloque a coleta e os webhooks no Cloudflare Workers com domínio próprio do cliente, o banco e o despachante de eventos na VM gratuita da Oracle, e entregue nesta ordem: site, destinos, checkout, domínio e onboarding, lead e CRM, WhatsApp, CRM externo e offline, campanhas, agente, cobrança. A partir da etapa 4 dá para cobrar do primeiro cliente.</p>
+</div>
+
+<h2>1. O que as LPs de referência trouxeram</h2>
+<p>A página do <b>Dev de Tráfego</b> (devdetrafego.online/a) vende um curso para montar página, tracking e CRM próprios com Claude Code, GitHub, Cloudflare e Supabase. O segundo link veio repetido (as duas URLs eram iguais), então só uma LP foi analisada. Mande a outra se for diferente.</p>
+<table>
+<tr><th>O que a LP mostra</th><th>Como entra no Rastro v2</th></tr>
+<tr><td>Painel com cada evento ligado a campanha, conjunto e anúncio</td><td>Aba <b>Eventos</b> com inspetor por evento: o que chegou, o que foi enviado a cada destino, resposta da plataforma e o anúncio de origem</td></tr>
+<tr><td>Venda do checkout entra por webhook e "volta para a Meta"</td><td>Etapa 3, com casamento pelo ID do visitante passado no link de checkout e, na falta dele, por e-mail ou telefone</td></tr>
+<tr><td>CRM em colunas: lead, conversa, venda. Contato mostra a origem</td><td>Aba <b>CRM</b> (quadro e contatos). Cada coluna pode disparar um evento offline para Meta, Google e TikTok</td></tr>
+<tr><td>Caso: aluno perdia 50% das vendas porque um formulário antes do checkout derrubava o parâmetro</td><td>O script repassa o ID do visitante e as UTMs em todo link e formulário. O agente compara vendas reais com as da Meta e avisa quando a diferença passa do limite</td></tr>
+<tr><td>Bônus "Validador de eventos" e "SOS quebrou"</td><td>Aba <b>Diagnóstico</b>: teste de evento ao vivo, checklist por fonte e alerta automático quando algo para</td></tr>
+<tr><td>Calculadora "ferramenta alugada x sua"</td><td>Ideia para a LP de venda do Rastro (etapa 10)</td></tr>
+<tr><td>Segurança: banco travado por linha (RLS), chaves fora do código, validação de entrada</td><td>Regras da etapa 0: isolamento por cliente, segredos criptografados, validação em toda borda</td></tr>
+<tr><td>Rastreio de WhatsApp vendido à parte</td><td>No Rastro v2 entra no produto (etapa 6), e isso vira diferencial de venda</td></tr>
+<tr><td>Público: gestor de tráfego que revende para cliente (relato de R$ 2 mil por cliente)</td><td>Modelo multi-cliente desde a etapa 0: agência, projetos e acesso do cliente final</td></tr>
+</table>
+<p class="cap">Os números acima são os que a própria LP declara. Não foram verificados.</p>
+
+<h2>2. Arquitetura e tech stack</h2>
+<div class="flow">Site do cliente ── s.js (t.cliente.com.br) ──┐
+Checkouts (Hotmart, Kiwify...) ── webhook ──┤
+Formulários e Lead Ads da Meta ─────────────┤   CLOUDFLARE WORKER (borda)
+WhatsApp (link rastreável, Cloud API) ──────┤   valida, enriquece, grava cookie,
+CRMs externos e CSV ────────────────────────┘   salva bruto no R2
+                                                    │  Hyperdrive + Tunnel
+                                                    ▼
+                         ORACLE ARM (Docker): PostgreSQL ─ fila "deliveries"
+                                                    │
+                    DESPACHANTE ── Meta CAPI (web, WhatsApp, CRM) · GA4 · Google Ads · TikTok
+                    PAINEL (Rastro, Node) em app.seudominio via Tunnel
+                    AGENTE 24h ── IA grátis (Gemini, Groq) ── alerta no Telegram</div>
+
+<table>
+<tr><th>Peça</th><th>Ferramenta</th><th>Por quê</th></tr>
+<tr><td>Borda: script, coleta, webhooks, redirecionador de WhatsApp</td><td>Cloudflare Workers + <b>Cloudflare for SaaS</b> (domínio do cliente)</td><td>Responde rápido no mundo todo, grava cookie primário pelo servidor e dá SSL automático no subdomínio de cada cliente</td></tr>
+<tr><td>Arquivo bruto</td><td>Cloudflare R2</td><td>Guarda cada payload por 30 dias para reprocessar e auditar. Sem custo de saída</td></tr>
+<tr><td>Banco</td><td>PostgreSQL 17 na VM da Oracle, acessado pelo Worker via <b>Hyperdrive</b> e <b>Cloudflare Tunnel</b></td><td>Multi-cliente com isolamento por linha (RLS), sem limite de espaço do Neon e sem expor a porta do banco</td></tr>
+<tr><td>Despachante e tarefas</td><td>Node 24 na Oracle (mesma imagem do painel), fila na tabela <code>deliveries</code> com <code>FOR UPDATE SKIP LOCKED</code></td><td>Reenvio com espera crescente sem depender de serviço pago de fila</td></tr>
+<tr><td>Painel</td><td>Rastro atual, renderizado no servidor (ADR 0005 continua valendo)</td><td>Reaproveita autenticação, papéis, telas de vendas, sync da Meta e testes</td></tr>
+<tr><td>IA</td><td>Gemini API e Groq nas camadas gratuitas, com troca automática</td><td>Classificar conversas, explicar alertas, responder "Pedir ao agente". Nunca recebe dado pessoal em claro</td></tr>
+<tr><td>Alertas</td><td>Bot do Telegram</td><td>Grátis, chega no celular</td></tr>
+<tr><td>Código</td><td>GitHub, deploy do Worker por <code>wrangler</code>, do painel por Docker Compose na Oracle</td><td>Cada etapa vira uma versão com volta fácil</td></tr>
+</table>
+<div class="box"><b>Confirmar antes da etapa 0</b> (limites mudam): Hyperdrive no plano gratuito do Workers; cota gratuita do Cloudflare for SaaS (hoje 100 domínios de cliente); requisições diárias do Workers gratuito (hoje 100 mil, o plano de US$ 5 resolve quando passar); política da Oracle para VM ociosa (converter a conta para Pay As You Go evita a recuperação).</div>
+
+<h3>Estrutura do repositório</h3>
+<table>
+<tr><th>Pasta</th><th>Conteúdo</th></tr>
+<tr><td><code>edge/</code></td><td>Worker: <code>s.js</code>, <code>/e</code>, <code>/hooks/:token/:plataforma</code>, <code>/w/:slug</code>, <code>/wa/webhook</code>, <code>/f/:form</code>, <code>/meta/leadgen</code></td></tr>
+<tr><td><code>src/</code></td><td>Painel atual (rotas, telas, auth), com <code>db.js</code> trocado de libSQL para Postgres</td></tr>
+<tr><td><code>src/core/</code></td><td>Código compartilhado entre borda e Oracle: normalização, hash, montagem de <code>fbc</code>, casamento de identidade, mapa de eventos</td></tr>
+<tr><td><code>src/dispatch/</code></td><td>Um arquivo por destino: <code>meta.js</code>, <code>ga4.js</code>, <code>google-ads.js</code>, <code>tiktok.js</code>, <code>webhook.js</code></td></tr>
+<tr><td><code>src/agent/</code></td><td>Tarefas do agente: auditoria, EMQ, alertas, resumo diário</td></tr>
+<tr><td><code>db/migrations/</code></td><td>SQL numerado, aplicado na subida</td></tr>
+<tr><td><code>deploy/</code></td><td><code>docker-compose.yml</code> (postgres, app, dispatcher, cloudflared), <code>wrangler.toml</code></td></tr>
+</table>
+
+<h2 class="page">3. Todas as opções de tracking</h2>
+<table>
+<tr><th>Fonte</th><th>Como entra</th><th>Eventos</th><th>Como liga ao anúncio</th></tr>
+<tr><td><b>Site e LP</b></td><td>Script <code>s.js</code> no subdomínio do cliente</td><td>PageView, ViewContent, cliques marcados, rolagem, Lead (form), InitiateCheckout (clique no checkout), personalizados</td><td>Cookie primário de 400 dias (<code>_rid</code>), <code>_fbp</code> e <code>_fbc</code> gravados pelo servidor, fbclid, gclid, gbraid, wbraid, ttclid e UTMs</td></tr>
+<tr><td><b>Checkout externo</b></td><td>Webhook por plataforma</td><td>Purchase, pendente (Pix e boleto), recusada, reembolso, chargeback, abandono, renovação de assinatura</td><td>1º o <code>_rid</code> que o script grava no link do checkout (<code>sck</code>, <code>src</code>, <code>xcod</code> ou <code>utm_id</code>, conforme a plataforma). 2º e-mail ou telefone de um lead anterior. 3º UTMs</td></tr>
+<tr><td><b>Formulário próprio</b></td><td>Captura automática de qualquer <code>&lt;form&gt;</code> com e-mail ou telefone, ou endpoint <code>/f/:form</code></td><td>Lead, CompleteRegistration</td><td>Mesmo <code>_rid</code> do visitante, que vira contato no CRM</td></tr>
+<tr><td><b>Lead Ads da Meta</b> (formulário instantâneo)</td><td>Webhook <code>leadgen</code> da página</td><td>Lead no CRM com campanha, conjunto e anúncio</td><td><code>lead_id</code> da Meta, usado depois nas conversões de CRM</td></tr>
+<tr><td><b>WhatsApp por link</b></td><td>Botão do site aponta para <code>t.cliente.com.br/w/:slug</code>, que redireciona ao <code>wa.me</code> com um código curto na mensagem ("Quero saber mais [R7K2]")</td><td>Contact ao clicar. Lead, Qualificado e Purchase quando o CRM muda a etapa</td><td>Código R7K2 liga a conversa ao <code>_rid</code> e ao clique</td></tr>
+<tr><td><b>WhatsApp de anúncio</b> (clique para conversar)</td><td>WhatsApp Cloud API oficial ligada ao projeto, webhook de mensagens</td><td>LeadSubmitted, Purchase, etapas do funil</td><td><code>ctwa_clid</code> e ID do anúncio que a Meta manda na primeira mensagem. Volta pela CAPI com <code>action_source=business_messaging</code></td></tr>
+<tr><td><b>CRM interno</b></td><td>Quadro do Rastro</td><td>Cada coluna mapeada para um evento (ex.: "Qualificado" = QualifiedLead)</td><td>Contato carrega <code>_rid</code>, <code>fbc</code>, <code>gclid</code>, <code>ctwa_clid</code> e <code>lead_id</code></td></tr>
+<tr><td><b>CRM externo</b></td><td>Webhook de entrada (Kommo, RD Station, Pipedrive, HubSpot, genérico) e importação de CSV</td><td>Conversões offline por etapa ou venda fechada</td><td>E-mail ou telefone (hash), <code>lead_id</code>, gclid</td></tr>
+</table>
+
+<h3>Destinos</h3>
+<table>
+<tr><th>Destino</th><th>O que recebe</th><th>Observação</th></tr>
+<tr><td>Meta Conversions API</td><td>Eventos web, de WhatsApp (<code>business_messaging</code>) e de CRM (<code>system_generated</code>)</td><td>Deduplicação com o Pixel pelo <code>event_id</code>. Código de teste por projeto</td></tr>
+<tr><td>GA4 Measurement Protocol</td><td>Eventos web e compras, reembolso como <code>refund</code></td><td>Precisa do <code>client_id</code> do GA, que o script lê do cookie <code>_ga</code></td></tr>
+<tr><td>Google Ads</td><td>Conversões offline por gclid e conversões otimizadas para leads</td><td>A API exige <i>developer token</i> aprovado. Enquanto não sai, usa a importação via GA4</td></tr>
+<tr><td>TikTok Events API</td><td>Eventos web e offline</td><td>Usa ttclid e cookie <code>_ttp</code></td></tr>
+<tr><td>Webhook de saída</td><td>Qualquer evento normalizado</td><td>Para n8n, Make ou sistema do cliente</td></tr>
+</table>
+
+<h3>Regras de identidade e dados pessoais</h3>
+<ul>
+<li>E-mail e telefone são normalizados (minúsculas, telefone em E.164 com 55) e viram SHA-256 antes de qualquer envio.</li>
+<li>O CRM precisa mostrar nome e telefone, então esses campos ficam <b>criptografados no banco</b> (AES-GCM com chave fora do banco), com o hash ao lado para casar registros. Isso substitui a regra antiga de "nunca gravar PII" (ADR 0002) e precisa de ADR nova.</li>
+<li>Consentimento: banner opcional por projeto. Sem consentimento, o script não grava cookie e manda o evento só com dados do servidor.</li>
+<li>Retenção configurável (padrão 13 meses para eventos, 30 dias para o bruto no R2). Exclusão por pedido do titular em Configurar, Privacidade.</li>
+</ul>
+
+<h2 class="page">4. Etapas de execução</h2>
+<p>Cada etapa termina com algo funcionando, testes passando e uma versão no GitHub. Não comece a próxima sem o critério de pronto da anterior.</p>
+
+<div class="stage"><span class="tag">ETAPA 0</span><span class="tag">FUNDAÇÃO</span>
+<h3>Decisões, infraestrutura e banco</h3>
+<ul>
+<li>Escrever as ADRs 0009 a 0013: multi-cliente com RLS; Postgres na Oracle; borda no Cloudflare; cookie primário com consentimento; PII criptografada para o CRM. Marcar 0002, 0006 e 0008 como substituídas onde couber.</li>
+<li>Subir a VM ARM da Oracle com Docker Compose: <code>postgres</code>, <code>app</code>, <code>dispatcher</code>, <code>cloudflared</code>. Backup diário do Postgres no R2.</li>
+<li>Trocar <code>src/db.js</code> de libSQL para Postgres (<code>postgres</code> do npm), mantendo a mesma API <code>db.all/get/run/batch</code> para não mexer nas rotas.</li>
+<li>Modelo de dados novo (seção 6). Todo registro de cliente leva <code>project_id</code> e passa por política RLS.</li>
+</ul>
+<p><b>Pronto quando:</b> os 20 testes atuais passam no Postgres e o painel abre em <code>app.seudominio</code> pelo Tunnel.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 1</span><span class="tag">SITE</span>
+<h3>Coleta no site pela borda</h3>
+<ul>
+<li>Worker com <code>GET /s.js</code> e <code>POST /e</code>. O novo <code>s.js</code> (meta: menos de 3 KB) lê IDs de clique e UTMs, gera <code>event_id</code>, captura formulários e repassa <code>_rid</code> e UTMs para links de checkout e WhatsApp.</li>
+<li><code>/e</code>: valida, junta IP, user agent e país (do Cloudflare), grava cookies <code>_rid</code>, <code>_fbp</code> e <code>_fbc</code> pelo servidor, salva no R2 e insere em <code>events</code>.</li>
+<li>Painel: aba <b>Eventos</b> com a lista ao vivo.</li>
+</ul>
+<p><b>Pronto quando:</b> um clique de teste com fbclid aparece em Eventos com <code>fbc</code> montado e os cookies sobrevivem a 7 dias no Safari.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 2</span><span class="tag">DESTINOS</span>
+<h3>Envio para Meta e GA4 com fila e reenvio</h3>
+<ul>
+<li>Cada evento gera uma linha por destino em <code>deliveries</code>. O despachante pega lotes, envia, grava a resposta e reenvia com espera de 1, 5, 30 minutos e 6 horas. Depois disso vai para "falhou" com o motivo.</li>
+<li>Mapa de eventos por projeto: qual evento interno vira qual evento em cada plataforma.</li>
+<li>Inspetor do evento: payload enviado (com hash), resposta, <code>fbtrace_id</code>, botão Reenviar.</li>
+</ul>
+<p><b>Pronto quando:</b> o Gerenciador de Eventos da Meta mostra o evento do navegador e do servidor deduplicados com o código de teste.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 3</span><span class="tag">CHECKOUT</span>
+<h3>Checkout externo</h3>
+<ul>
+<li>Levar os parsers atuais (Hotmart, Kiwify, Eduzz, genérico) para <code>edge/</code> e somar Monetizze, Ticto, Perfect Pay, Braip, Greenn, Yampi, Cartpanda, Shopify, Nuvemshop, WooCommerce, Stripe e Mercado Pago, um de cada vez, cada um com payload de exemplo em teste.</li>
+<li>Casamento da venda: <code>_rid</code> do link, depois e-mail ou telefone, depois UTM. O inspetor mostra qual regra casou.</li>
+<li>Abandono de checkout como evento, quando a plataforma avisa.</li>
+</ul>
+<p><b>Pronto quando:</b> uma compra de teste na Hotmart chega na Meta como Purchase com <code>fbc</code> do clique original e aparece em Vendas ligada ao anúncio.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 4</span><span class="tag">VENDÁVEL</span>
+<h3>Domínio, onboarding e conexão com a Meta</h3>
+<ul>
+<li>Domínio: o cliente cria um CNAME <code>t</code> apontando para <code>edge.seudominio</code>. O painel registra o hostname no Cloudflare for SaaS pela API e mostra o status (aguardando DNS, emitindo SSL, ativo).</li>
+<li>Conexão com a Meta, fase 1: o cliente cola o ID do Pixel e o token da CAPI (gerado no Gerenciador de Eventos) e um token de usuário do sistema para ler gastos. O painel testa os dois na hora.</li>
+<li>Conexão com a Meta, fase 2 (depois da verificação da empresa e da revisão do app): botão "Entrar com Facebook", com escolha do Business, da conta de anúncios, do Pixel e da página.</li>
+<li>Assistente de 6 passos (seção 5) e agência com vários projetos, papéis Dono, Gestor, Cliente (só leitura).</li>
+</ul>
+<p><b>Pronto quando:</b> uma pessoa de fora configura um projeto do zero sem sua ajuda em menos de 20 minutos.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 5</span><span class="tag">LEAD E CRM</span>
+<h3>Leads e CRM interno</h3>
+<ul>
+<li>Formulários capturados viram contatos. Webhook <code>leadgen</code> traz os leads dos formulários instantâneos.</li>
+<li>Aba CRM: quadro com colunas editáveis (padrão: Novo, Em conversa, Qualificado, Proposta, Ganhou, Perdeu) e lista de contatos com origem, linha do tempo de eventos e valor.</li>
+<li>Configurar cada coluna para disparar evento: na Meta como conversão de CRM com <code>lead_id</code> ou hash; no Google como offline; no TikTok como offline.</li>
+</ul>
+<p><b>Pronto quando:</b> mover um card para "Ganhou" gera um Purchase offline aceito pela Meta, visível no inspetor.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 6</span><span class="tag">WHATSAPP</span>
+<h3>WhatsApp</h3>
+<ul>
+<li>Links rastreáveis <code>/w/:slug</code> com código na mensagem, contagem de cliques e evento Contact.</li>
+<li>Conexão opcional da WhatsApp Cloud API (número oficial do cliente): webhook de mensagens, leitura do <code>ctwa_clid</code> e do anúncio, criação automática do contato no CRM.</li>
+<li>Aba Conversas: lista por contato com origem (anúncio, link, orgânico) e etapa. A IA lê a conversa e sugere a etapa (ex.: "pediu preço, mover para Qualificado"); o humano confirma com um clique.</li>
+<li>Para quem usa o app comum do WhatsApp Business: só link rastreável e marcação manual no CRM. Nada de API não oficial, por risco de banimento.</li>
+</ul>
+<p><b>Pronto quando:</b> uma conversa vinda de anúncio de clique para WhatsApp vira lead no CRM e a venda marcada volta para a Meta como <code>business_messaging</code>.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 7</span><span class="tag">OFFLINE</span>
+<h3>CRM externo, CSV, Google Ads e TikTok</h3>
+<ul>
+<li>Webhooks de entrada para Kommo, RD Station, Pipedrive e HubSpot, com tela de mapeamento de campos e etapas.</li>
+<li>Importação de CSV com prévia, validação linha a linha e envio em lote.</li>
+<li>Destinos Google Ads (offline por gclid e leads otimizados) e TikTok Events API.</li>
+</ul>
+<p><b>Pronto quando:</b> uma venda fechada no Kommo chega à Meta e ao Google com o clique de origem.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 8</span><span class="tag">CAMPANHAS</span>
+<h3>Campanhas e atribuição</h3>
+<ul>
+<li>Reaproveitar o sync de gastos atual. Somar Google Ads e TikTok quando os destinos existirem.</li>
+<li>Tabela por campanha, conjunto e anúncio: gasto, leads, conversas, vendas reais, faturamento, CPA real, ROAS real e ROAS que a Meta diz, lado a lado.</li>
+<li>Modelos de atribuição: primeiro clique, último clique e linear, por cookie de 400 dias.</li>
+</ul>
+<p><b>Pronto quando:</b> o ROAS real de cada anúncio bate com a soma das vendas do período.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 9</span><span class="tag">AGENTE</span>
+<h3>Agente 24 horas</h3>
+<ul>
+<li>A cada hora: diferença entre vendas reais e compras da Meta, EMQ por evento (API do Pixel), entregas falhando, fonte sem evento há mais de X horas, domínio com SSL vencendo.</li>
+<li>Alerta no Telegram e na aba Diagnóstico, com explicação em português e o passo para resolver.</li>
+<li>Resumo diário às 8h. Caixa "Pedir ao agente" no Início para perguntas sobre os dados do projeto.</li>
+</ul>
+<p><b>Pronto quando:</b> desligar o webhook de teste gera alerta em até 1 hora.</p></div>
+
+<div class="stage"><span class="tag">ETAPA 10</span><span class="tag">COMERCIAL</span>
+<h3>Cobrança e lançamento</h3>
+<ul>
+<li>Planos por número de eventos e projetos, cobrança recorrente por Pix e cartão (Asaas ou Mercado Pago). Limite com aviso, nunca corte silencioso.</li>
+<li>Termos de uso e contrato de tratamento de dados (LGPD), porque o Rastro age como operador dos dados do cliente.</li>
+<li>LP de venda com a calculadora "ferramenta alugada x Rastro" e prova do seu próprio funil.</li>
+</ul>
+<p><b>Pronto quando:</b> 3 clientes pagando e usando por 30 dias.</p></div>
+
+<h2 class="page">5. Interface: abas, telas e botões</h2>
+<h3>Barra lateral (fixa à esquerda)</h3>
+<table>
+<tr><th>Grupo</th><th>Itens</th></tr>
+<tr><td>Topo</td><td>Logo, seletor de projeto (cliente) com busca, botão "+ Projeto"</td></tr>
+<tr><td>Visão</td><td>Início · Eventos (contador ao vivo) · Diagnóstico (contador de alertas)</td></tr>
+<tr><td>Resultado</td><td>Vendas · Campanhas · Atribuição · Tráfego</td></tr>
+<tr><td>Relacionamento</td><td>CRM · Contatos · Conversas</td></tr>
+<tr><td>Configurar</td><td>Fontes · Destinos · Domínio · Mapa de eventos · Privacidade · Equipe · Plano</td></tr>
+<tr><td>Rodapé</td><td>Alternar claro e escuro, conta, sair</td></tr>
+</table>
+
+<h3>Cabeçalho de toda página</h3>
+<p>Rótulo pequeno em caixa alta (<span class="mono">PROJETO · PÁGINA</span>), título grande com a palavra principal em azul, uma linha de status em cinza logo abaixo. À direita: seletor de período 7d, 14d, 30d, personalizado, e o botão principal da página (só um por página, em azul).</p>
+
+<table>
+<tr><th>Aba</th><th>Conteúdo</th><th>Botões e onde ficam</th></tr>
+<tr><td><b>Início</b></td><td>Card azul de destaque: vendas reais do período com barras por dia. Cards brancos: Meta diz x real (diferença em %), EMQ média, entregas com falha. Abaixo: eventos recentes e caixa "Pedir ao agente"</td><td>Topo direito: período e "Atualizar". Cada card leva à aba dele no título. Na caixa do agente, botão Enviar à direita</td></tr>
+<tr><td><b>Eventos</b></td><td>Lista ao vivo: hora, evento, fonte, anúncio, selos por destino (verde enviado, vermelho falhou). Clique abre o inspetor na lateral direita</td><td>Topo: filtros (fonte, evento, destino, status) e "Pausar ao vivo". No inspetor: "Reenviar", "Copiar payload", "Ver no R2"</td></tr>
+<tr><td><b>Diagnóstico</b></td><td>Alertas abertos, checklist por fonte (verde, amarelo, vermelho), validador de evento de teste</td><td>"Enviar evento de teste" no topo. Cada alerta tem "Como resolver" e "Marcar resolvido"</td></tr>
+<tr><td><b>Vendas</b></td><td>Telas atuais do Rastro (faturamento, lucro, ROAS, meios de pagamento) com a coluna nova "regra de casamento"</td><td>"Exportar CSV" no topo</td></tr>
+<tr><td><b>Campanhas</b></td><td>Tabela campanha, conjunto, anúncio com real x plataforma</td><td>Alternador de nível e de plataforma no topo, colunas configuráveis</td></tr>
+<tr><td><b>CRM</b></td><td>Quadro com colunas arrastáveis. Card mostra nome, origem (ícone Meta, Google, WhatsApp, orgânico), valor e dias parado</td><td>"+ Lead" no topo. Engrenagem em cada coluna para "Evento ao entrar aqui"</td></tr>
+<tr><td><b>Contatos</b></td><td>Lista com busca. Ficha com dados, origem completa e linha do tempo de eventos e mensagens</td><td>"Importar CSV" no topo. Na ficha: "Mover etapa", "Excluir dados (LGPD)"</td></tr>
+<tr><td><b>Conversas</b></td><td>Lista de conversas à esquerda, conversa à direita, painel da origem e sugestão da IA</td><td>"Aceitar sugestão" e "Mudar etapa" no painel direito</td></tr>
+<tr><td><b>Fontes</b></td><td>Cards por tipo: Site, Checkouts, Formulários, Lead Ads, WhatsApp, CRM externo, CSV. Cada um com status e último evento</td><td>"Conectar" em cada card. Dentro: URL do webhook com "Copiar", "Gerar novo token", últimos 50 recebidos</td></tr>
+<tr><td><b>Destinos</b></td><td>Meta, GA4, Google Ads, TikTok, Webhook. Status, taxa de sucesso 24h, EMQ</td><td>"Conectar" ou "Testar conexão". Campo de código de teste da Meta</td></tr>
+<tr><td><b>Domínio</b></td><td>Registro DNS para copiar, status em 3 passos, verificação automática</td><td>"Copiar registro", "Verificar agora"</td></tr>
+<tr><td><b>Mapa de eventos</b></td><td>Tabela evento interno x evento em cada plataforma, com valor e moeda</td><td>"+ Regra" no topo</td></tr>
+</table>
+
+<h3>Assistente de primeiro uso (6 passos, barra de progresso no topo)</h3>
+<ol>
+<li><b>Projeto:</b> nome, site, fuso, moeda.</li>
+<li><b>Domínio:</b> mostra o CNAME <code>t</code> para copiar e um vídeo curto de como criar no Registro.br, Cloudflare e Hostinger. Verifica sozinho a cada 30 segundos.</li>
+<li><b>Script:</b> código para colar no <code>&lt;head&gt;</code>, com abas para WordPress, Elementor, GTM e HTML. Fica verde quando chega o primeiro PageView.</li>
+<li><b>Meta:</b> ID do Pixel e token da CAPI (com o caminho de onde gerar), conta de anúncios. Botão Testar.</li>
+<li><b>Checkout:</b> escolhe a plataforma, copia a URL do webhook, segue o passo a passo daquela plataforma. Fica verde no primeiro webhook.</li>
+<li><b>Teste final:</b> o painel manda um evento com código de teste e mostra lado a lado o que saiu e o que a Meta recebeu.</li>
+</ol>
+
+<h2 class="page">6. Funções principais e modelo de dados</h2>
+<table>
+<tr><th>Função</th><th>Onde</th><th>O que faz</th></tr>
+<tr><td><code>handleCollect(req)</code></td><td>edge</td><td>Valida o evento, aplica limite por IP, enriquece, grava cookies, salva no R2, insere em <code>events</code> e cria as <code>deliveries</code></td></tr>
+<tr><td><code>handleHook(token, plataforma, body)</code></td><td>edge</td><td>Confere o token e a assinatura da plataforma, chama o parser, casa a venda e grava em <code>orders</code></td></tr>
+<tr><td><code>parsers[plataforma](body)</code></td><td>core</td><td>Payload da plataforma para venda normalizada (já existe para 4 plataformas)</td></tr>
+<tr><td><code>buildFbc(fbclid, ts)</code></td><td>core</td><td>Monta <code>fb.1.ts.fbclid</code> sem alterar o fbclid</td></tr>
+<tr><td><code>normalizeAndHash(email, phone)</code></td><td>core</td><td>Normaliza e devolve SHA-256 no formato que cada plataforma pede</td></tr>
+<tr><td><code>resolveIdentity(evento)</code></td><td>core</td><td>Junta <code>_rid</code>, hashes, <code>lead_id</code> e <code>ctwa_clid</code> no mesmo contato</td></tr>
+<tr><td><code>matchOrder(pedido)</code></td><td>core</td><td>Aplica as 3 regras de casamento e grava qual casou</td></tr>
+<tr><td><code>mapEvent(evento, destino)</code></td><td>core</td><td>Aplica o mapa de eventos do projeto</td></tr>
+<tr><td><code>handleWaRedirect(slug)</code></td><td>edge</td><td>Gera o código curto, grava o clique e redireciona ao <code>wa.me</code></td></tr>
+<tr><td><code>handleWaWebhook(body)</code></td><td>edge</td><td>Lê mensagem, código e <code>ctwa_clid</code>, cria ou atualiza contato e conversa</td></tr>
+<tr><td><code>dispatchLoop()</code></td><td>dispatch</td><td>Pega entregas pendentes, chama o envio do destino, agenda reenvio</td></tr>
+<tr><td><code>sendMeta / sendGa4 / sendGoogleAds / sendTiktok</code></td><td>dispatch</td><td>Montam o payload de cada API e devolvem resultado padronizado</td></tr>
+<tr><td><code>onStageChange(deal, etapa)</code></td><td>app</td><td>Dispara o evento offline configurado para a coluna</td></tr>
+<tr><td><code>syncSpend(conta)</code></td><td>agent</td><td>Gastos e entidades das plataformas (o atual <code>syncMeta</code>)</td></tr>
+<tr><td><code>audit(projeto)</code></td><td>agent</td><td>Compara real x plataforma, EMQ, falhas e silêncio de fonte. Cria alertas</td></tr>
+<tr><td><code>notify(alerta)</code></td><td>agent</td><td>Telegram e painel, texto escrito pela IA sem PII</td></tr>
+</table>
+
+<h3>Tabelas</h3>
+<p><code>agencies</code>, <code>users</code>, <code>memberships</code>, <code>projects</code>, <code>domains</code>, <code>sources</code>, <code>destinations</code> (segredos criptografados), <code>event_map</code>, <code>visitors</code>, <code>contacts</code> (PII criptografada e hashes), <code>identities</code>, <code>events</code> (particionada por mês), <code>deliveries</code>, <code>orders</code>, <code>pipelines</code>, <code>stages</code>, <code>deals</code>, <code>wa_links</code>, <code>conversations</code>, <code>messages</code> (só os últimos 90 dias), <code>ad_entities</code>, <code>ad_spend</code>, <code>alerts</code>, <code>webhook_log</code>, <code>audit_log</code>.</p>
+
+<h2 class="page">7. Sistema de design</h2>
+<p>Base no tweet de referência (painel com barra lateral azul, fundo azul gelo, cards brancos arredondados e um card de destaque em azul cheio). O azul foi medido no próprio vídeo: <span class="mono">#0B4DB4</span> na barra e no card, <span class="mono">#0E58DB</span> nos botões. A imagem anexada não chegou na mensagem, então a referência foi só o tweet.</p>
+<table>
+<tr><th>Token</th><th>Claro</th><th>Escuro</th><th>Uso</th></tr>
+<tr><td><code>--bg</code></td><td>#ECF1FB</td><td>#070D1C</td><td>Fundo da página</td></tr>
+<tr><td><code>--surface</code></td><td>#FFFFFF</td><td>#0E1730</td><td>Cards</td></tr>
+<tr><td><code>--side</code></td><td>#0B4DB4</td><td>#0A1838 (item ativo em #0B4DB4)</td><td>Barra lateral</td></tr>
+<tr><td><code>--hero</code></td><td>#0B4DB4</td><td>#0B4DB4</td><td>Card de destaque, igual nos dois modos</td></tr>
+<tr><td><code>--primary</code></td><td>#0E58DB</td><td>#0E58DB</td><td>Botão principal, foco, gráfico de uma série</td></tr>
+<tr><td><code>--link</code></td><td>#0E58DB</td><td>#8DB4F5</td><td>Texto azul (no escuro clareia para manter contraste)</td></tr>
+<tr><td><code>--ink / --muted</code></td><td>#0B1530 / #5B6785</td><td>#E8EEFC / #8392B8</td><td>Texto</td></tr>
+<tr><td><code>--ok / --bad / --warn</code></td><td>#0F7A55 / #C2372F / #9A6200</td><td>#4FD1A0 / #FF8A80 / #F2C15E</td><td>Sempre com seta ou texto, nunca só cor</td></tr>
+</table>
+<p><b>Tipografia:</b> <b>Figtree</b> para interface e títulos (pesos 400 a 800), <b>JetBrains Mono</b> para rótulos em caixa alta, IDs, horários e valores técnicos. Nada de Inter nem Geist. Fontes servidas pelo próprio servidor, como o Rastro já faz. Números em <code>tabular-nums</code>.</p>
+<p><b>Forma:</b> cantos de 18 px nos cards e 12 px nos campos, borda de 1 px em vez de sombra, uma única sombra suave só no card de destaque.</p>
+
+<h3>Regras anti-slop para a interface</h3>
+<ol>
+<li>Um botão azul cheio por tela. O resto é botão claro com borda ou link.</li>
+<li>Sem gradiente roxo, sem vidro fosco, sem brilho, sem emoji como ícone. Ícones de traço único, 1,5 px, do mesmo conjunto.</li>
+<li>Nada de grade de cards iguais com ícone, título e frase. Cada card mostra um número que alguém usa para decidir.</li>
+<li>Todo número tem contexto: comparação com o período anterior, meta ou o que a plataforma diz.</li>
+<li>Texto de interface direto e específico: "3 vendas sem clique de origem" em vez de "Algo deu errado".</li>
+<li>Estados vazios ensinam o próximo passo com o botão que resolve ("Nenhum evento ainda. Cole o script no site").</li>
+<li>Estado de carregando, vazio, erro e sem permissão desenhados para cada tela.</li>
+<li>Alinhamento à esquerda e hierarquia por tamanho e peso, não por caixas dentro de caixas.</li>
+<li>Contraste mínimo AA nos dois modos, foco visível em azul, tudo usável por teclado.</li>
+<li>Animação só para explicar mudança (evento chegando, card movido), até 200 ms, respeitando "reduzir movimento".</li>
+<li>Cor de status sempre acompanhada de texto ou seta, por causa de daltonismo.</li>
+<li>Tabelas densas e legíveis: 13 px, linhas de 40 px, cabeçalho fixo, números alinhados à direita.</li>
+</ol>
+
+<h3>Tela Início, modo claro (dados de exemplo)</h3>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><i></i>Rastro</div>
+    <div class="proj">Projeto<b>Agentise · EDIA67</b></div>
+    <div class="grp">Visão</div>
+    <div class="nav on">Início</div>
+    <div class="nav">Eventos <s>ao vivo</s></div>
+    <div class="nav">Diagnóstico <s>2</s></div>
+    <div class="grp">Resultado</div>
+    <div class="nav">Vendas</div><div class="nav">Campanhas</div><div class="nav">Atribuição</div>
+    <div class="grp">Relacionamento</div>
+    <div class="nav">CRM <s>14</s></div><div class="nav">Conversas</div>
+    <div class="grp">Configurar</div>
+    <div class="nav">Fontes</div><div class="nav">Destinos</div><div class="nav">Domínio</div>
+  </aside>
+  <section class="main">
+    <div class="top">
+      <div><div class="eyebrow">EDIA67 · Início</div><h4>Boa noite, <b>Iegos.</b></h4><div class="sub">Todas as fontes recebendo. 2 alertas pedem atenção.</div></div>
+      <div class="row"><div class="seg"><span class="on">7d</span><span>14d</span><span>30d</span></div><span class="btn">Atualizar</span></div>
+    </div>
+    <div class="grid">
+      <div class="card hero">
+        <div class="row"><h5>Vendas reais</h5><span class="pill w">Hotmart</span></div>
+        <div class="row" style="justify-content:flex-start;gap:16px"><div><div class="k">128</div><div class="l">no período</div></div><div><div class="k" style="font-size:18px">+19</div><div class="l">vs 7d antes</div></div></div>
+        <div class="bars"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:70%"></i><i style="height:62%"></i><i style="height:85%"></i><i class="on" style="height:95%"></i></div>
+      </div>
+      <div class="card">
+        <div class="row"><h5>Meta x real</h5><span class="pill bad">▼ 22% a menos</span></div>
+        <div class="vs"><div><div class="k" style="font-size:20px">100</div><div class="l">Meta diz</div><div class="meter"><i style="width:78%"></i></div></div><div><div class="k" style="font-size:20px">128</div><div class="l">Real</div><div class="meter"><i style="width:100%"></i></div></div></div>
+        <div class="sub" style="margin-top:8px">28 vendas sem clique de origem. Ver em Vendas.</div>
+      </div>
+      <div class="card">
+        <div class="row"><h5>Qualidade (EMQ)</h5><span class="pill">▲ 0,6</span></div>
+        <div class="k">8,4</div><div class="l">Purchase · média 7d</div>
+        <div class="row" style="margin-top:10px"><span class="sub">Lead</span><b>7,1</b></div>
+        <div class="row"><span class="sub">Entregas com falha</span><b>3</b></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="row"><h5>Eventos recentes</h5><span class="sub">Ver todos</span></div>
+        <div class="ev"><span class="t">21:56</span><div><b>Purchase</b> · R$ 297<div class="d">Hotmart · AD12 Vídeo depoimento</div></div><div class="dest"><b>META</b><b>GA4</b></div></div>
+        <div class="ev"><span class="t">21:54</span><div><b>Lead</b> · WhatsApp R7K2<div class="d">Link /w/aula · AD07 Carrossel</div></div><div class="dest"><b>META</b><b>GA4</b></div></div>
+        <div class="ev"><span class="t">21:51</span><div><b>InitiateCheckout</b><div class="d">LP /oferta · AD12 Vídeo depoimento</div></div><div class="dest"><b>META</b><b class="x">GA4</b></div></div>
+      </div>
+      <div class="card">
+        <h5>Pedir ao agente</h5>
+        <div class="sub">Pergunte sobre os dados deste projeto.</div>
+        <div class="ask"><span>Ex.: qual anúncio teve o menor CPA real?</span><span class="btn" style="flex:0">Enviar</span></div>
+        <div class="alert">Kiwify sem webhook há 6 horas. Ver Diagnóstico.</div>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="cap">Mockup em HTML e CSS com os tokens reais. Números são de exemplo, só para mostrar a hierarquia.</p>
+
+<h3>Tela Início, modo escuro</h3>
+<div class="app dark">
+  <aside class="side">
+    <div class="brand"><i></i>Rastro</div>
+    <div class="proj">Projeto<b>Agentise · EDIA67</b></div>
+    <div class="grp">Visão</div>
+    <div class="nav on">Início</div>
+    <div class="nav">Eventos <s>ao vivo</s></div>
+    <div class="nav">Diagnóstico <s>2</s></div>
+    <div class="grp">Resultado</div>
+    <div class="nav">Vendas</div><div class="nav">Campanhas</div><div class="nav">Atribuição</div>
+    <div class="grp">Relacionamento</div>
+    <div class="nav">CRM <s>14</s></div><div class="nav">Conversas</div>
+    <div class="grp">Configurar</div>
+    <div class="nav">Fontes</div><div class="nav">Destinos</div><div class="nav">Domínio</div>
+  </aside>
+  <section class="main">
+    <div class="top">
+      <div><div class="eyebrow" style="color:var(--blue-300)">EDIA67 · Início</div><h4>Boa noite, <b>Iegos.</b></h4><div class="sub">Todas as fontes recebendo. 2 alertas pedem atenção.</div></div>
+      <div class="row"><div class="seg"><span class="on">7d</span><span>14d</span><span>30d</span></div><span class="btn">Atualizar</span></div>
+    </div>
+    <div class="grid">
+      <div class="card hero">
+        <div class="row"><h5>Vendas reais</h5><span class="pill w">Hotmart</span></div>
+        <div class="row" style="justify-content:flex-start;gap:16px"><div><div class="k">128</div><div class="l">no período</div></div><div><div class="k" style="font-size:18px">+19</div><div class="l">vs 7d antes</div></div></div>
+        <div class="bars"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:70%"></i><i style="height:62%"></i><i style="height:85%"></i><i class="on" style="height:95%"></i></div>
+      </div>
+      <div class="card">
+        <div class="row"><h5>Meta x real</h5><span class="pill bad">▼ 22% a menos</span></div>
+        <div class="vs"><div><div class="k" style="font-size:20px">100</div><div class="l">Meta diz</div><div class="meter"><i style="width:78%"></i></div></div><div><div class="k" style="font-size:20px">128</div><div class="l">Real</div><div class="meter"><i style="width:100%"></i></div></div></div>
+        <div class="sub" style="margin-top:8px">28 vendas sem clique de origem. Ver em Vendas.</div>
+      </div>
+      <div class="card">
+        <div class="row"><h5>Qualidade (EMQ)</h5><span class="pill">▲ 0,6</span></div>
+        <div class="k">8,4</div><div class="l">Purchase · média 7d</div>
+        <div class="row" style="margin-top:10px"><span class="sub">Lead</span><b>7,1</b></div>
+        <div class="row"><span class="sub">Entregas com falha</span><b>3</b></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="row"><h5>Eventos recentes</h5><span class="sub">Ver todos</span></div>
+        <div class="ev"><span class="t">21:56</span><div><b>Purchase</b> · R$ 297<div class="d">Hotmart · AD12 Vídeo depoimento</div></div><div class="dest"><b>META</b><b>GA4</b></div></div>
+        <div class="ev"><span class="t">21:54</span><div><b>Lead</b> · WhatsApp R7K2<div class="d">Link /w/aula · AD07 Carrossel</div></div><div class="dest"><b>META</b><b>GA4</b></div></div>
+        <div class="ev"><span class="t">21:51</span><div><b>InitiateCheckout</b><div class="d">LP /oferta · AD12 Vídeo depoimento</div></div><div class="dest"><b>META</b><b class="x">GA4</b></div></div>
+      </div>
+      <div class="card">
+        <h5>Pedir ao agente</h5>
+        <div class="sub">Pergunte sobre os dados deste projeto.</div>
+        <div class="ask"><span>Ex.: qual anúncio teve o menor CPA real?</span><span class="btn" style="flex:0">Enviar</span></div>
+        <div class="alert">Kiwify sem webhook há 6 horas. Ver Diagnóstico.</div>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="cap">No escuro, a barra lateral vira azul-marinho e o azul de referência passa para o item ativo, o card de destaque e os botões. Texto azul clareia para #8DB4F5 para manter contraste.</p>
+
+<h2>8. Riscos e o que fazer</h2>
+<table>
+<tr><th>Risco</th><th>Resposta</th></tr>
+<tr><td>Revisão do app da Meta demora ou é negada</td><td>Fase 1 com tokens colados funciona sem revisão. OAuth entra depois</td></tr>
+<tr><td>VM gratuita da Oracle cai ou é recuperada</td><td>Conta Pay As You Go, backup diário no R2, a borda guarda o bruto e reprocessa quando o banco volta</td></tr>
+<tr><td>Limites gratuitos da Cloudflare e das IAs</td><td>Plano Workers de US$ 5 a partir do primeiro cliente pago. IA paga quando houver receita</td></tr>
+<tr><td>LGPD com dados de compradores e conversas</td><td>Criptografia, retenção, exclusão por pedido, contrato de operador, IA sem PII</td></tr>
+<tr><td>Concorrência (Stape, ferramentas de tracking prontas, cursos como o Dev de Tráfego)</td><td>Foco no que eles cobram à parte ou não fazem: plataformas brasileiras, WhatsApp, CRM com conversão offline e agente vigiando, tudo num painel em português</td></tr>
+</table>
+
+<h2>9. Próximo passo</h2>
+<p>Começar pela etapa 0: escrever as ADRs, subir a VM da Oracle e migrar o <code>db.js</code> para Postgres com os 20 testes passando. Depois disso, etapa 1 no seu próprio funil antes de qualquer cliente.</p>
+
+</div>
+</body>
+</html>
