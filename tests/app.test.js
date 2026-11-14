@@ -15,7 +15,7 @@ test('login, sessão e CSRF', async () => {
   admin = await login('ADMIN@test.dev');
   assert.ok(admin?.startsWith('sid='));
   assert.equal((await req('/sites', { cookie: admin, form: { id: 'x', name: 'X', timezone: 'UTC', currency: 'BRL' }, headers: { 'sec-fetch-site': 'cross-site' } })).status, 403);
-  assert.equal((await req('/sites', { cookie: admin, form: { id: 'blog', name: 'Blog', timezone: 'America/Sao_Paulo', currency: 'BRL' } })).location, '/sites/blog/integrations');
+  assert.equal((await req('/sites', { cookie: admin, form: { id: 'blog', name: 'Blog', timezone: 'America/Sao_Paulo', currency: 'BRL' } })).location, '/sites/blog/setup');
   assert.equal((await req('/sites', { cookie: admin, form: { id: 'outro', name: 'Outro', timezone: 'UTC', currency: 'USD' } })).status, 303);
   assert.equal((await req('/sites', { cookie: admin, form: { id: 'blog', name: 'Dup', timezone: 'UTC', currency: 'BRL' } })).status, 400);
   assert.equal((await req('/login', { form: { email: 'admin@test.dev', password: 'admin-pass-123', next: '//evil.com' } })).location, '/', 'sem open redirect');

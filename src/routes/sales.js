@@ -4,6 +4,7 @@ import { period } from '../time.js';
 import { route, send, redirect, form, readBody, origin, sitePath, HttpError } from '../http.js';
 import { siteCtx } from '../auth.js';
 import * as S from '../sales/stats.js';
+import { edgeUrlFor } from '../cloudflare.js';
 import { handleWebhook, handleSheet, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, parseCustom, secretsOf } from '../sales/webhooks.js';
 import { syncMeta } from '../ads/meta.js';
 import * as V from '../views/sales.js';
@@ -42,12 +43,12 @@ route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
 // --- integrações ---
 const MSG = {
   rotate: 'Novo token gerado. Atualize a URL do webhook nas plataformas.', meta_add: 'Conta conectada e sincronizada.',
-  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.', secrets: 'Segredos dos webhooks salvos.', custom_map: 'Mapa do webhook personalizado salvo.',
+  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.', meta_test: 'Conexão com a Meta conferida.', secrets: 'Segredos dos webhooks salvos.', custom_map: 'Mapa do webhook personalizado salvo.',
 };
 async function integrationsView(r, msg, err, extra = {}) {
   const d = await awaitAll({
     accounts: db.all("SELECT id, account_id, name, currency, last_sync, last_error FROM ad_accounts WHERE site=? AND platform='meta' ORDER BY id", [r.site.id]),
-    logs: S.lastWebhooks(r.site.id), edgeUrl: env.EDGE_URL || origin(r.req), // subdomínio t. do Worker da borda
+    logs: S.lastWebhooks(r.site.id), edgeUrl: edgeUrlFor(r.site, origin(r.req)), // domínio do cliente na borda, quando ativo
     // Saúde da fila nas últimas 24 h, por destino (etapa 2).
     deliveries: db.all(`SELECT dest, COUNT(*) FILTER (WHERE status='sent') sent, COUNT(*) FILTER (WHERE status='failed') failed,
       COUNT(*) FILTER (WHERE status IN ('pending','sending')) pending, MAX(sent_at) last_sent FROM deliveries WHERE site=? AND created>? GROUP BY dest`, [r.site.id, Date.now() - 864e5]),
@@ -57,7 +58,7 @@ async function integrationsView(r, msg, err, extra = {}) {
 route('GET', '/sites/:id/integrations', { site: 'edit' }, r => integrationsView(r, Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null));
 route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
   const f = await form(r.req), action = f.get('action'), site = r.site;
-  const done = () => redirect(r, sitePath(site, `/integrations?ok=${action}`));
+  const done = () => redirect(r, f.get('back') === 'setup' ? sitePath(site, '/setup') : sitePath(site, `/integrations?ok=${action}`));
   const account = async () => {
     const a = await db.get('SELECT * FROM ad_accounts WHERE id=? AND site=?', [Number(f.get('account')) || 0, site.id]);
     if (!a) throw new HttpError(404, 'Conta não encontrada.');
@@ -90,7 +91,7 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
       if (pixel && !/^\d{5,25}$/.test(pixel)) return integrationsView(r, null, 'ID de pixel inválido.');
       const test = (f.get('test_code') || '').trim();
       if (test && !/^TEST\w{1,40}$/.test(test)) return integrationsView(r, null, 'Código de teste inválido (começa com TEST, copie do Gerenciador de Eventos).');
-      if (pixel) await db.run('UPDATE sites SET meta_pixel=?, meta_capi_token=COALESCE(?, meta_capi_token), meta_test_code=? WHERE id=?', [pixel, token || null, test || null, site.id]);
+      if (pixel) await db.run('UPDATE sites SET meta_pixel=?, meta_capi_token=COALESCE(?, meta_capi_token), meta_test_code=?, meta_checked=CASE WHEN meta_pixel=? AND ?::text IS NULL THEN meta_checked END WHERE id=?', [pixel, token || null, test || null, pixel, token || null, site.id]);
       else await db.run('UPDATE sites SET meta_pixel=NULL, meta_capi_token=NULL, meta_test_code=NULL WHERE id=?', [site.id]);
       await loadSites();
       return done();
@@ -126,6 +127,23 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
         return integrationsView(r, null, null, { customDraft: map, preview: { sample: f.get('sample') || '', parsed, error } });
       }
       await db.run('UPDATE sites SET custom_map=? WHERE id=?', [JSON.stringify(map), site.id]);
+      await loadSites();
+      return done();
+    }
+    case 'meta_test': { // confere pixel e token na Graph API: o pixel existe e o token tem acesso a ele
+      if (!site.meta_pixel || !site.meta_capi_token) return integrationsView(r, null, 'Salve o ID do pixel e o token antes de testar.');
+      try {
+        const res = await fetch(`https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}/${encodeURIComponent(site.meta_pixel)}?fields=id,name`,
+          { headers: { authorization: `Bearer ${site.meta_capi_token}` }, signal: AbortSignal.timeout(10e3) });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.error) throw new Error(j.error?.message || `HTTP ${res.status}`);
+        await db.run('UPDATE sites SET meta_checked=?, meta_pixel_name=? WHERE id=?', [Date.now(), String(j.name || '').slice(0, 120), site.id]);
+      } catch (e) {
+        await db.run('UPDATE sites SET meta_checked=NULL WHERE id=?', [site.id]);
+        await loadSites();
+        const m = `A Meta recusou: ${e.message}. Confira se o token é da Conversions API deste pixel.`;
+        return f.get('back') === 'setup' ? redirect(r, sitePath(site, '/setup?meta=erro')) : integrationsView(r, null, m);
+      }
       await loadSites();
       return done();
     }

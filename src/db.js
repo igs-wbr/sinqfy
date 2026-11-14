@@ -123,14 +123,31 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS events_site_rid_ts ON events(site, rid, ts) WHERE rid IS NOT NULL;
     ALTER TABLE sales ADD COLUMN IF NOT EXISTS rid TEXT, ADD COLUMN IF NOT EXISTS match_rule TEXT NOT NULL DEFAULT 'none';
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS hook_secrets TEXT, ADD COLUMN IF NOT EXISTS custom_map TEXT;
+    -- Etapa 4 (ADR 0009): agências isoladas. Quem já existia fica na agência 1. platform=1: dono da instalação (cria agências).
+    CREATE TABLE IF NOT EXISTS agencies(id ${ID}, name TEXT NOT NULL, created BIGINT);
+    CREATE TABLE IF NOT EXISTS deleted_sites(id TEXT PRIMARY KEY, deleted BIGINT NOT NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_id BIGINT, ADD COLUMN IF NOT EXISTS platform INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS agency_id BIGINT;
+    -- Domínio do cliente na borda (Cloudflare for SaaS) e o último teste da conexão com a Meta.
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS edge_host TEXT, ADD COLUMN IF NOT EXISTS edge_host_id TEXT, ADD COLUMN IF NOT EXISTS edge_status TEXT,
+      ADD COLUMN IF NOT EXISTS edge_error TEXT, ADD COLUMN IF NOT EXISTS meta_checked BIGINT, ADD COLUMN IF NOT EXISTS meta_pixel_name TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS sites_edge_host ON sites(edge_host);
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS ga4_id TEXT, ADD COLUMN IF NOT EXISTS ga4_secret TEXT, ADD COLUMN IF NOT EXISTS meta_test_code TEXT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 
   if (!await db.get('SELECT 1 FROM users LIMIT 1')) {
     if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD) throw new Error('Defina ADMIN_EMAIL e ADMIN_PASSWORD (veja .env.example) para criar o primeiro admin');
-    await db.run("INSERT INTO users(email, name, role, pass, created) VALUES (?, 'Admin', 'admin', ?, ?)", [env.ADMIN_EMAIL, hashPassword(env.ADMIN_PASSWORD), Date.now()]);
+    await db.run("INSERT INTO users(email, name, role, pass, created, platform) VALUES (?, 'Admin', 'admin', ?, ?, 1)", [env.ADMIN_EMAIL, hashPassword(env.ADMIN_PASSWORD), Date.now()]);
   }
+  // Agência 1 para o que já existia antes da etapa 4; o primeiro usuário vira dono da plataforma.
+  // Só na primeira vez (tabela de agências vazia): depois disso, ninguém vira dono da plataforma por migração.
+  if (!await db.get('SELECT 1 FROM agencies LIMIT 1')) {
+    await db.run("INSERT INTO agencies(name, created) VALUES ('Minha agência', ?)", [Date.now()]);
+    await db.run('UPDATE users SET platform=1 WHERE id=(SELECT MIN(id) FROM users) AND NOT EXISTS (SELECT 1 FROM users WHERE platform=1)');
+  }
+  const first = (await db.get('SELECT MIN(id) id FROM agencies')).id;
+  await db.batch([['UPDATE users SET agency_id=? WHERE agency_id IS NULL', [first]], ['UPDATE sites SET agency_id=? WHERE agency_id IS NULL', [first]]]);
   await loadSites();
 }
 

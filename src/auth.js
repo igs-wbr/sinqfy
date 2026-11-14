@@ -28,13 +28,16 @@ export const clearFails = ip => db.run('DELETE FROM login_fails WHERE ip=?', [ip
 
 // ---------- permissões: admin vê tudo; editor e leitor só os sites liberados; só admin/editor alteram ----------
 export const memberSites = async uid => new Set((await db.all('SELECT site_id FROM user_sites WHERE user_id=?', [uid])).map(x => x.site_id));
+// Agências (ADR 0009): ninguém enxerga site de outra agência, nem o dono (admin) dela. O papel vale dentro da agência.
+const sameAgency = (u, id) => sites.get(id)?.agency_id === u.agency_id;
 export async function allowedSites(u) {
-  if (u.role === 'admin') return [...sites.values()];
+  const mine = [...sites.values()].filter(s => s.agency_id === u.agency_id);
+  if (u.role === 'admin') return mine;
   const ids = await memberSites(u.id);
-  return [...sites.values()].filter(s => ids.has(s.id));
+  return mine.filter(s => ids.has(s.id));
 }
-export const canView = async (u, id) => u.role === 'admin' || !!await db.get('SELECT 1 FROM user_sites WHERE user_id=? AND site_id=?', [u.id, id]);
-export const canEdit = async (u, id) => u.role === 'admin' || (u.role === 'editor' && await canView(u, id));
+export const canView = async (u, id) => sameAgency(u, id) && (u.role === 'admin' || !!await db.get('SELECT 1 FROM user_sites WHERE user_id=? AND site_id=?', [u.id, id]));
+export const canEdit = async (u, id) => sameAgency(u, id) && (u.role === 'admin' || (u.role === 'editor' && await canView(u, id)));
 
 /** Contexto passado às views. */
 export const ctx = (r, extra = {}) => ({ nonce: r.nonce, user: r.user, q: r.q, ...extra });

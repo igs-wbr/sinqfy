@@ -26,7 +26,7 @@ ${ctx.user.role === 'admin' ? html`<section class="card"><h2>Excluir site</h2><p
 }
 
 export function sitesPage(ctx, rows, err) {
-  return layout(ctx, 'Sites', html`${pageHead('Admin · Sites', raw('Seus <em>sites</em>'), 'Cada site tem seu próprio snippet, webhooks e contas de anúncio.')}
+  return layout(ctx, 'Sites', html`${pageHead('Agência · Sites', raw('Seus <em>sites</em>'), 'Cada site tem seu próprio snippet, webhooks e contas de anúncio.')}
 ${notice(err, true)}
 <section class="card">${rows.length ? html`<div class="tw"><table class="list"><thead><tr><th>Site</th><th>Visitantes hoje</th><th>Faturamento hoje</th></tr></thead><tbody>${rows.map(r => html`<tr><td><a href="/sites/${encodeURIComponent(r.id)}">${r.name}</a> <span class="muted">${r.id}</span></td><td>${num(r.visitors)}</td><td>${money(r.net, r.currency)}</td></tr>`)}</tbody></table></div>` : html`<p class="empty">Nenhum site ainda.</p>`}</section>
 <section class="card" style="margin-top:14px"><h2>Novo site</h2><form method="post" action="/sites" class="stack" style="margin-top:14px">
@@ -42,12 +42,12 @@ const siteChecks = (allSites, chosen, form) => allSites.length
 const roleSelect = (cur, form) => html`<select name="role" aria-label="Papel"${form ? html` form="${form}"` : ''}>${Object.entries(ROLES).map(([k, t]) => html`<option value="${k}"${k === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
 
 export function teamPage(ctx, users, allSites, { link: inviteLink, err } = {}) {
-  return layout(ctx, 'Equipe', html`${pageHead('Admin · Equipe', raw('Quem vê <em>o quê</em>'), raw('<b>Admin</b>: tudo, inclusive equipe e sites. <b>Editor</b>: vê e configura os sites liberados (integrações, funis, link público). <b>Leitor</b>: só vê os sites liberados.'))}
+  return layout(ctx, 'Equipe', html`${pageHead('Agência · Equipe', raw('Quem vê <em>o quê</em>'), raw('<b>Dono</b>: tudo na agência, inclusive equipe e sites. <b>Gestor</b>: vê e configura os sites liberados (integrações, funis, link público). <b>Cliente</b>: só vê os sites liberados.'))}
 ${notice(err, true)}
 ${inviteLink ? notice(html`Link de acesso, válido por 7 dias. Envie para a pessoa:<pre><code>${inviteLink}</code></pre>`) : ''}
 <section class="card"><h2>Convidar pessoa</h2><form method="post" action="/team" class="stack" style="margin-top:14px;max-width:none">
 <div class="fields"><label class="f">E-mail<input type="email" name="email" required></label><label class="f">Nome<input name="name" maxlength="80"></label><label class="f">Papel${roleSelect('viewer')}</label></div>
-<div><span class="lbl" style="margin-bottom:6px">Sites liberados (admins veem todos)</span>${siteChecks(allSites, new Set())}</div><div><button class="primary">Convidar</button></div></form></section>
+<div><span class="lbl" style="margin-bottom:6px">Sites liberados (o Dono vê todos)</span>${siteChecks(allSites, new Set())}</div><div><button class="primary">Convidar</button></div></form></section>
 <section class="card" style="margin-top:16px"><h2>Membros</h2><div class="tw" style="margin-top:12px"><table class="left"><thead><tr><th scope="col">Pessoa</th><th scope="col">Papel</th><th scope="col">Sites liberados</th><th scope="col">Ações</th></tr></thead><tbody>${users.map(u => {
     const me = u.id === ctx.user.id, fid = `u${u.id}`;
     return html`<tr><td><b>${u.name || u.email}</b>${me ? html` <span class="muted">(você)</span>` : ''}<br><small>${u.email}</small>${u.pass ? '' : html`<br><span class="badge st-pending">convite pendente</span>`}</td>
@@ -84,4 +84,15 @@ export function invitePage(ctx, user, err) {
 export function messagePage(ctx, title, text) {
   if (!ctx.user) return layout(ctx, title, authCard(html`<h1>${title}</h1><p class="sub" style="margin-bottom:16px">${text}</p><a class="btn" href="/">Voltar</a>`), { bare: true });
   return layout(ctx, title, html`${pageHead(`Rastro · ${title}`, title, html`${text} Confira o endereço ou volte para os seus sites.`)}<a class="btn" href="/">Ir para os meus sites</a>`);
+}
+
+export function agenciesPage(ctx, rows, { link: inviteLink, agency, err } = {}) {
+  return layout(ctx, 'Agências', html`${pageHead('Rastro · Agências', raw('Cada agência com os <em>seus</em> clientes'), 'Uma agência só vê os próprios sites e a própria equipe. O dono entra pelo link de convite.')}
+${notice(err, true)}${inviteLink ? notice(html`Agência <b>${agency}</b> criada. Envie este link ao dono (vale 7 dias): <code>${inviteLink}</code>`) : ''}
+<div class="grid two" style="align-items:start">
+<section class="card"><h2>Agências</h2><div class="tw"><table class="data txt"><thead><tr><th>Agência</th><th class="num">Sites</th><th class="num">Pessoas</th></tr></thead>
+<tbody>${rows.map(a => html`<tr><td>${a.name}${a.id === ctx.user.agency_id ? html` <span class="tag">a sua</span>` : ''}</td><td class="num">${num(a.sites)}</td><td class="num">${num(a.users)}</td></tr>`)}</tbody></table></div></section>
+<section class="card"><h2>Nova agência</h2><form method="post" action="/agencies" class="stack"><div class="fields">
+<label class="f">Nome da agência<input name="name" required maxlength="80"></label><label class="f">E-mail do dono<input name="email" type="email" required></label></div>
+<div><button class="primary">Criar e gerar convite</button></div></form></section></div>`);
 }

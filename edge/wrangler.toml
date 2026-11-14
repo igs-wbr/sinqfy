@@ -4,8 +4,12 @@ name = "rastro-edge"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
-# Etapa 1: o seu próprio subdomínio. Na etapa 4 entra o "*/*" do Cloudflare for SaaS para os domínios dos clientes.
-routes = [{ pattern = "t.seudominio.com.br", custom_domain = true }]
+# O seu subdomínio e os domínios dos clientes (Cloudflare for SaaS: os t.cliente.com.br cadastrados pelo painel chegam pela rota */*).
+# Antes, na zona: SSL/TLS, Custom Hostnames, defina o fallback origin (ex.: edge.seudominio.com.br, um registro proxied qualquer).
+routes = [
+  { pattern = "t.seudominio.com.br", custom_domain = true },
+  { pattern = "*/*", zone_name = "seudominio.com.br" },
+]
 
 [vars]
 ORIGIN = "https://app.seudominio.com.br"

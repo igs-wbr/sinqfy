@@ -6,3 +6,4 @@ node_modules/
 .vercel/
 _archive/
 deploy/.env
+deploy/.env.local

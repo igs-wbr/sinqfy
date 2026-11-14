@@ -26,7 +26,8 @@ const flag = c => String.fromCodePoint(...[...c].map(x => 127397 + x.charCodeAt(
 export const countryName = c => { if (c === '??') return 'Desconhecido'; try { return `${flag(c)} ${regions.of(c)}`; } catch { return c; } };
 export const brDate = d => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 export const SCREEN = { mobile: 'Celular', tablet: 'Tablet', laptop: 'Notebook', desktop: 'Desktop', '??': 'Desconhecido' };
-export const ROLES = { admin: 'Admin', editor: 'Editor', viewer: 'Leitor' };
+// Papéis dentro da agência (ADR 0009): Dono gerencia sites e equipe; Gestor configura os sites liberados; Cliente só vê.
+export const ROLES = { admin: 'Dono', editor: 'Gestor', viewer: 'Cliente' };
 
 export function link(q, changes) {
   const s = new URLSearchParams(q);
@@ -77,7 +78,7 @@ main{max-width:1240px;margin:0 auto;padding:32px 32px 80px}
 .cnt{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.22);font:600 10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.06em}
 .cnt i{width:6px;height:6px;border-radius:50%;background:#7CE8B8}
 .glabel{margin:10px 12px 4px;font:600 10.5px/1 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--side-muted)}
-.side .foot{margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.14);display:grid;gap:2px}.side form{margin:0}
+.side .foot{margin-top:auto;position:sticky;bottom:-14px;background:var(--side);padding-bottom:4px;padding-top:8px;border-top:1px solid rgba(255,255,255,.14);display:grid;gap:2px}.side form{margin:0}
 .tl{display:var(--if-light)}.td{display:var(--if-dark)}
 .menu{position:relative;margin-bottom:6px}.menu summary{list-style:none;background:rgba(255,255,255,.08)}.menu summary::-webkit-details-marker{display:none}
 .menu[open] summary .chev{transform:rotate(90deg)}.chev{transition:transform .12s;opacity:.8}
@@ -184,6 +185,14 @@ svg:not(.ic){display:block;width:100%;height:auto}svg text{fill:var(--muted);fon
 pre{font-variant-ligatures:none}pre.code{white-space:pre;word-break:normal;max-height:420px;overflow:auto}
 table.txt th,table.txt td{text-align:left}table.txt .num{text-align:right}table.txt td:first-child{white-space:nowrap}
 .grid>.card.full{grid-column:1/-1}.platform pre{border:0;background:var(--surface)}
+.progress{height:8px;border-radius:999px;background:var(--surface3);overflow:hidden;margin:4px 0 18px}.progress i{display:block;height:100%;background:var(--primary);border-radius:999px;transition:width .16s}
+.steps-list{display:grid;gap:12px}.step>summary{display:flex;align-items:center;gap:14px;list-style:none;cursor:pointer;min-height:44px}.step>summary::-webkit-details-marker{display:none}
+.step .num{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line2);font:700 14px/1 var(--sans);color:var(--ink2)}
+.step.ok .num{background:var(--ok-bg);border-color:transparent;color:var(--ok)}.step .st{display:grid;gap:2px}.step .st small{color:var(--muted);font-size:12.5px}.step.ok .st small{color:var(--ok)}
+.step>.body{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:10px}.step>.body>p{margin:0}
+.setup-checks{list-style:none;margin:0;padding:0;display:grid;gap:6px}.setup-checks li{display:flex;align-items:center;gap:8px;color:var(--bad)}.setup-checks li.ok{color:var(--ok)}
+.step>.body>.btn,.step>.body>a.btn{justify-self:start}.step>.body>p.okline{display:flex;gap:8px;align-items:center;color:var(--ok)}.step>summary{border-radius:12px}
+.notice code{overflow-wrap:anywhere}.notice>div{min-width:0}
 .steps{margin:10px 0 12px;padding-left:20px;display:grid;gap:6px;color:var(--ink2)}textarea{font:500 12.5px/1.5 var(--mono)}
 .tag.ok{color:var(--ok);background:var(--ok-bg);border-color:transparent}.tag.bad{color:var(--bad);background:var(--bad-bg);border-color:transparent}.tag.warn{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 details.dl{display:inline-block}details.dl>summary{list-style:none;cursor:pointer}details.dl>summary::-webkit-details-marker{display:none}details.dl[open]>div{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-size:12px;max-width:360px;white-space:normal}
@@ -273,7 +282,7 @@ const NAV = [
   { label: 'Visão', items: [['', 'Resumo', 'house'], ['/events', 'Eventos', 'activity', 'ao vivo']] },
   { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list']] },
   { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/attribution', 'Atribuição', 'target']] },
-  { label: 'Configurar', edit: true, items: [['/integrations', 'Integrações', 'plug'], ['/settings', 'Configurações', 'settings']] },
+  { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/settings', 'Configurações', 'settings']] },
 ];
 const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);
 
@@ -291,7 +300,7 @@ function sidebar(ctx) {
 ${brand('/')}
 ${site ? html`<details class="menu"><summary class="it" title="Trocar de site">${icon('layers')}<span class="t">${site.name}</span><span class="chev">${icon('chevron-right', 16)}</span></summary><div>${(ctx.sites || []).map(s => html`<a href="/sites/${encodeURIComponent(s.id)}">${s.name}</a>`)}${user?.role === 'admin' ? html`<a href="/sites">+ Novo site</a>` : ''}</div></details>
 <nav aria-label="Seções do site">${groups.map(g => html`<p class="glabel">${g.label}</p>${g.items.map(([p, t, ic, badge]) => item(href(p), t, ic, ctx.tab === p, badge))}`)}</nav>` : ''}
-<nav class="foot" aria-label="Conta">${user?.role === 'admin' ? html`${item('/sites', 'Sites', 'globe', ctx.tab === 'sites')}${item('/team', 'Equipe', 'users', ctx.tab === 'team')}` : ''}
+<nav class="foot" aria-label="Conta">${user?.role === 'admin' ? html`${item('/sites', 'Sites', 'globe', ctx.tab === 'sites')}${item('/team', 'Equipe', 'users', ctx.tab === 'team')}` : ''}${user?.platform ? item('/agencies', 'Agências', 'layers', ctx.tab === 'agencies') : ''}
 ${user ? item('/account', 'Conta', 'user', ctx.tab === 'account') : ''}
 <button type="button" class="it theme" data-act="theme"><span class="tl">${icon('moon')}</span><span class="td">${icon('sun')}</span><span class="t tl">Tema escuro</span><span class="t td">Tema claro</span></button>
 ${user ? html`<form method="post" action="/logout"><button class="it">${icon('log-out')}<span class="t">Sair</span></button></form>` : ''}</nav>

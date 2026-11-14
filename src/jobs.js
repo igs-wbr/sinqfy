@@ -4,6 +4,7 @@
 import { db, sites, ready } from './db.js';
 import { syncMeta } from './ads/meta.js';
 import { dispatch } from './dispatch.js';
+import { checkHost, cfReady } from './cloudflare.js';
 
 const META_EVERY = 55 * 60e3; // < 1 h, para o cron horário sempre pegar
 
@@ -13,6 +14,7 @@ export async function runJobs() {
   await db.batch([['DELETE FROM sessions WHERE expires<?', [Date.now()]], ['DELETE FROM login_fails WHERE until<?', [Date.now()]],
     ["DELETE FROM deliveries WHERE created<? AND status IN ('sent','failed')", [Date.now() - 30 * 864e5]]]); // histórico de envios: 30 dias
   out.dispatch = await dispatch();
+  if (cfReady()) for (const s of [...sites.values()].filter(s => s.edge_host && (s.edge_status === 'dns' || s.edge_status === 'ssl'))) await checkHost(s); // erro só com Verificar agora
   // Contas com erro (last_sync antigo) tentam a cada execução do cron, ou seja, no máximo uma vez por hora.
   for (const acc of await db.all("SELECT * FROM ad_accounts WHERE platform='meta' AND COALESCE(last_sync, 0) < ?", [Date.now() - META_EVERY])) {
     if (!sites.has(acc.site)) continue;

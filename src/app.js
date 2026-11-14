@@ -11,6 +11,7 @@ import './routes/auth.js';
 import './routes/admin.js';
 import './routes/traffic.js';
 import './routes/sales.js';
+import './routes/setup.js';
 
 // ---------- arquivos públicos (na Vercel a CDN serve public/ antes de chegar aqui) ----------
 const CORS = { 'access-control-allow-origin': '*' };

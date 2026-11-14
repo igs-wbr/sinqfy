@@ -58,6 +58,15 @@ npx wrangler deploy     # antes, troque t.seudominio.com.br e ORIGIN no wrangler
 ```
 Confira: abra `https://t.seudominio.com.br/s.js` (precisa mostrar o snippet) e, depois de colar o snippet no site, veja os eventos chegando em Tráfego → Eventos com o selo `fbc` ao abrir uma URL com `?fbclid=teste123`.
 
+## 7. Domínio dos clientes (Cloudflare for SaaS)
+Para cada cliente usar o próprio `t.dominiodele.com.br`:
+1. Na zona do seu domínio: SSL/TLS, Custom Hostnames, ative o Cloudflare for SaaS e defina o **fallback origin** (ex.: `edge.seudominio.com.br`, um registro com proxy laranja). Os primeiros 100 domínios são gratuitos.
+2. Crie um token de API com permissão **SSL and Certificates: Edit** nessa zona.
+3. No `deploy/.env` do painel: `CF_API_TOKEN`, `CF_ZONE_ID` (Visão geral da zona) e `CF_SAAS_TARGET=edge.seudominio.com.br`. Reinicie o app.
+4. Publique o Worker com a rota `*/*` (já está no `edge/wrangler.toml`).
+
+O cliente cadastra o domínio no assistente (Primeiros passos), cria o CNAME `t` apontando para `CF_SAAS_TARGET`, e o painel confere o DNS e o SSL sozinho a cada 5 minutos.
+
 ## Atualizar
 ```bash
 cd rastro && git pull && cd deploy && docker compose up -d --build app

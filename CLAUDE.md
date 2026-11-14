@@ -1,6 +1,6 @@
 # Rastro: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 3 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 4 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -14,6 +14,8 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/http.js` (rotas e respostas) · `src/auth.js` (sessão, papéis, força bruta no banco) · `src/time.js` (fusos e períodos).
 - `src/tracking/`, `src/sales/`, `src/ads/meta.js`: domínio. `src/jobs.js`: `runJobs()`, chamado por `GET /cron` (Bearer `CRON_SECRET`).
 - `src/dispatch.js`: fila `deliveries` e envio server-side para Meta (CAPI) e GA4 (Measurement Protocol), com reenvio. Ingestão e webhooks só enfileiram; `dispatch()` roda a cada 5 s no servidor e no `/cron`.
+- `src/cloudflare.js`: domínio do cliente na borda (Cloudflare for SaaS, custom hostnames). `src/routes/setup.js` + `src/views/setup.js`: assistente de 6 passos.
+- Agências ([ADR 0009](docs/adr/0009-multi-cliente.md)): todo acesso a site, equipe e convite filtra por `agency_id`; `users.platform` é o dono da instalação.
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 3 KB) é minificado à mão e servido aos sites pelo Worker.

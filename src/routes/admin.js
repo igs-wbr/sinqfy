@@ -8,6 +8,7 @@ import { totals } from '../tracking/stats.js';
 import { salesTotals } from '../sales/stats.js';
 import { runJobs } from '../jobs.js';
 import { ROLES } from '../views/ui.js';
+import { removeHost } from '../cloudflare.js';
 import * as V from '../views/admin.js';
 
 const TIMEZONES = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
@@ -19,7 +20,7 @@ const MSG = {
 export const msg = r => Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null;
 
 // Tabelas ligadas a um site / a um usuário. Apagadas explicitamente: o schema não usa chave estrangeira.
-const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
+const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['deliveries', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
   ['funnels', 'site_id'], ['user_sites', 'site_id'], ['sites', 'id']];
 const USER_TABLES = [['user_sites', 'user_id'], ['sessions', 'user_id'], ['users', 'id']];
 
@@ -57,14 +58,16 @@ route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
 route('POST', '/sites/:id/delete', { site: 'edit', admin: true }, async r => {
   const f = await form(r.req);
   if (f.get('confirm') !== r.site.id) throw new HttpError(400, 'A confirmação não confere. Nada foi apagado.');
-  await db.batch(SITE_TABLES.map(([t, c]) => [`DELETE FROM ${t} WHERE ${c}=?`, [r.site.id]]));
+  if (r.site.edge_host) await removeHost(r.site); // libera o domínio na Cloudflare
+  await db.batch([...SITE_TABLES.map(([t, c]) => [`DELETE FROM ${t} WHERE ${c}=?`, [r.site.id]]),
+    ['INSERT INTO deleted_sites VALUES (?,?) ON CONFLICT DO NOTHING', [r.site.id, Date.now()]]]); // o id não volta a ser usado
   await loadSites();
   redirect(r, '/');
 });
 
 // --- sites ---
 async function sitesView(r, err) {
-  const rows = await Promise.all([...sites.values()].map(async s => {
+  const rows = await Promise.all((await allowedSites(r.user)).map(async s => {
     const today = localDate(Date.now(), s.timezone), range = { from: today, to: today };
     const [t, sl] = await Promise.all([totals(s.id, range), salesTotals(s, range)]);
     return { ...s, visitors: t.visitors, net: sl.net };
@@ -76,21 +79,21 @@ route('POST', '/sites', { admin: true }, async r => {
   const f = await form(r.req), id = (f.get('id') || '').trim(), name = (f.get('name') || '').trim().slice(0, 80);
   const tz = f.get('timezone'), cur = (f.get('currency') || '').toUpperCase();
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) return sitesView(r, 'Id inválido: use letras, números, ponto ou hífen.');
-  if (await db.get('SELECT 1 FROM sites WHERE id=?', [id])) return sitesView(r, 'Já existe um site com esse id.');
+  if (await db.get('SELECT 1 FROM sites WHERE id=? UNION ALL SELECT 1 FROM deleted_sites WHERE id=?', [id, id])) return sitesView(r, 'Esse id não está disponível. Escolha outro.');
   if (!name || !TIMEZONES.has(tz) || !/^[A-Z]{3}$/.test(cur)) return sitesView(r, 'Preencha nome, fuso horário e moeda válidos.');
-  await db.run('INSERT INTO sites(id, name, timezone, currency, created, webhook_token) VALUES (?,?,?,?,?,?)', [id, name, tz, cur, Date.now(), newToken()]);
+  await db.run('INSERT INTO sites(id, name, timezone, currency, created, webhook_token, agency_id) VALUES (?,?,?,?,?,?,?)', [id, name, tz, cur, Date.now(), newToken(), r.user.agency_id]);
   await loadSites();
-  redirect(r, `/sites/${encodeURIComponent(id)}/integrations`);
+  redirect(r, `/sites/${encodeURIComponent(id)}/setup`);
 });
 
 // --- equipe ---
 async function teamView(r, extra = {}) {
-  const users = await Promise.all((await db.all('SELECT * FROM users ORDER BY created')).map(async u => ({ ...u, sites: await memberSites(u.id) })));
-  send(r, extra.err ? 400 : 200, V.teamPage(ctx(r, { tab: 'team' }), users, [...sites.values()], extra));
+  const users = await Promise.all((await db.all('SELECT * FROM users WHERE agency_id=? ORDER BY created', [r.user.agency_id])).map(async u => ({ ...u, sites: await memberSites(u.id) })));
+  send(r, extra.err ? 400 : 200, V.teamPage(ctx(r, { tab: 'team' }), users, await allowedSites(r.user), extra));
 }
-const setSites = (uid, ids) => db.batch([
+const setSites = (r, uid, ids) => db.batch([
   ['DELETE FROM user_sites WHERE user_id=?', [uid]],
-  ...[...new Set(ids)].filter(id => sites.has(id)).map(id => ['INSERT INTO user_sites VALUES (?,?)', [uid, id]]),
+  ...[...new Set(ids)].filter(id => sites.get(id)?.agency_id === r.user.agency_id).map(id => ['INSERT INTO user_sites VALUES (?,?)', [uid, id]]),
 ]);
 async function issueLink(r, u) {
   const t = newToken(), url = `${origin(r.req)}/invite/${t}`;
@@ -98,9 +101,10 @@ async function issueLink(r, u) {
   return { link: url };
 }
 async function member(r) {
-  const u = await db.get('SELECT * FROM users WHERE id=?', [Number(r.params.uid) || 0]);
+  const u = await db.get('SELECT * FROM users WHERE id=? AND agency_id=?', [Number(r.params.uid) || 0, r.user.agency_id]);
   if (!u) throw new HttpError(404, 'Pessoa não encontrada.');
   if (u.id === r.user.id) throw new HttpError(400, 'Use a página Conta para alterar a sua própria conta.');
+  if (u.platform && !r.user.platform) throw new HttpError(403, 'Essa conta é do dono da plataforma e não pode ser alterada aqui.');
   return u;
 }
 route('GET', '/team', { admin: true }, r => teamView(r));
@@ -108,15 +112,15 @@ route('POST', '/team', { admin: true }, async r => {
   const f = await form(r.req), email = (f.get('email') || '').trim().toLowerCase(), role = f.get('role') || '';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !Object.hasOwn(ROLES, role)) return teamView(r, { err: 'E-mail ou papel inválido.' });
   if (await db.get('SELECT 1 FROM users WHERE lower(email)=lower(?)', [email])) return teamView(r, { err: 'Já existe alguém com esse e-mail.' });
-  const { rows: [{ id: uid }] } = await db.run('INSERT INTO users(email, name, role, created) VALUES (?,?,?,?) RETURNING id', [email, (f.get('name') || '').trim().slice(0, 80), role, Date.now()]);
-  await setSites(uid, f.getAll('sites'));
+  const { rows: [{ id: uid }] } = await db.run('INSERT INTO users(email, name, role, created, agency_id) VALUES (?,?,?,?,?) RETURNING id', [email, (f.get('name') || '').trim().slice(0, 80), role, Date.now(), r.user.agency_id]);
+  await setSites(r, uid, f.getAll('sites'));
   teamView(r, await issueLink(r, await db.get('SELECT * FROM users WHERE id=?', [uid])));
 });
 route('POST', '/team/:uid', { admin: true }, async r => {
   const u = await member(r), f = await form(r.req), role = f.get('role') || '';
   if (!Object.hasOwn(ROLES, role)) throw new HttpError(400, 'Papel inválido.');
   await db.run('UPDATE users SET role=? WHERE id=?', [role, u.id]);
-  await setSites(u.id, f.getAll('sites'));
+  await setSites(r, u.id, f.getAll('sites'));
   redirect(r, '/team');
 });
 route('POST', '/team/:uid/link', { admin: true }, async r => teamView(r, await issueLink(r, await member(r))));
@@ -124,6 +128,25 @@ route('POST', '/team/:uid/delete', { admin: true }, async r => {
   const u = await member(r);
   await db.batch(USER_TABLES.map(([t, c]) => [`DELETE FROM ${t} WHERE ${c}=?`, [u.id]]));
   redirect(r, '/team');
+});
+
+// --- agências (dono da plataforma): cada agência tem os seus sites e a sua equipe; o primeiro dono entra por convite ---
+const platformOnly = r => { if (!r.user.platform) throw new HttpError(404, 'Página não encontrada.'); };
+async function agenciesView(r, extra = {}) {
+  platformOnly(r);
+  const rows = await db.all(`SELECT a.*, (SELECT COUNT(*) FROM sites s WHERE s.agency_id=a.id) sites, (SELECT COUNT(*) FROM users u WHERE u.agency_id=a.id) users
+    FROM agencies a ORDER BY a.id`);
+  send(r, extra.err ? 400 : 200, V.agenciesPage(ctx(r, { tab: 'agencies' }), rows, extra));
+}
+route('GET', '/agencies', {}, r => agenciesView(r));
+route('POST', '/agencies', {}, async r => {
+  platformOnly(r);
+  const f = await form(r.req), name = (f.get('name') || '').trim().slice(0, 80), email = (f.get('email') || '').trim().toLowerCase();
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return agenciesView(r, { err: 'Informe o nome da agência e o e-mail do dono.' });
+  if (await db.get('SELECT 1 FROM users WHERE lower(email)=lower(?)', [email])) return agenciesView(r, { err: 'Esse e-mail já tem conta no Rastro.' });
+  const { rows: [{ id: aid }] } = await db.run('INSERT INTO agencies(name, created) VALUES (?,?) RETURNING id', [name, Date.now()]);
+  const { rows: [{ id: uid }] } = await db.run("INSERT INTO users(email, name, role, created, agency_id) VALUES (?,?,'admin',?,?) RETURNING id", [email, '', Date.now(), aid]);
+  agenciesView(r, { ...await issueLink(r, await db.get('SELECT * FROM users WHERE id=?', [uid])), agency: name });
 });
 
 // --- conta ---
