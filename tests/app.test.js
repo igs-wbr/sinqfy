@@ -68,7 +68,7 @@ test('link público mostra só tráfego e pode ser desativado', async () => {
 test('arquivos públicos: snippet, fontes, ícone e manifest', async () => {
   const s = await req('/s.js');
   assert.equal(s.headers.get('access-control-allow-origin'), '*');
-  assert.equal((await req('/fonts/inter.woff2')).headers.get('content-type'), 'font/woff2');
+  assert.equal((await req('/fonts/figtree.woff2')).headers.get('content-type'), 'font/woff2');
   assert.equal((await req('/manifest.webmanifest')).status, 200);
   assert.equal((await req('/fonts/../db.js')).status, 404, 'sem path traversal');
 });
@@ -78,7 +78,7 @@ test('cron: só responde com o segredo e executa as tarefas', async () => {
   assert.equal((await req('/cron', { headers: { authorization: 'Bearer errado' } })).status, 404);
   const ok = await req('/cron', { headers: { authorization: 'Bearer segredo-de-teste' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(JSON.parse(ok.text), { meta: 0, errors: [] });
+  assert.deepEqual(JSON.parse(ok.text), { meta: 0, errors: [], dispatch: { sent: 0, failed: 0, retry: 0 } });
 });
 
 test('força bruta: 10 falhas bloqueiam o IP', async () => {

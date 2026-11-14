@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
+import { enqueueWeb } from '../dispatch.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
 const UTM = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
@@ -48,6 +49,11 @@ export function channel({ referrer: ref, utm_source, utm_medium, utm_campaign })
 }
 
 const CLICKS = ['gclid', 'gbraid', 'wbraid', 'ttclid'];
+/** Domínios do site ("loja.com.br, outra.com"): aceita o domínio e os subdomínios. Vazio aceita qualquer um. */
+export function allowedHost(site, host) {
+  const list = String(site.domains || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+  return !list.length || list.some(d => host === d || host.endsWith('.' + d));
+}
 const INSERT = `INSERT INTO events(site,date,ts,visitor,session,name,path,referrer,channel,${UTM},screen,browser,os,country,props,revenue,rid,event_id,fbc,fbp,${CLICKS})
   VALUES (${Array(28).fill('?')})`;
 const CLICK_RE = /^[\w.-]{1,255}$/;
@@ -66,13 +72,14 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   if (!ua || BOT_RE.test(ua)) return 202; // bots são descartados em silêncio
   let url;
   try { url = new URL(e.u); } catch { return 400; }
+  if (!allowedHost(site, url.hostname)) return 403; // beacon de um domínio que não é do site
   const name = e.n == null || e.n === 'pageview' ? 'pageview' : String(e.n).trim().slice(0, 64);
   if (!name) return 400;
 
-  const visitor = edge?.rid || createHash('sha256').update(await dailySalt(new Date(now).toISOString().slice(0, 10)))
+  const visitor = (e.c !== 0 && edge?.rid) || createHash('sha256').update(await dailySalt(new Date(now).toISOString().slice(0, 10)))
     .update(`${site.id}|${ip}|${ua}`).digest('hex').slice(0, 16);
   // Sessão: continua se o último evento do visitante foi há ≤ 30 min, herdando a origem da visita.
-  const last = await db.get('SELECT * FROM events WHERE visitor=? ORDER BY ts DESC LIMIT 1', [visitor]);
+  const last = await db.get('SELECT * FROM events WHERE site=? AND visitor=? ORDER BY ts DESC LIMIT 1', [site.id, visitor]);
   let s = last && now - last.ts <= SESSION_GAP ? last : null;
   if (!s) {
     let referrer = '';
@@ -93,9 +100,17 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   const { browser, os } = parseUA(ua);
   const q = url.searchParams, click = k => CLICK_RE.test(q.get(k) || '') ? q.get(k) : null;
   const eventId = typeof e.i === 'string' && /^[\w-]{8,64}$/.test(e.i) ? e.i : randomUUID();
+  // Sem consentimento (snippet com data-consent="required" e c:0): só a estatística, sem IDs de anúncio e sem envio a terceiros.
+  const consent = e.c !== 0;
+  const ev = { name, ts: now, rid: consent && edge?.rid || null, visitor, event_id: eventId,
+    fbc: consent && (edge?.fbc || fbcOf(q.get('fbclid'), now)) || null, fbp: consent && edge?.fbp || null,
+    revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null };
   await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
-    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null,
-    edge?.rid || null, eventId, edge?.fbc || fbcOf(q.get('fbclid'), now) || null, edge?.fbp || null, ...CLICKS.map(click)]);
+    /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null)]);
+  // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
+  const clientId = typeof e.g === 'string' && /^\d{1,12}\.\d{1,12}$/.test(e.g) ? e.g : null; // cookie _ga, lido pelo snippet
+  // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
+  if (consent && name !== 'Purchase') await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
   return 202;
 }

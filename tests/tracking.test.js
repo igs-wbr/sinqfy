@@ -29,11 +29,11 @@ function runSnippet({ search = '', referrer = 'https://google.com/', cookie, con
   return { src, beacons, ids, on, store, loc, hist, win };
 }
 const el = (attrs, tagName = 'BUTTON') => ({ tagName, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })), dataset: { rastro: attrs['data-rastro'] }, closest(sel) { return sel === '[data-rastro]' && attrs['data-rastro'] ? this : null; } });
-const anchor = href => ({ tagName: 'A', href, closest(sel) { return sel === 'a[href]' ? this : null; } });
+const anchor = (href, attrs = {}) => ({ tagName: 'A', href, hasAttribute: n => Object.hasOwn(attrs, n), closest(sel) { return sel === 'a[href]' ? this : null; } });
 
-test('snippet: < 2 KB, pageview, SPA, eventos, opt-out', () => {
+test('snippet: < 3 KB, pageview, SPA, eventos, opt-out', () => {
   const { src, beacons, on, store, loc, hist, win } = runSnippet();
-  assert.ok(Buffer.byteLength(src) < 2048, `snippet com ${Buffer.byteLength(src)} bytes`);
+  assert.ok(Buffer.byteLength(src) < 3072, `snippet com ${Buffer.byteLength(src)} bytes`);
   assert.deepEqual(beacons[0], ['https://stats.dev/e', { s: 'blog', u: loc.href, r: 'https://google.com/', w: 1280 }]);
   Object.assign(loc, { href: 'https://blog.dev/b', pathname: '/b', search: '' });
   hist.pushState({}, '', '/b'); hist.pushState({}, '', '/b');
@@ -68,6 +68,10 @@ test('snippet v2: id por evento, consentimento e rid nos links externos', () => 
   c.on.click({ target: pay }); c.on.click({ target: keep });
   assert.equal(new URL(pay.href).searchParams.get('rid'), 'AbC123xyz_-');
   assert.equal(new URL(keep.href).searchParams.get('rid'), 'outro', 'não sobrescreve');
+  const blog = anchor('https://outro-site.com/artigo'), marked = anchor('https://agenda.com/x', { 'data-rastro-rid': '' });
+  c.on.click({ target: blog }); c.on.click({ target: marked });
+  assert.equal(blog.href, 'https://outro-site.com/artigo', 'rid só em checkout, WhatsApp ou link marcado');
+  assert.equal(new URL(marked.href).searchParams.get('rid'), 'AbC123xyz_-');
   const none = anchor('https://pay.kiwify.com.br/K');
   runSnippet().on.click({ target: none });
   assert.equal(none.href, 'https://pay.kiwify.com.br/K', 'sem cookie e sem UTM, link intacto');
@@ -132,6 +136,13 @@ test('ingestão pela borda: cookie vira visitante, IDs de clique e segredo obrig
   assert.match(c.fbc, /^fb\.1\.\d{13}\.IwAR-semborda$/, 'sem borda, fbc montado a partir do fbclid');
   assert.match(c.event_id, /^[0-9a-f-]{36}$/, 'id inválido é trocado');
   assert.ok(!JSON.stringify([a, b, c]).includes('198.51.100.20') && !JSON.stringify([a, b, c]).includes('203.0.113.9'), 'IP nunca é gravado');
+
+  // domínios do site: beacon de outro domínio é recusado
+  assert.equal((await req('/sites/edge/settings', { cookie: admin, form: { action: 'save', name: 'Edge', timezone: 'UTC', currency: 'BRL', tax_rate: '0', domains: 'https://e.dev/, Loja.com.br' } })).status, 303);
+  assert.equal((await db.get("SELECT domains FROM sites WHERE id='edge'")).domains, 'e.dev, loja.com.br');
+  assert.equal(await send({ s: 'edge', u: 'https://golpe.com/', i: 'evt_0000009' }), 403);
+  assert.equal(await send({ s: 'edge', u: 'https://www.loja.com.br/x', i: 'evt_0000010' }), 202);
+  assert.equal((await req('/sites/edge/settings', { cookie: admin, form: { action: 'save', name: 'Edge', timezone: 'UTC', currency: 'BRL', tax_rate: '0', domains: 'não é domínio' } })).status, 400);
 
   const page = await req('/sites/edge/events', { cookie: admin });
   assert.equal(page.status, 200);

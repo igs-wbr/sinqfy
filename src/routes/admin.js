@@ -45,7 +45,9 @@ route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
   if (action === 'save') {
     const name = (f.get('name') || '').trim().slice(0, 80), tz = f.get('timezone'), cur = (f.get('currency') || '').toUpperCase(), tax = Number(f.get('tax_rate') || 0);
     if (!name || !TIMEZONES.has(tz) || !/^[A-Z]{3}$/.test(cur) || !(tax >= 0 && tax <= 100)) throw new HttpError(400, 'Nome, fuso horário, moeda ou imposto inválidos.');
-    await db.run('UPDATE sites SET name=?, timezone=?, currency=?, tax_rate=? WHERE id=?', [name, tz, cur, tax, id]);
+    const domains = (f.get('domains') || '').toLowerCase().split(/[\s,]+/).map(d => d.replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean);
+    if (domains.some(d => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d))) throw new HttpError(400, 'Domínio inválido. Use só o domínio, ex.: loja.com.br');
+    await db.run('UPDATE sites SET name=?, timezone=?, currency=?, tax_rate=?, domains=? WHERE id=?', [name, tz, cur, tax, domains.join(', ') || null, id]);
   } else if (action === 'share_on') await db.run('UPDATE sites SET share_token=? WHERE id=?', [newToken(), id]);
   else if (action === 'share_off') await db.run('UPDATE sites SET share_token=NULL WHERE id=?', [id]);
   else throw new HttpError(400, 'Ação inválida.');

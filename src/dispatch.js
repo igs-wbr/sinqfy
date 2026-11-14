@@ -1,0 +1,166 @@
+// Etapa 2: fila de envio server-side para a Meta (Conversions API) e o GA4 (Measurement Protocol).
+// Ingestão e webhooks só enfileiram (enqueue); dispatch() envia em lotes, com reenvio e espera crescente.
+// IP e user agent só existem no payload enquanto o envio está pendente (ADR 0014): ao terminar, saem do banco.
+import { createHash } from 'node:crypto';
+import { db, env, sites } from './db.js';
+
+const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}`;
+const sha = v => createHash('sha256').update(v).digest('hex');
+export const BACKOFF = [60e3, 5 * 60e3, 30 * 60e3, 6 * 3600e3]; // 4 reenvios; o 5º erro encerra
+const MAX_AGE = 7 * 864e5; // a Meta recusa eventos com mais de 7 dias
+export const DESTS = { meta: 'Meta', ga4: 'GA4' };
+
+export const metaReady = s => !!(s.meta_pixel && s.meta_capi_token);
+export const ga4Ready = s => !!(s.ga4_id && s.ga4_secret);
+
+// ---------- montagem dos eventos ----------
+const GA4_NAMES = { pageview: 'page_view', Purchase: 'purchase', Lead: 'generate_lead', InitiateCheckout: 'begin_checkout', AddToCart: 'add_to_cart',
+  ViewContent: 'view_item', CompleteRegistration: 'sign_up', Search: 'search', AddPaymentInfo: 'add_payment_info' };
+export const ga4Name = n => GA4_NAMES[n] || (n.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^[^A-Za-z]+/, '').toLowerCase().slice(0, 40) || 'evento');
+export const metaName = n => n === 'pageview' ? 'PageView' : n;
+
+/** Evento do site para a Conversions API. `ctx` traz ip, ua e a URL da página (sem query string). */
+export function metaWebEvent(site, ev, { ip, ua, url }) {
+  const user_data = { client_user_agent: ua };
+  if (ip) user_data.client_ip_address = ip;
+  if (ev.fbc) user_data.fbc = ev.fbc;
+  if (ev.fbp) user_data.fbp = ev.fbp;
+  if (ev.rid) user_data.external_id = [sha(ev.rid)];
+  const out = { event_name: metaName(ev.name), event_time: Math.floor(ev.ts / 1000), event_id: ev.event_id, action_source: 'website', event_source_url: url, user_data };
+  if (ev.revenue != null) out.custom_data = { value: ev.revenue, currency: site.currency };
+  return out;
+}
+
+/** Compra aprovada vinda do webhook. E-mail e telefone chegam aqui e só seguem em SHA-256. */
+export function metaPurchase(site, sale, { email, phone } = {}, now = Date.now()) {
+  const user_data = {};
+  if (email) user_data.em = [sha(String(email).trim().toLowerCase())];
+  if (phone) { let d = String(phone).replace(/\D/g, ''); if (d.length === 10 || d.length === 11) d = '55' + d; user_data.ph = [sha(d)]; } // a Meta exige o DDI
+  if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador
+  const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;
+  return {
+    event_name: 'Purchase', event_time: Math.floor(ts / 1000), event_id: `${sale.platform}-${sale.order_id}`,
+    // 'other': sem user agent e URL da página a Meta recusa 'website'. Na etapa 3 a venda casa com o clique e passa a ir como 'website'.
+    action_source: 'other', user_data,
+    custom_data: { currency: sale.currency || site.currency, value: sale.gross, content_name: sale.product || undefined, order_id: sale.order_id },
+  };
+}
+
+/** Evento do site para o GA4. client_id vem do cookie _ga (campo `g` do snippet); sem ele, do visitante. */
+export function ga4WebEvent(site, ev, { url, clientId }) {
+  const params = { page_location: url, engagement_time_msec: 1 };
+  if (ev.revenue != null) Object.assign(params, { value: ev.revenue, currency: site.currency });
+  if (ev.name === 'pageview') params.page_path = new URL(url).pathname;
+  return { client_id: clientId || ev.rid || ev.visitor, timestamp_micros: ev.ts * 1000, events: [{ name: ga4Name(ev.name), params }] };
+}
+
+// ---------- fila ----------
+export const enqueue = (site, dest, eventId, name, payload, now = Date.now()) => db.run(
+  `INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload) VALUES (?,?,?,?,'pending',0,?,?,?)`,
+  [site, dest, eventId, name, now, now, JSON.stringify(payload)]);
+
+/** Enfileira um evento do site para os destinos configurados. */
+export async function enqueueWeb(site, ev, ctx, now = Date.now()) {
+  if (metaReady(site)) await enqueue(site.id, 'meta', ev.event_id, ev.name, metaWebEvent(site, ev, ctx), now);
+  // page_view não vai ao GA4: o gtag do site já conta, e o GA4 não deduplica. Só eventos de conversão.
+  if (ga4Ready(site) && ev.name !== 'pageview') await enqueue(site.id, 'ga4', ev.event_id, ev.name, ga4WebEvent(site, ev, ctx), now);
+}
+
+class SendError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
+/** 4xx (menos 429) não melhora tentando de novo: token inválido, parâmetro errado. */
+const permanent = e => e.status >= 400 && e.status < 500 && e.status !== 429;
+const TIMEOUT = 10e3;
+
+const SENDERS = {
+  async meta(site, payloads) {
+    const body = { data: payloads, access_token: site.meta_capi_token }; // no corpo, não na URL (não vaza em log de proxy)
+    if (site.meta_test_code) body.test_event_code = site.meta_test_code;
+    const res = await fetch(`${graph()}/${encodeURIComponent(site.meta_pixel)}/events`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.error) throw new SendError(j.error?.error_user_msg || j.error?.message || `HTTP ${res.status}`, res.ok ? 400 : res.status);
+    return `recebidos: ${j.events_received ?? payloads.length}${j.fbtrace_id ? ` · fbtrace_id ${j.fbtrace_id}` : ''}`;
+  },
+  async ga4(site, [payload]) { // o Measurement Protocol aceita um client_id por requisição
+    const res = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(site.ga4_id)}&api_secret=${encodeURIComponent(site.ga4_secret)}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(TIMEOUT) });
+    if (!res.ok) throw new SendError(`HTTP ${res.status}`, res.status); // o GA4 responde 2xx mesmo para evento inválido; validar com o endpoint de debug
+    return 'aceito pelo GA4';
+  },
+};
+
+const strip = p => { const o = JSON.parse(p); if (o.user_data) { delete o.user_data.client_ip_address; delete o.user_data.client_user_agent; } return JSON.stringify(o); };
+
+async function finish(rows, err, now, giveUp) {
+  const stmts = rows.map(r => {
+    if (!err) return ["UPDATE deliveries SET status='sent', attempts=attempts+1, sent_at=?, payload=NULL, response=? WHERE id=?", [now, r.response, r.id]];
+    return isFinal(r, now, giveUp)
+      ? ["UPDATE deliveries SET status='failed', attempts=attempts+1, payload=?, response=? WHERE id=?", [strip(r.payload), err.slice(0, 300), r.id]]
+      : ["UPDATE deliveries SET status='pending', attempts=attempts+1, next_at=?, response=? WHERE id=?", [now + BACKOFF[r.attempts], err.slice(0, 300), r.id]];
+  });
+  await db.batch(stmts);
+}
+const isFinal = (r, now, giveUp) => giveUp || r.attempts + 1 > BACKOFF.length || now - r.created > MAX_AGE;
+
+/**
+ * Envia um grupo (lote da Meta ou um evento do GA4). Se a Meta recusar o lote por causa de um evento (4xx),
+ * reparte em envios de um evento, para o erro ficar só no evento ruim; 4xx num evento sozinho falha na hora.
+ */
+async function sendGroup(list, now, out) {
+  const { site: id, dest } = list[0], site = sites.get(id);
+  let err = null, giveUp = false, response;
+  try {
+    if (!site || !(dest === 'meta' ? metaReady(site) : ga4Ready(site))) throw new SendError('Destino não configurado', 0);
+    response = await SENDERS[dest](site, list.map(r => JSON.parse(r.payload)));
+  } catch (e) {
+    if (permanent(e) && list.length > 1) { for (const r of list) await sendGroup([r], now, out); return; }
+    err = e.name === 'TimeoutError' ? 'Sem resposta em 10 s' : e.message || String(e);
+    giveUp = permanent(e);
+  }
+  for (const r of list) r.response = response;
+  await finish(list, err, now, giveUp);
+  for (const r of list) out[!err ? 'sent' : isFinal(r, now, giveUp) ? 'failed' : 'retry']++;
+}
+
+/**
+ * Envia o que está pendente. Cada linha é "alugada" por 2 min (status sending), então duas instâncias não
+ * enviam a mesma coisa, e uma linha presa por queda volta sozinha. Retorna { sent, failed, retry }.
+ */
+let running = null;
+export async function dispatch(opts) {
+  if (running && !opts) return running; // o ciclo de 5 s não empilha rodadas
+  while (running) await running.catch(() => {}); // chamada com opções (cron, testes) espera e roda a sua
+  running = run(opts).finally(() => { running = null; });
+  return running;
+}
+async function run({ now = Date.now(), limit = 500 } = {}) {
+  const rows = await db.all(`UPDATE deliveries SET status='sending', next_at=? WHERE id IN (SELECT id FROM deliveries
+    WHERE status IN ('pending','sending') AND next_at<=? ORDER BY next_at LIMIT ${Number(limit)} FOR UPDATE SKIP LOCKED) RETURNING *`, [now + 120e3, now]);
+  rows.sort((a, b) => a.id - b.id); // RETURNING não garante ordem; envia na ordem de chegada
+  const out = { sent: 0, failed: 0, retry: 0 };
+  const groups = new Map();
+  for (const r of rows) {
+    const k = r.dest === 'meta' ? `${r.site}
+meta` : `${r.site}
+${r.dest}
+${r.id}`; // Meta em lote; GA4 um por requisição
+    (groups.get(k) || groups.set(k, []).get(k)).push(r);
+  }
+  const queue = [...groups.values()];
+  const worker = async () => { while (queue.length) await sendGroup(queue.shift(), now, out); };
+  await Promise.all(Array.from({ length: 6 }, worker)); // até 6 envios em paralelo
+  return out;
+}
+
+/** Reenvio manual de uma entrega que falhou (botão no inspetor do evento). */
+export const retry = (site, id, now = Date.now()) => db.run(
+  "UPDATE deliveries SET status='pending', attempts=0, next_at=?, created=? WHERE id=? AND site=? AND status='failed' AND payload IS NOT NULL", [now, now, id, site]);
+
+/** Entregas por evento, para a aba Eventos. */
+export async function deliveriesFor(site, eventIds) {
+  if (!eventIds.length) return new Map();
+  const rows = await db.all('SELECT id, event_id, dest, status, attempts, response, sent_at FROM deliveries WHERE site=? AND event_id = ANY(?::text[])', [site, eventIds]);
+  const m = new Map();
+  for (const r of rows) (m.get(r.event_id) || m.set(r.event_id, []).get(r.event_id)).push(r);
+  return m;
+}

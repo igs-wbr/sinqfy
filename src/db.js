@@ -106,6 +106,17 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS fbc TEXT, ADD COLUMN IF NOT EXISTS fbp TEXT, ADD COLUMN IF NOT EXISTS gclid TEXT,
       ADD COLUMN IF NOT EXISTS gbraid TEXT, ADD COLUMN IF NOT EXISTS wbraid TEXT, ADD COLUMN IF NOT EXISTS ttclid TEXT;
     CREATE INDEX IF NOT EXISTS events_site_ts ON events(site, ts DESC);
+
+    -- Etapa 2: fila de envio server-side (src/dispatch.js) e configuração do GA4 e do código de teste da Meta.
+    CREATE TABLE IF NOT EXISTS deliveries(id ${ID}, site TEXT NOT NULL, dest TEXT NOT NULL, event_id TEXT NOT NULL, name ${T},
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','sent','failed')), attempts INTEGER NOT NULL DEFAULT 0,
+      next_at BIGINT NOT NULL, created BIGINT NOT NULL, sent_at BIGINT, payload TEXT, response TEXT);
+    CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries(next_at) WHERE status IN ('pending','sending');
+    CREATE INDEX IF NOT EXISTS deliveries_event ON deliveries(site, event_id);
+    CREATE INDEX IF NOT EXISTS events_site_visitor_ts ON events(site, visitor, ts);
+    -- Domínios aceitos no beacon (separados por vírgula; vazio aceita qualquer um) e o token do Hotmart (etapa 3).
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS domains TEXT;
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS ga4_id TEXT, ADD COLUMN IF NOT EXISTS ga4_secret TEXT, ADD COLUMN IF NOT EXISTS meta_test_code TEXT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

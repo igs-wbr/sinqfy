@@ -1,7 +1,7 @@
 // Worker da borda (edge/worker.js): cookies primários, consentimento, repasse para a origem e fila de falhas no R2.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { identify, cookieDomain } from '../edge/worker.js';
+import worker, { identify, cookieDomain, scrubUrl } from '../edge/worker.js';
 
 const calls = [], puts = [];
 let originStatus = 202;
@@ -26,6 +26,9 @@ beforeEach(() => { calls.length = 0; puts.length = 0; originStatus = 202; });
 test('domínio do cookie e identificadores', () => {
   assert.equal(cookieDomain('t.cliente.com.br'), 'cliente.com.br');
   assert.equal(cookieDomain('localhost'), null);
+  assert.equal(cookieDomain('cliente.com.br'), null, 'nunca um sufixo público');
+  assert.equal(cookieDomain('rastro-edge.user.workers.dev'), null);
+  assert.equal(scrubUrl('https://x.dev/p?email=a%40b.com&utm_source=FB&fbclid=I1'), 'https://x.dev/p?utm_source=FB&fbclid=I1');
   const now = 1700000000000;
   const fresh = identify({}, 'https://x.dev/?fbclid=IwAR1', now);
   assert.match(fresh.rid, /^[\w-]{22}$/);
@@ -52,6 +55,12 @@ test('beacon: grava cookies no domínio do cliente e repassa à origem com o seg
   assert.equal(o.init.headers['x-rastro-fbc'], c._fbc);
 });
 
+test('cookie malformado de outro sistema não derruba o beacon', async () => {
+  const res = await run(beacon({ s: 'site', u: 'https://www.cliente.com.br/' }, { cookie: 'quebrado=%E0%A4%A; _rid=RidAntigo123; semigual' }));
+  assert.equal(res.status, 202);
+  assert.equal(jar(res)._rid, 'RidAntigo123');
+});
+
 test('sem consentimento: nenhum cookie e nenhum id persistente', async () => {
   const res = await run(beacon({ s: 'site', u: 'https://www.cliente.com.br/?fbclid=IwAR9', c: 0 }));
   assert.equal(res.status, 202);
@@ -70,7 +79,7 @@ test('origem fora do ar: beacon vai para o R2, sem o segredo', async () => {
   assert.equal(puts.length, 2);
   assert.match(puts[0][0], /^failed\/\d{4}-\d{2}-\d{2}\//);
   assert.equal(JSON.parse(puts[0][1].body).s, 'site');
-  assert.ok(!JSON.stringify(puts).includes('s3gredo'));
+  assert.ok(!JSON.stringify(puts).includes('s3gredo') && !JSON.stringify(puts).includes('203.0.113.5') && !JSON.stringify(puts).includes('"UA"'), 'sem segredo, IP nem user agent');
   originStatus = 400;
   await run(beacon({ s: 'nope', u: 'x' }));
   assert.equal(puts.length, 2, 'erro do cliente (4xx) não vai para a fila');
@@ -83,7 +92,11 @@ test('entrada inválida, preflight e snippet', async () => {
   assert.equal(pre.status, 204);
   const js = await run(new Request('https://t.cliente.com.br/s.js'));
   assert.equal(await js.text(), '!function(){}()');
+  assert.equal(js.headers.get('cache-control'), 'public, max-age=3600');
+  originStatus = 503;
+  assert.equal((await run(new Request('https://t.cliente.com.br/s.js'))).headers.get('cache-control'), 'no-store', 'erro da origem não fica em cache');
+  originStatus = 202;
   assert.equal(calls.at(-1).url, 'https://app.rastro.dev/s.js');
   assert.equal((await run(new Request('https://t.cliente.com.br/qualquer'))).status, 404);
-  assert.equal(calls.length, 1, 'nada além do snippet chega à origem');
+  assert.equal(calls.length, 2, 'nada além do snippet chega à origem');
 });

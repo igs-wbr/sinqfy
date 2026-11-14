@@ -12,7 +12,9 @@ export function readBody(req, limit) {
   });
 }
 export const form = async (req, limit = 64 * 1024) => new URLSearchParams(await readBody(req, limit));
-export const clientIp = req => (env.TRUST_PROXY === '1' && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress;
+// Atrás da Cloudflare, cf-connecting-ip é sobrescrito por ela e não dá para forjar. O primeiro item do X-Forwarded-For vem do cliente,
+// então sem cf-connecting-ip vale o último salto (o proxy imediatamente antes de nós).
+export const clientIp = req => (env.TRUST_PROXY === '1' && (req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']?.split(',').at(-1).trim())) || req.socket.remoteAddress;
 export const origin = req => env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http'}://${req.headers.host}`;
 
 export function send(r, status, body, headers = {}) {

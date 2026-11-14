@@ -8,13 +8,14 @@ route('GET', '/login', { auth: false }, r => r.user ? redirect(r, '/') : send(r,
 
 route('POST', '/login', { auth: false }, async r => {
   const f = await form(r.req), ip = clientIp(r.req), email = (f.get('email') || '').trim(), next = f.get('next') || '';
-  if (await blocked(ip)) return send(r, 429, V.loginPage(ctx(r), { email, next, err: 'Muitas tentativas. Tente de novo em 15 minutos.' }));
+  const byEmail = 'e:' + email.toLowerCase().slice(0, 200);
+  if (await blocked(ip) || await blocked(byEmail)) return send(r, 429, V.loginPage(ctx(r), { email, next, err: 'Muitas tentativas. Tente de novo em 15 minutos.' }));
   const user = await db.get('SELECT * FROM users WHERE lower(email)=lower(?)', [email]);
   if (!checkPassword(f.get('password') || '', user?.pass)) {
-    await failed(ip);
+    await failed(ip); await failed(byEmail);
     return send(r, 401, V.loginPage(ctx(r), { email, next, err: 'E-mail ou senha incorretos.' }));
   }
-  await clearFails(ip);
+  await clearFails(ip); await clearFails(byEmail);
   redirect(r, /^\/(?![/\\])/.test(next) ? next : '/', await login(r, user.id)); // só redireciona para caminhos locais
 });
 

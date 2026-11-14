@@ -19,6 +19,7 @@ services:
     environment:
       DATABASE_URL: postgres://rastro:${POSTGRES_PASSWORD}@postgres:5432/rastro
       TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
 
   cloudflared:
     image: cloudflare/cloudflared:latest

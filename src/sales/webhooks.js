@@ -1,8 +1,9 @@
 // Recebe webhooks de plataformas de venda, normaliza para um formato único e grava em `sales`.
 // Dados pessoais do comprador nunca são gravados; e-mail/telefone só seguem (em hash) para a Conversions API.
+import { timingSafeEqual } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
-import { sendCapi } from '../ads/meta.js';
+import { enqueue, metaPurchase, metaReady } from '../dispatch.js';
 
 export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', generic: 'Genérico' };
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
@@ -122,7 +123,8 @@ const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gros
 
 /** Processa um webhook. Retorna o status HTTP para a plataforma. `now` é injetável para testes. */
 export async function handleWebhook(token, platform, raw, now = Date.now()) {
-  const site = [...sites.values()].find(s => s.webhook_token && s.webhook_token === token);
+  const t = Buffer.from(String(token));
+  const site = [...sites.values()].find(s => s.webhook_token && s.webhook_token.length === t.length && timingSafeEqual(Buffer.from(s.webhook_token), t));
   if (!site || !Object.hasOwn(PARSERS, platform)) return 404;
   let body;
   try { body = JSON.parse(raw); } catch { body = Object.fromEntries(new URLSearchParams(raw)); }
@@ -138,11 +140,11 @@ export async function handleWebhook(token, platform, raw, now = Date.now()) {
     s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content)]);
   await log(site.id, platform, s, true, before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[s.status]}` : 'Nova venda');
 
-  // Aguardado antes de responder: em serverless a função pode congelar logo após a resposta.
-  if (s.status === 'paid' && before?.status !== 'paid' && site.meta_pixel && site.meta_capi_token) {
-    try {
-      if (await sendCapi(site, { ...s, ts, platform }, { email: s.email, phone: s.phone }, now)) await log(site.id, platform, s, true, 'Enviada para a Conversions API da Meta');
-    } catch (e) { await log(site.id, platform, s, false, `Conversions API: ${e.message}`); }
+  // Compra aprovada vai para a fila da Conversions API (src/dispatch.js), uma vez só.
+  if (s.status === 'paid' && before?.status !== 'paid' && metaReady(site)) {
+    const ev = metaPurchase(site, { ...s, ts, platform }, { email: s.email, phone: s.phone }, now);
+    if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); await log(site.id, platform, s, true, 'Na fila da Conversions API da Meta'); }
+    else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail nem telefone, não enviada');
   }
   return 200;
 }

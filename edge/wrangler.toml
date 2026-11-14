@@ -10,7 +10,15 @@ routes = [{ pattern = "t.seudominio.com.br", custom_domain = true }]
 [vars]
 ORIGIN = "https://app.seudominio.com.br"
 
-# Beacons que a origem não conseguiu receber ficam aqui para reprocessar (crie o bucket antes: `npx wrangler r2 bucket create rastro-raw`).
+# Beacons que a origem não conseguiu receber ficam aqui para reprocessar, sem IP nem user agent. Crie o bucket e a regra de 30 dias:
+#   npx wrangler r2 bucket create rastro-raw
+#   npx wrangler r2 bucket lifecycle add rastro-raw expira-30d failed/ --expire-days 30
 [[r2_buckets]]
 binding = "RAW"
 bucket_name = "rastro-raw"
+
+# Limite de beacons por IP (protege a fila e a cota da Meta do cliente contra inundação).
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }

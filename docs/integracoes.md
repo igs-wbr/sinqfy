@@ -12,7 +12,11 @@ Use o subdomínio `t.` servido pelo Worker da borda (veja [deploy](deploy-oracle
 
 - **Consentimento (LGPD):** com `data-consent="required"` no `<script>`, nenhum cookie é gravado até o banner chamar `rastro('consent')`.
 - **Cada evento leva um id** (`event_id`), usado na etapa 2 para deduplicar com o Pixel.
-- **Links externos** (checkout) recebem `rid=<id do visitante>`, que liga a venda ao clique na etapa 3.
+- **Links de checkout e de WhatsApp** (Hotmart, Kiwify, Eduzz, Monetizze, Ticto, Perfect Pay, Braip, Greenn, Yampi, Cartpanda, `pay.*`, `checkout`, `wa.me`) recebem `rid=<id do visitante>`, que liga a venda ao clique na etapa 3. Outro link qualquer só recebe com o atributo `data-rastro-rid`.
+- **Domínios do site** (Configurações): com a lista preenchida, beacons de outros domínios são recusados.
+- **Limite do Safari:** se o subdomínio `t.` e o site principal ficarem em IPs diferentes, o Safari limita o cookie gravado pelo servidor a 7 dias. Para ter os 400 dias no Safari, o site principal também precisa passar pela Cloudflare.
+- **Pixel junto do servidor:** com `data-pixel="mirror"`, o snippet repete cada evento no Pixel (`fbq`) com o mesmo `eventID` do envio pelo servidor, e a Meta conta uma vez só. Nesse caso, apague a linha `fbq('track','PageView')` do código base do Pixel.
+- **GA4:** o snippet lê o cookie `_ga` e manda o `client_id`. Só conversões vão pelo servidor (page_view continua com o gtag do site, porque o GA4 não deduplica).
 - A aba **Tráfego → Eventos** mostra cada evento com o visitante e os IDs de clique (fbc, fbp, gclid, gbraid, wbraid, ttclid).
 
 O snippet:
@@ -111,11 +115,14 @@ O que acontece depois:
 - A versão da API é configurável em `META_API_VERSION` (padrão `v23.0`).
 - O gasto é somado como está, sem conversão de moeda. Se a moeda da conta for diferente da moeda do site, a tela mostra um aviso.
 
-## 5. Conversions API (rastreamento server-side)
+## 5. Envio server-side: Meta (Conversions API) e GA4
 
-Informe o id do pixel (conjunto de dados) e um token da Conversions API. A partir daí, cada venda que passa a **aprovada** via webhook vira um evento `Purchase` enviado direto do servidor. Isso recupera conversões que bloqueadores e o iOS escondem do pixel.
+**Meta:** informe o id do pixel (conjunto de dados), um token da Conversions API e, para testar, o código de teste do Gerenciador de Eventos (`TEST...`). **GA4:** informe o ID de medição (`G-...`) e um segredo da API do Measurement Protocol (Admin → Fluxos de dados → Measurement Protocol).
 
-- `event_id` = `plataforma-pedido`. Se o pixel do navegador mandar o mesmo id, a Meta descarta a duplicata.
-- E-mail e telefone são normalizados e enviados **apenas em SHA-256**.
-- Pedidos sem e-mail e sem telefone não são enviados, porque a Meta exige ao menos um identificador.
-- Envios e falhas aparecem em "Últimos webhooks".
+A partir daí:
+
+- **Todo evento do site** (PageView, Lead, InitiateCheckout, eventos próprios) entra na fila e vai para os destinos configurados, com `fbc`, `fbp`, IP, user agent e o id do visitante em hash (`external_id`).
+- **Cada venda aprovada** via webhook vira um `Purchase` com `event_id` = `plataforma-pedido`, e-mail e telefone **apenas em SHA-256**. Pedidos sem e-mail e sem telefone não vão, porque a Meta exige ao menos um identificador.
+- A fila tenta de novo em 1 min, 5 min, 30 min e 6 h. Depois disso, a entrega aparece como falha na aba Eventos, com o motivo e um botão **Reenviar**.
+- IP e user agent saem do banco assim que o envio termina ([ADR 0014](adr/0014-fila-de-envio-server-side.md)).
+- A tela Integrações mostra quantos eventos foram enviados, estão na fila ou falharam nas últimas 24 h.

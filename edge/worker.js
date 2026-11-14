@@ -8,18 +8,30 @@ const YEAR = 400 * 86400; // limite de vida de cookie aceito pelo Chrome
 const MAX_BODY = 4096;
 const ID_RE = /^[\w-]{8,64}$/, FB_RE = /^fb\.\d\.\d{10,13}\.[\w.-]{1,255}$/, CLICK_RE = /^[\w.-]{1,255}$/;
 
-const cookies = req => Object.fromEntries((req.headers.get('cookie') || '').split(/;\s*/).filter(Boolean).map(c => {
+// Cookie malformado de outro sistema do cliente é ignorado (não pode derrubar o beacon).
+const cookies = req => Object.fromEntries((req.headers.get('cookie') || '').split(/;\s*/).flatMap(c => {
   const i = c.indexOf('=');
-  return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))];
+  if (i < 1) return [];
+  try { return [[c.slice(0, i), decodeURIComponent(c.slice(i + 1))]]; } catch { return []; }
 }));
 const rand = bytes => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(bytes)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const digits = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => b % 10).join('');
 
-/** t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. */
-export const cookieDomain = host => {
-  const parts = host.split('.');
-  return parts.length >= 3 ? parts.slice(1).join('.') : null;
-};
+/**
+ * t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. Só para hosts "t.*" (o padrão do Rastro);
+ * qualquer outro host fica com cookie só do host, para nunca cair num sufixo público como com.br.
+ */
+export const cookieDomain = host => /^t\.[^.]+\.[^.]+/.test(host) ? host.slice(2) : null;
+
+/** Para o arquivo de falhas no R2: tira a query da URL, menos UTMs e IDs de clique (formulário GET pode trazer e-mail). */
+const KEEP = /^(utm_\w+|fbclid|gclid|gbraid|wbraid|ttclid)$/;
+export function scrubUrl(u) {
+  try {
+    const url = new URL(u);
+    for (const k of [...url.searchParams.keys()]) if (!KEEP.test(k)) url.searchParams.delete(k);
+    return url.href;
+  } catch { return null; }
+}
 
 /**
  * Identificadores do visitante. Cookies existentes são mantidos; fbclid novo na URL gera _fbc novo
@@ -41,6 +53,9 @@ function cors(req) {
 }
 
 async function collect(req, env, ctx) {
+  if (Number(req.headers.get('content-length')) > MAX_BODY) return new Response(null, { status: 413, headers: cors(req) });
+  // Limite por IP com o binding de rate limit da Cloudflare (opcional; veja wrangler.toml).
+  if (env.LIMITER && !(await env.LIMITER.limit({ key: req.headers.get('cf-connecting-ip') || 'x' })).success) return new Response(null, { status: 429, headers: cors(req) });
   const body = await req.text();
   if (body.length > MAX_BODY) return new Response(null, { status: 413, headers: cors(req) });
   let e;
@@ -63,10 +78,12 @@ async function collect(req, env, ctx) {
   };
   // Responde já; a origem recebe em segundo plano. Se ela falhar, o beacon vai para o R2 para reprocessar.
   // ponytail: só os que falharam vão para o R2 (cabe no plano gratuito); arquivar tudo quando houver auditoria por payload.
-  ctx.waitUntil(fetch(`${env.ORIGIN}/e`, { method: 'POST', headers: forward, body }).then(r => {
+  ctx.waitUntil(fetch(`${env.ORIGIN}/e`, { method: 'POST', headers: forward, body, signal: AbortSignal.timeout(10e3) }).then(r => {
     if (r.status >= 500) throw new Error(`origem respondeu ${r.status}`);
   }).catch(err => env.RAW?.put(`failed/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${id.rid}.json`,
-    JSON.stringify({ at: Date.now(), error: String(err.message || err), headers: { ...forward, 'x-edge-secret': undefined }, body }))));
+    // Sem segredo, IP e user agent; URL sem query (menos UTMs e IDs de clique). Apagado pela regra de ciclo de vida do bucket (30 dias).
+    JSON.stringify({ at: Date.now(), error: String(err.message || err),
+      headers: { ...forward, 'x-edge-secret': undefined, 'x-rastro-ip': undefined, 'user-agent': undefined }, body: JSON.stringify({ ...e, u: scrubUrl(e.u) }) }))));
   return new Response(null, { status: 202, headers });
 }
 
@@ -74,8 +91,9 @@ export default {
   async fetch(req, env, ctx) {
     const { pathname } = new URL(req.url);
     if (pathname === '/s.js' && req.method === 'GET') {
-      const r = await fetch(`${env.ORIGIN}/s.js`, { cf: { cacheTtl: 3600, cacheEverything: true } });
-      return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600', 'access-control-allow-origin': '*' } });
+      // Só cacheia resposta boa: um erro momentâneo da origem não pode deixar o snippet quebrado por 1 h em todos os sites.
+      const r = await fetch(`${env.ORIGIN}/s.js`, { cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 3600, '400-599': 0 } }, signal: AbortSignal.timeout(10e3) });
+      return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': r.ok ? 'public, max-age=3600' : 'no-store', 'access-control-allow-origin': '*' } });
     }
     if (pathname === '/e' && req.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { ...cors(req), 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type' } });

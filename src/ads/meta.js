@@ -1,11 +1,9 @@
-// Integração com a Meta: leitura de campanhas/gastos (Marketing API) e envio de compras (Conversions API).
+// Integração com a Meta: leitura de campanhas/gastos (Marketing API). O envio server-side fica em src/dispatch.js.
 // Somente leitura nas contas de anúncio: o token precisa apenas de `ads_read`.
-import { createHash } from 'node:crypto';
 import { db, env, sites } from '../db.js';
 import { localDate, addDays } from '../time.js';
 
 const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}`;
-const hash = v => createHash('sha256').update(v).digest('hex');
 
 async function getAll(url) {
   const out = [];
@@ -74,29 +72,5 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 30) {
   }
 }
 
-/**
- * Envia uma compra aprovada para a Conversions API (rastreamento server-side).
- * E-mail/telefone chegam do webhook, são normalizados e enviados só em SHA-256; nada disso é gravado.
- * Retorna false quando não há identificador do comprador (a Meta exige ao menos um).
- */
-export async function sendCapi(site, sale, { email, phone } = {}, now = Date.now()) {
-  const user_data = {};
-  if (email) user_data.em = [hash(String(email).trim().toLowerCase())];
-  if (phone) user_data.ph = [hash(String(phone).replace(/\D/g, ''))];
-  if (!Object.keys(user_data).length) return false;
-  const ts = now - sale.ts > 6 * 864e5 ? now : sale.ts; // a Meta recusa eventos com mais de 7 dias
-  const body = {
-    data: [{
-      event_name: 'Purchase', event_time: Math.floor(ts / 1000), event_id: `${sale.platform}-${sale.order_id}`, action_source: 'website',
-      user_data, custom_data: { currency: sale.currency || site.currency, value: sale.gross, content_name: sale.product || undefined, order_id: sale.order_id },
-    }],
-  };
-  const res = await fetch(`${graph()}/${encodeURIComponent(site.meta_pixel)}/events?access_token=${encodeURIComponent(site.meta_capi_token)}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return true;
-}
-
 export const STATUS_PT = s => /^ACTIVE$/.test(s) ? 'Ativo' : /PAUSED/.test(s) ? 'Pausado' : /DELETED|ARCHIVED/.test(s) ? 'Arquivado'
-  : /ISSUES|DISAPPROVED/.test(s) ? 'Com problema' : /IN_PROCESS|PENDING/.test(s) ? 'Em análise' : s ? s.toLowerCase() : '—';
+  : /ISSUES|DISAPPROVED/.test(s) ? 'Com problema' : /IN_PROCESS|PENDING/.test(s) ? 'Em análise' : s ? s.toLowerCase() : "-";

@@ -33,6 +33,7 @@ const { req, login, close } = await boot();
 const DB = await import('../src/db.js'), { db } = DB;
 const W = await import('../src/sales/webhooks.js');
 const S = await import('../src/sales/stats.js');
+const D = await import('../src/dispatch.js');
 const { period, localDate } = await import('../src/time.js');
 const { action } = await import('../src/ads/meta.js');
 after(close);
@@ -82,9 +83,11 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'capi', pixel: '555001', capi_token: 'CAPI' } })).status, 303);
   await hook('hotmart', hotmart('HP2'));
   await hook('hotmart', hotmart('HP2')); // reenvio do mesmo evento
+  assert.equal(capiBodies.length, 0, 'webhook só enfileira');
+  await D.dispatch();
   assert.equal(capiBodies.length, 1);
   const ev = capiBodies[0].data[0];
-  assert.deepEqual([ev.event_name, ev.event_id, ev.custom_data.value, ev.action_source], ['Purchase', 'hotmart-HP2', 197, 'website']);
+  assert.deepEqual([ev.event_name, ev.event_id, ev.custom_data.value, ev.action_source], ['Purchase', 'hotmart-HP2', 197, 'other']);
   assert.equal(ev.user_data.em[0], createHash('sha256').update('comprador@exemplo.com').digest('hex'));
   assert.equal(ev.user_data.ph[0], createHash('sha256').update('5511999990000').digest('hex'));
   assert.ok(!JSON.stringify(capiBodies).includes('Comprador@'), 'e-mail só em hash');

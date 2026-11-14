@@ -6,13 +6,14 @@ const tzSelect = cur => html`<select name="timezone">${TIMEZONES.map(t => html`<
 
 export function settingsPage(ctx, originUrl, msg) {
   const s = ctx.site, base = `/sites/${encodeURIComponent(s.id)}`;
-  return layout(ctx, `Configurações · ${s.name}`, html`${pageHead('Configurações', html`${s.name} <em>·</em> ajustes`, html`id <code>${s.id}</code>`)}
+  return layout(ctx, `Configurações · ${s.name}`, html`${pageHead(`${s.name} · Configurações`, raw('Ajustes do <em>site</em>'), html`id <code>${s.id}</code>`)}
 ${notice(msg)}
 <div class="grid two" style="align-items:start">
 <section class="card"><h2>Geral</h2><form method="post" action="${base}/settings" class="stack" style="margin-top:14px"><input type="hidden" name="action" value="save">
 <label class="f">Nome<input name="name" value="${s.name}" required maxlength="80"></label>
 <label class="f">Fuso horário${tzSelect(s.timezone)}</label>
 <label class="f">Moeda<input name="currency" value="${s.currency}" pattern="[A-Za-z]{3}" maxlength="3" required></label>
+<label class="f">Domínios do site<span>Separados por vírgula, ex.: loja.com.br. Eventos de outros domínios são recusados. Vazio aceita qualquer um.</span><input name="domains" value="${s.domains || ''}" maxlength="500" placeholder="loja.com.br, ofertas.loja.com.br"></label>
 <label class="f">Imposto sobre o faturamento (%)<span>Descontado do lucro. Ex.: 6 para Simples Nacional na faixa inicial.</span><input name="tax_rate" type="number" min="0" max="100" step="0.01" value="${s.tax_rate}"></label>
 <div><button class="primary">Salvar</button></div></form></section>
 <div class="stack">
@@ -25,7 +26,7 @@ ${ctx.user.role === 'admin' ? html`<section class="card"><h2>Excluir site</h2><p
 }
 
 export function sitesPage(ctx, rows, err) {
-  return layout(ctx, 'Sites', html`${pageHead('Admin · sites', raw('Seus <em>sites</em>'), 'Cada site tem seu próprio snippet, webhooks e contas de anúncio.')}
+  return layout(ctx, 'Sites', html`${pageHead('Admin · Sites', raw('Seus <em>sites</em>'), 'Cada site tem seu próprio snippet, webhooks e contas de anúncio.')}
 ${notice(err, true)}
 <section class="card">${rows.length ? html`<div class="tw"><table class="list"><thead><tr><th>Site</th><th>Visitantes hoje</th><th>Faturamento hoje</th></tr></thead><tbody>${rows.map(r => html`<tr><td><a href="/sites/${encodeURIComponent(r.id)}">${r.name}</a> <span class="muted">${r.id}</span></td><td>${num(r.visitors)}</td><td>${money(r.net, r.currency)}</td></tr>`)}</tbody></table></div>` : html`<p class="empty">Nenhum site ainda.</p>`}</section>
 <section class="card" style="margin-top:14px"><h2>Novo site</h2><form method="post" action="/sites" class="stack" style="margin-top:14px">
@@ -36,21 +37,23 @@ ${notice(err, true)}
 <div><button class="primary">Criar site</button></div></form></section>`);
 }
 
-const siteChecks = (allSites, chosen) => allSites.length
-  ? html`<div class="checks">${allSites.map(s => html`<label><input type="checkbox" name="sites" value="${s.id}"${chosen.has(s.id) ? raw(' checked') : ''}>${s.name}</label>`)}</div>` : html`<span class="muted">Nenhum site cadastrado.</span>`;
-const roleSelect = cur => html`<select name="role" aria-label="Papel">${Object.entries(ROLES).map(([k, t]) => html`<option value="${k}"${k === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
+const siteChecks = (allSites, chosen, form) => allSites.length
+  ? html`<div class="checks">${allSites.map(s => html`<label><input type="checkbox" name="sites" value="${s.id}"${form ? html` form="${form}"` : ''}${chosen.has(s.id) ? raw(' checked') : ''}>${s.name}</label>`)}</div>` : html`<span class="muted">Nenhum site cadastrado.</span>`;
+const roleSelect = (cur, form) => html`<select name="role" aria-label="Papel"${form ? html` form="${form}"` : ''}>${Object.entries(ROLES).map(([k, t]) => html`<option value="${k}"${k === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
 
 export function teamPage(ctx, users, allSites, { link: inviteLink, err } = {}) {
-  return layout(ctx, 'Equipe', html`${pageHead('Admin · equipe', raw('Quem vê <em>o quê</em>'), raw('<b>Admin</b>: tudo, inclusive equipe e sites. <b>Editor</b>: vê e configura os sites liberados (integrações, funis, link público). <b>Leitor</b>: só vê os sites liberados.'))}
+  return layout(ctx, 'Equipe', html`${pageHead('Admin · Equipe', raw('Quem vê <em>o quê</em>'), raw('<b>Admin</b>: tudo, inclusive equipe e sites. <b>Editor</b>: vê e configura os sites liberados (integrações, funis, link público). <b>Leitor</b>: só vê os sites liberados.'))}
 ${notice(err, true)}
-${inviteLink ? html`<div class="notice" role="status">Link de acesso, válido por 7 dias. Envie para a pessoa:<pre><code>${inviteLink}</code></pre></div>` : ''}
+${inviteLink ? notice(html`Link de acesso, válido por 7 dias. Envie para a pessoa:<pre><code>${inviteLink}</code></pre>`) : ''}
 <section class="card"><h2>Convidar pessoa</h2><form method="post" action="/team" class="stack" style="margin-top:14px;max-width:none">
-<div class="row"><label class="f">E-mail<input type="email" name="email" required></label><label class="f">Nome<input name="name" maxlength="80"></label><label class="f">Papel${roleSelect('viewer')}</label></div>
+<div class="fields"><label class="f">E-mail<input type="email" name="email" required></label><label class="f">Nome<input name="name" maxlength="80"></label><label class="f">Papel${roleSelect('viewer')}</label></div>
 <div><span class="lbl" style="margin-bottom:6px">Sites liberados (admins veem todos)</span>${siteChecks(allSites, new Set())}</div><div><button class="primary">Convidar</button></div></form></section>
-<section class="card" style="margin-top:14px"><h2>Membros</h2>${users.map(u => html`<div class="member"><div class="row"><b>${u.name || u.email}</b><span class="muted">${u.email}</span>
-<span class="badge ${u.role === 'admin' ? 'st-paid' : 'st-paused'}">${ROLES[u.role]}</span>${u.pass ? '' : html`<span class="badge st-pending">convite pendente</span>`}${u.id === ctx.user.id ? html`<span class="muted">· você</span>` : ''}</div>
-${u.id === ctx.user.id ? '' : html`<form method="post" action="/team/${u.id}" class="row">${roleSelect(u.role)}${siteChecks(allSites, u.sites)}<button>Salvar</button></form>
-<div class="row"><form method="post" action="/team/${u.id}/link"><button class="link">Gerar novo link de acesso</button></form><form method="post" action="/team/${u.id}/delete"><button class="link danger">Remover</button></form></div>`}</div>`)}</section>`);
+<section class="card" style="margin-top:16px"><h2>Membros</h2><div class="tw" style="margin-top:12px"><table class="left"><thead><tr><th scope="col">Pessoa</th><th scope="col">Papel</th><th scope="col">Sites liberados</th><th scope="col">Ações</th></tr></thead><tbody>${users.map(u => {
+    const me = u.id === ctx.user.id, fid = `u${u.id}`;
+    return html`<tr><td><b>${u.name || u.email}</b>${me ? html` <span class="muted">(você)</span>` : ''}<br><small>${u.email}</small>${u.pass ? '' : html`<br><span class="badge st-pending">convite pendente</span>`}</td>
+<td>${me ? html`<span class="badge">${ROLES[u.role]}</span>` : roleSelect(u.role, fid)}</td><td>${me ? html`<span class="muted">${u.role === 'admin' ? 'Todos' : '-'}</span>` : siteChecks(allSites, u.sites, fid)}</td>
+<td>${me ? '' : html`<div class="row" style="gap:4px"><form method="post" action="/team/${u.id}" id="${fid}"><button>Salvar</button></form><form method="post" action="/team/${u.id}/link"><button class="link">Novo link de acesso</button></form><form method="post" action="/team/${u.id}/delete"><button class="link danger">Remover</button></form></div>`}</td></tr>`;
+  })}</tbody></table></div></section>`);
 }
 
 export function accountPage(ctx, msg, err) {
@@ -62,22 +65,23 @@ ${notice(msg)}${notice(err, true)}
 <label class="f">Confirmar<input type="password" name="confirm" required minlength="8" autocomplete="new-password"></label><div><button class="primary">Trocar senha</button></div></form></section>`);
 }
 
-const authCard = body => html`<div class="auth"><a class="brand" href="/" style="margin-bottom:22px;font-size:34px">rastro<i></i></a><div class="card">${body}</div><div class="zig" aria-hidden="true"></div></div>`;
+const authCard = body => html`<div class="auth"><a class="brand" href="/"><span class="mark" aria-hidden="true">r</span><span>rastro</span></a><div class="card">${body}</div></div>`;
 
 export function loginPage(ctx, { next = '', email = '', err } = {}) {
-  return layout(ctx, 'Entrar', authCard(html`<div class="eyebrow">Acesso</div><h1 style="font-size:40px;margin-bottom:18px">Entrar</h1>${notice(err, true)}
+  return layout(ctx, 'Entrar', authCard(html`<div class="eyebrow">Acesso</div><h1>Entrar</h1>${notice(err, true)}
 <form method="post" action="/login" class="stack"><input type="hidden" name="next" value="${next}">
 <label class="f">E-mail<input type="email" name="email" value="${email}" required autocomplete="username" autofocus></label>
 <label class="f">Senha<input type="password" name="password" required autocomplete="current-password"></label><div><button class="primary">Entrar</button></div></form>`), { bare: true });
 }
 
 export function invitePage(ctx, user, err) {
-  return layout(ctx, 'Definir senha', authCard(user ? html`<div class="eyebrow">Convite</div><h1 style="font-size:40px">Bem-<em>vindo</em></h1><p class="sub" style="margin-bottom:16px">Defina uma senha para ${user.email}.</p>${notice(err, true)}
+  return layout(ctx, 'Definir senha', authCard(user ? html`<div class="eyebrow">Convite</div><h1>Bem-<em>vindo</em></h1><p class="sub" style="margin-bottom:16px">Defina uma senha para ${user.email}.</p>${notice(err, true)}
 <form method="post" class="stack"><label class="f">Senha (mín. 8)<input type="password" name="password" required minlength="8" autocomplete="new-password" autofocus></label>
 <label class="f">Confirmar<input type="password" name="confirm" required minlength="8" autocomplete="new-password"></label><div><button class="primary">Salvar e entrar</button></div></form>`
-    : html`<h1 style="font-size:40px">Link inválido</h1><p class="sub" style="margin-bottom:16px">Este link expirou ou já foi usado. Peça um novo a um admin.</p><a class="btn" href="/login">Ir para o login</a>`), { bare: true });
+    : html`<h1>Link inválido</h1><p class="sub" style="margin-bottom:16px">Este link expirou ou já foi usado. Peça um novo a um admin.</p><a class="btn" href="/login">Ir para o login</a>`), { bare: true });
 }
 
 export function messagePage(ctx, title, text) {
-  return layout(ctx, title, authCard(html`<h1 style="font-size:40px">${title}</h1><p class="sub" style="margin-bottom:16px">${text}</p><a class="btn" href="/">Voltar</a>`), { bare: !ctx.user });
+  if (!ctx.user) return layout(ctx, title, authCard(html`<h1>${title}</h1><p class="sub" style="margin-bottom:16px">${text}</p><a class="btn" href="/">Voltar</a>`), { bare: true });
+  return layout(ctx, title, html`${pageHead(`Rastro · ${title}`, title, html`${text} Confira o endereço ou volte para os seus sites.`)}<a class="btn" href="/">Ir para os meus sites</a>`);
 }

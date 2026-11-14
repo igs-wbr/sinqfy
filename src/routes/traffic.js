@@ -5,6 +5,7 @@ import { route, send, redirect, form, sitePath, HttpError } from '../http.js';
 import { ctx, siteCtx } from '../auth.js';
 import * as S from '../tracking/stats.js';
 import * as V from '../views/traffic.js';
+import { deliveriesFor, retry, dispatch } from '../dispatch.js';
 
 const range = r => [period(r.q, r.site.timezone), S.filtersFrom(r.q)];
 
@@ -23,7 +24,14 @@ route('GET', '/share/:token', { auth: false }, async r => {
 
 route('GET', '/sites/:id/events', { site: 'view' }, async r => {
   const [c, d] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id)]);
+  const dl = await deliveriesFor(r.site.id, d.map(e => e.event_id).filter(Boolean));
+  for (const e of d) e.deliveries = dl.get(e.event_id) || [];
   send(r, 200, r.q.has('partial') ? V.eventsBody(c, d) : V.eventsPage(c, d));
+});
+route('POST', '/sites/:id/deliveries/:did/retry', { site: 'edit' }, async r => {
+  await retry(r.site.id, Number(r.params.did) || 0);
+  dispatch().catch(e => console.error(e)); // envia já; a tela mostra o resultado no próximo ciclo
+  redirect(r, sitePath(r.site, '/events'));
 });
 
 route('GET', '/sites/:id/realtime', { site: 'view' }, async r => {

@@ -1,5 +1,5 @@
 // Vendas: resumo (página inicial do site), campanhas, pedidos, integrações e o endpoint público de webhooks.
-import { db, newToken, loadSites, awaitAll } from '../db.js';
+import { db, env, newToken, loadSites, awaitAll } from '../db.js';
 import { period } from '../time.js';
 import { route, send, redirect, form, readBody, origin, sitePath, HttpError } from '../http.js';
 import { siteCtx } from '../auth.js';
@@ -42,12 +42,15 @@ route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
 // --- integrações ---
 const MSG = {
   rotate: 'Novo token gerado. Atualize a URL do webhook nas plataformas.', meta_add: 'Conta conectada e sincronizada.',
-  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.',
+  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.',
 };
 async function integrationsView(r, msg, err) {
   const d = await awaitAll({
     accounts: db.all("SELECT id, account_id, name, currency, last_sync, last_error FROM ad_accounts WHERE site=? AND platform='meta' ORDER BY id", [r.site.id]),
-    logs: S.lastWebhooks(r.site.id),
+    logs: S.lastWebhooks(r.site.id), edgeUrl: env.EDGE_URL || origin(r.req), // subdomínio t. do Worker da borda
+    // Saúde da fila nas últimas 24 h, por destino (etapa 2).
+    deliveries: db.all(`SELECT dest, COUNT(*) FILTER (WHERE status='sent') sent, COUNT(*) FILTER (WHERE status='failed') failed,
+      COUNT(*) FILTER (WHERE status IN ('pending','sending')) pending, MAX(sent_at) last_sent FROM deliveries WHERE site=? AND created>? GROUP BY dest`, [r.site.id, Date.now() - 864e5]),
   });
   send(r, err ? 400 : 200, V.integrationsPage(await siteCtx(r, '/integrations'), origin(r.req), d, msg, err));
 }
@@ -85,8 +88,19 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
     case 'capi': {
       const pixel = (f.get('pixel') || '').trim(), token = (f.get('capi_token') || '').trim();
       if (pixel && !/^\d{5,25}$/.test(pixel)) return integrationsView(r, null, 'ID de pixel inválido.');
-      if (pixel) await db.run('UPDATE sites SET meta_pixel=?, meta_capi_token=COALESCE(?, meta_capi_token) WHERE id=?', [pixel, token || null, site.id]);
-      else await db.run('UPDATE sites SET meta_pixel=NULL, meta_capi_token=NULL WHERE id=?', [site.id]);
+      const test = (f.get('test_code') || '').trim();
+      if (test && !/^TEST\w{1,40}$/.test(test)) return integrationsView(r, null, 'Código de teste inválido (começa com TEST, copie do Gerenciador de Eventos).');
+      if (pixel) await db.run('UPDATE sites SET meta_pixel=?, meta_capi_token=COALESCE(?, meta_capi_token), meta_test_code=? WHERE id=?', [pixel, token || null, test || null, site.id]);
+      else await db.run('UPDATE sites SET meta_pixel=NULL, meta_capi_token=NULL, meta_test_code=NULL WHERE id=?', [site.id]);
+      await loadSites();
+      return done();
+    }
+    case 'ga4': {
+      const id = (f.get('ga4_id') || '').trim().toUpperCase(), secret = (f.get('ga4_secret') || '').trim();
+      if (id && !/^G-[A-Z0-9]{4,20}$/.test(id)) return integrationsView(r, null, 'ID de medição inválido (formato G-XXXXXXX).');
+      if (id && !secret && !site.ga4_secret) return integrationsView(r, null, 'Informe o segredo da API do Measurement Protocol.');
+      if (id) await db.run('UPDATE sites SET ga4_id=?, ga4_secret=COALESCE(?, ga4_secret) WHERE id=?', [id, secret || null, site.id]);
+      else await db.run('UPDATE sites SET ga4_id=NULL, ga4_secret=NULL WHERE id=?', [site.id]);
       await loadSites();
       return done();
     }

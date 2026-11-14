@@ -38,11 +38,12 @@ Abra `https://app.seudominio.com.br` e entre com o admin do `.env`.
 ## 5. Backup diário no R2
 ```bash
 sudo apt-get install -y rclone
-rclone config   # novo remoto "r2", tipo s3, provider Cloudflare, chaves do token do R2, endpoint https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+rclone config   # 1) remoto "r2", tipo s3, provider Cloudflare, chaves do token do R2, endpoint https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+                # 2) remoto "r2crypt", tipo crypt, apontando para r2:rastro-backups, com senha forte guardada fora da VM
 chmod +x ~/rastro/deploy/backup.sh && ~/rastro/deploy/backup.sh   # teste manual
 (crontab -l 2>/dev/null; echo "0 4 * * * $HOME/rastro/deploy/backup.sh") | crontab -
 ```
-Para restaurar: `gunzip -c rastro-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
+Para restaurar: `rclone copy r2crypt:rastro-AAAA-MM-DD.sql.gz .` e `gunzip -c rastro-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
 
 ## 6. Worker da borda
 O Worker grava os cookies no seu domínio e repassa os eventos ao painel.
@@ -51,6 +52,7 @@ openssl rand -hex 32   # gere o EDGE_SECRET e coloque também no deploy/.env do 
 cd edge
 npx wrangler login
 npx wrangler r2 bucket create rastro-raw
+npx wrangler r2 bucket lifecycle add rastro-raw expira-30d failed/ --expire-days 30
 npx wrangler secret put EDGE_SECRET
 npx wrangler deploy     # antes, troque t.seudominio.com.br e ORIGIN no wrangler.toml
 ```
