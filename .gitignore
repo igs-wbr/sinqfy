@@ -7,3 +7,4 @@ node_modules/
 _archive/
 deploy/.env
 deploy/.env.local
+deploy/logins-teste.local.md
