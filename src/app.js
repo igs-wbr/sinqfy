@@ -10,6 +10,7 @@ import { messagePage } from './views/admin.js';
 import './routes/auth.js';
 import './routes/admin.js';
 import './routes/traffic.js';
+import './routes/crm.js'; // antes de sales.js: /hooks/:token/leads vem antes da rota genérica
 import './routes/sales.js';
 import './routes/setup.js';
 

@@ -9,7 +9,7 @@ export const ADMIN = { email: 'admin@test.dev', password: 'admin-pass-123' };
 export async function boot() {
   Object.assign(process.env, {
     DATABASE_URL: process.env.TEST_DATABASE_URL || 'postgres://rastro:rastro@127.0.0.1:55432/rastro', DATABASE_SCHEMA: 't_' + randomBytes(6).toString('hex'), PORT: '0', HOST: '127.0.0.1',
-    ADMIN_EMAIL: ADMIN.email, ADMIN_PASSWORD: ADMIN.password, TRUST_PROXY: '1', PUBLIC_URL: '', CRON_SECRET: 'segredo-de-teste', EDGE_SECRET: 'segredo-da-borda', DISPATCH_EVERY: '0',
+    ADMIN_EMAIL: ADMIN.email, ADMIN_PASSWORD: ADMIN.password, TRUST_PROXY: '1', PUBLIC_URL: '', CRON_SECRET: 'segredo-de-teste', EDGE_SECRET: 'segredo-da-borda', DISPATCH_EVERY: '0', DATA_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   });
   const { server } = await import('../src/server.js');
   if (!server.listening) await new Promise(ok => server.once('listening', ok));

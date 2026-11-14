@@ -3,6 +3,8 @@ import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
 import { enqueueWeb } from '../dispatch.js';
+import { upsertContact } from '../crm.js';
+import { adKey } from '../sales/webhooks.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
 const UTM = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
@@ -113,5 +115,12 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
   if (consent && name !== 'Purchase') await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
+  // Formulário com e-mail ou telefone (campo `l` do snippet): vira contato do CRM, cifrado. Nunca entra no evento.
+  // Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
+  if (consent && edge && e.l && typeof e.l === 'object' && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {
+    const l = { email: String(e.l.e || '').slice(0, 254), phone: String(e.l.p || '').slice(0, 40), name: String(e.l.n || '').slice(0, 120) };
+    await upsertContact(site, { ...l, rid: ev.rid, fbc: ev.fbc, fbp: ev.fbp, source: 'site', utm: { source: s.utm_source, campaign: s.utm_campaign },
+      campaign_key: adKey(s.utm_campaign), adset_key: adKey(s.utm_medium), ad_key: adKey(s.utm_content), note: 'Formulário do site' }, now);
+  }
   return 202;
 }

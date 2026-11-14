@@ -4,6 +4,8 @@ import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { enqueue, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
+import { findContact, saleToCrm } from '../crm.js';
+import { hashEmail, hashPhone, piiReady } from '../pii.js';
 
 export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
 /** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
@@ -238,7 +240,7 @@ const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gros
     utm_campaign=COALESCE(NULLIF(sales.utm_campaign,''), excluded.utm_campaign), utm_content=COALESCE(NULLIF(sales.utm_content,''), excluded.utm_content),
     utm_term=COALESCE(NULLIF(sales.utm_term,''), excluded.utm_term), campaign_key=COALESCE(NULLIF(sales.campaign_key,''), excluded.campaign_key),
     adset_key=COALESCE(NULLIF(sales.adset_key,''), excluded.adset_key), ad_key=COALESCE(NULLIF(sales.ad_key,''), excluded.ad_key),
-    rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule='rid' THEN sales.match_rule ELSE excluded.match_rule END
+    rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule IN ('rid','email') THEN sales.match_rule ELSE excluded.match_rule END
   RETURNING status`;
 
 /** Processa um webhook. Retorna o status HTTP para a plataforma. `now` é injetável para testes. */
@@ -260,6 +262,13 @@ export const secretsOf = site => jsonOr(site.hook_secrets, {});
  */
 export async function matchSale(site, s) {
   const out = { rule: 'none', click: null, utm: s.utm };
+  // Sem rid no checkout: procura o lead pelo e-mail ou telefone (formulário antes do checkout) e usa o rid dele.
+  let rid = s.rid, via = 'rid';
+  if (!rid && (s.email || s.phone)) {
+    const c = await findContact(site.id, { emailHash: hashEmail(s.email), phoneHash: hashPhone(s.phone) });
+    if (c?.rid) { rid = c.rid; via = 'email'; }
+  }
+  s = { ...s, rid };
   if (s.rid) {
     // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
     const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
@@ -270,7 +279,7 @@ export async function matchSale(site, s) {
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts DESC LIMIT 1`, a),
     ]);
     if (last) {
-      out.rule = 'rid';
+      out.rule = via;
       out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
@@ -282,7 +291,7 @@ export async function matchSale(site, s) {
   return out;
 }
 
-export const MATCH_PT = { rid: 'Clique (rid)', utm: 'UTM', none: 'Sem origem' };
+export const MATCH_PT = { rid: 'Clique (rid)', email: 'Lead (e-mail ou telefone)', utm: 'UTM', none: 'Sem origem' };
 
 /** Grava a venda normalizada, casa com o clique e enfileira a compra para Meta e GA4. */
 export async function ingestSale(site, platform, s, now = Date.now()) {
@@ -291,7 +300,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
   const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
   const m = await matchSale(site, { ...s, ts }), u = m.utm;
   const { rows: [saved] } = await db.run(UPSERT, [site.id, platform, s.order_id, s.status, s.method, Math.max(0, s.gross), Math.max(0, s.net), s.currency.toUpperCase() || site.currency,
-    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || null, m.rule]);
+    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || m.click?.rid || null, m.rule]);
   const message = `${before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[saved.status]}` : 'Nova venda'} · origem: ${MATCH_PT[m.rule]}`;
   await log(site.id, platform, s, true, message);
 
@@ -305,6 +314,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     }
     const g = ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
     if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
+    if (piiReady() && (s.email || s.phone)) await saleToCrm(site, { ...sale, utm: u }, m.click, now); // comprador no CRM, coluna de ganho
   }
   return { ok: true, message };
 }

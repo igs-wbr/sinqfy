@@ -1,6 +1,6 @@
 # Rastro: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 4 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 5 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -16,6 +16,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/dispatch.js`: fila `deliveries` e envio server-side para Meta (CAPI) e GA4 (Measurement Protocol), com reenvio. Ingestão e webhooks só enfileiram; `dispatch()` roda a cada 5 s no servidor e no `/cron`.
 - `src/cloudflare.js`: domínio do cliente na borda (Cloudflare for SaaS, custom hostnames). `src/routes/setup.js` + `src/views/setup.js`: assistente de 6 passos.
 - Agências ([ADR 0009](docs/adr/0009-multi-cliente.md)): todo acesso a site, equipe e convite filtra por `agency_id`; `users.platform` é o dono da instalação.
+- `src/pii.js` (cifra e hash de dados pessoais, `DATA_KEY`) e `src/crm.js` (contatos, colunas, evento offline por coluna, compra leva o contato para Ganhou). `src/routes/crm.js` é importado antes de `sales.js` por causa das rotas `/hooks/:token/leads` e `/meta-leads`.
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 3 KB) é minificado à mão e servido aos sites pelo Worker.
@@ -29,7 +30,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - Nada de estado em memória que precise valer entre instâncias serverless. Use o banco; o cache de `sites` é a exceção, com validade de 10 s.
 - Trabalho assíncrono de um webhook (ex.: Conversions API) é **aguardado** antes de responder.
 - Escape por padrão: monte HTML com o template `html`; `raw()` só para HTML gerado pelo próprio código.
-- Nunca grave IP, e-mail ou telefone. PII do webhook só segue em hash para a Conversions API. Exceções: IP e user agent no payload da fila `deliveries` enquanto o envio está pendente ([ADR 0014](docs/adr/0014-fila-de-envio-server-side.md)); user agent, domínio e client_id do GA4 no evento, com consentimento, para casar a venda com o clique ([ADR 0015](docs/adr/0015-venda-casada-pelo-clique.md)). (Muda na etapa 5, ver [ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md).)
+- Nunca grave IP, e-mail ou telefone. PII do webhook só segue em hash para a Conversions API. Exceções: IP e user agent no payload da fila `deliveries` enquanto o envio está pendente ([ADR 0014](docs/adr/0014-fila-de-envio-server-side.md)); user agent, domínio e client_id do GA4 no evento, com consentimento, para casar a venda com o clique ([ADR 0015](docs/adr/0015-venda-casada-pelo-clique.md)). Contatos do CRM: nome, e-mail e telefone só cifrados com `seal()` e hash ao lado ([ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md)); nunca em log, `crm_log` ou evento.
 - Chaves vindas da query string que indexam objetos passam por `Object.hasOwn`. Nomes de coluna em SQL vêm de whitelists (`FILTERS`, `SALE_FILTERS`, `LEVELS`, `ATTR_DIMS`).
 - Ao desestruturar um import dinâmico, `sites` perde o live binding. Use o namespace (`DB.sites`).
 - Anúncios: só Meta ([ADR 0007](docs/adr/0007-anuncios-so-meta.md)), somente leitura ([ADR 0004](docs/adr/0004-meta-somente-leitura-e-csv.md)).

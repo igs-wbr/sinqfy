@@ -193,6 +193,36 @@ table.txt th,table.txt td{text-align:left}table.txt .num{text-align:right}table.
 .setup-checks{list-style:none;margin:0;padding:0;display:grid;gap:6px}.setup-checks li{display:flex;align-items:center;gap:8px;color:var(--bad)}.setup-checks li.ok{color:var(--ok)}
 .step>.body>.btn,.step>.body>a.btn{justify-self:start}.step>.body>p.okline{display:flex;gap:8px;align-items:center;color:var(--ok)}.step>summary{border-radius:12px}
 .notice code{overflow-wrap:anywhere}.notice>div{min-width:0}
+/* CRM: quadro, cards, ficha e colunas */
+.board{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 12px;align-items:stretch;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+@property --fl{syntax:"<length>";inherits:false;initial-value:0px}@property --fr{syntax:"<length>";inherits:false;initial-value:0px}
+@keyframes bfade{0%{--fl:0px;--fr:56px}6%,94%{--fl:56px;--fr:56px}100%{--fl:56px;--fr:0px}}
+@supports (animation-timeline:scroll()){.board{-webkit-mask-image:linear-gradient(to right,transparent,#000 var(--fl),#000 calc(100% - var(--fr)),transparent);mask-image:linear-gradient(to right,transparent,#000 var(--fl),#000 calc(100% - var(--fr)),transparent);animation:bfade linear both;animation-timeline:scroll(self inline)}}
+.board>.col{flex:0 0 280px;display:flex;flex-direction:column;background:var(--surface2);border:1px solid var(--line);border-radius:16px;padding:8px;scroll-snap-align:start;transition:background-color .12s,border-color .12s}
+.board>.col.over{background:var(--info-bg);border:1px dashed var(--ring)}
+.col>header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 6px 10px}.col>header h2{font:700 14px/1.3 var(--sans);margin:0}
+.cnt-n{min-width:24px;padding:1px 8px;border-radius:999px;background:var(--surface3);color:var(--ink2);font:600 11.5px/1.5 var(--mono);text-align:center}
+.col>header .ctags{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px}.col>header .tag{margin:0}
+.cards{display:grid;align-content:start;gap:8px;flex:1;min-height:96px}
+.kcard{position:relative;display:grid;gap:8px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(11,40,110,.06)}
+@media (hover:hover){.kcard:hover{border-color:var(--line2)}}
+.kcard[draggable=true]{cursor:grab}.kcard[draggable=true]:active{cursor:grabbing}.kcard.dragging{opacity:.45}.kcard:focus-within{border-color:var(--ring)}
+.kh{display:flex;gap:8px;align-items:flex-start}.kh a{flex:1;min-width:0;color:var(--ink);text-decoration:none;font-weight:600;line-height:1.35;overflow-wrap:anywhere}.kh a:hover{color:var(--link);text-decoration:underline}.kh .grip{color:var(--muted);margin-top:1px}
+.kcard .meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:12.5px;color:var(--muted)}.kcard .meta .tag{margin:0}.kcard .val{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}.kcard .age{margin-left:auto;font:500 11.5px var(--mono)}
+.kcard .mv{display:flex;gap:6px;padding-top:8px;border-top:1px solid var(--line)}.kcard .mv select{flex:1;min-width:0;min-height:36px;padding:4px 8px;font-size:13px}.kcard .mv button{min-height:36px;padding:0 12px;font-size:13px}
+@media (hover:hover) and (pointer:fine){.js .kcard:not(:focus-within) .mv{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0}}
+.cards .empty{display:grid;place-items:center;min-height:88px;padding:12px;border:1px dashed var(--line2);border-radius:12px;font-size:12.5px;text-align:center}.cards:has(.kcard) .empty{display:none}
+.newlead>summary{list-style:none;display:inline-flex;align-items:center;gap:6px}.newlead>summary::-webkit-details-marker{display:none}.newlead[open]>.card{margin-top:10px;max-width:760px}
+@media (max-width:899px){.board{scroll-snap-type:x mandatory;margin:0 -16px;padding:2px 16px 12px;scroll-padding:0 16px}.board>.col{flex-basis:min(84vw,300px)}}
+.kv{display:grid;grid-template-columns:minmax(96px,auto) 1fr;gap:10px 16px;margin:14px 0 0}.kv dt{color:var(--muted);font:600 10.5px/1.7 var(--mono);text-transform:uppercase;letter-spacing:.1em}.kv dd{margin:0;word-break:break-word}
+.record{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:16px;align-items:start}.record>.stack{gap:16px}@media (max-width:899px){.record{grid-template-columns:1fr}}
+.record form.row{align-items:flex-end}.record form.row label.f{flex:1 1 160px;min-width:0}.record label.f select,.record label.f input{width:100%;min-width:0}
+.timeline{max-height:none}.feed.timeline li{grid-template-columns:140px 1fr}.timeline time{white-space:nowrap}@media (max-width:480px){.feed.timeline li{grid-template-columns:1fr;gap:2px}}
+.search{position:relative;flex:1;max-width:440px}.search .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}.search input{width:100%;padding-left:38px}
+.stages input,.stages select{width:100%;min-width:150px}.stages td.nm input{min-width:180px}.stages input.ord{width:72px;min-width:72px}.stages td.ac{white-space:nowrap}
+@media (max-width:719px){.stages thead{display:none}.stages tbody tr{display:grid;grid-template-columns:88px 1fr;gap:10px 12px;padding:14px 0;border-top:1px solid var(--line)}.stages tbody tr:first-child{border-top:0}
+.stages td{padding:0;border:0;text-align:left!important}.stages td::before{content:attr(data-label);display:block;margin-bottom:4px;color:var(--muted);font:600 10.5px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.1em}
+.stages td.nm,.stages td.ev,.stages td.kd{grid-column:2}.stages td.ps{grid-row:1/3}.stages td.ct,.stages td.ac{align-self:end}}
 .steps{margin:10px 0 12px;padding-left:20px;display:grid;gap:6px;color:var(--ink2)}textarea{font:500 12.5px/1.5 var(--mono)}
 .tag.ok{color:var(--ok);background:var(--ok-bg);border-color:transparent}.tag.bad{color:var(--bad);background:var(--bad-bg);border-color:transparent}.tag.warn{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 details.dl{display:inline-block}details.dl>summary{list-style:none;cursor:pointer}details.dl>summary::-webkit-details-marker{display:none}details.dl[open]>div{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-size:12px;max-width:360px;white-space:normal}
@@ -282,6 +312,7 @@ const NAV = [
   { label: 'Visão', items: [['', 'Resumo', 'house'], ['/events', 'Eventos', 'activity', 'ao vivo']] },
   { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list']] },
   { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/attribution', 'Atribuição', 'target']] },
+  { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban'], ['/contacts', 'Contatos', 'users']] },
   { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/settings', 'Configurações', 'settings']] },
 ];
 const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);

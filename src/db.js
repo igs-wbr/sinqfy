@@ -126,6 +126,22 @@ async function migrate() {
     -- Etapa 4 (ADR 0009): agências isoladas. Quem já existia fica na agência 1. platform=1: dono da instalação (cria agências).
     CREATE TABLE IF NOT EXISTS agencies(id ${ID}, name TEXT NOT NULL, created BIGINT);
     CREATE TABLE IF NOT EXISTS deleted_sites(id TEXT PRIMARY KEY, deleted BIGINT NOT NULL);
+    -- Etapa 5: CRM (src/crm.js). Nome, e-mail e telefone cifrados (ADR 0013); hashes para casar e enviar à Meta.
+    CREATE TABLE IF NOT EXISTS stages(id ${ID}, site TEXT NOT NULL, name TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, event_name TEXT,
+      kind TEXT NOT NULL DEFAULT 'open' CHECK(kind IN ('open','won','lost')), UNIQUE(site, name));
+    CREATE TABLE IF NOT EXISTS contacts(id ${ID}, site TEXT NOT NULL, stage_id BIGINT, stage_since BIGINT, name_enc TEXT, email_enc TEXT, phone_enc TEXT,
+      email_hash TEXT, phone_hash TEXT, lead_id TEXT, rid TEXT, fbc TEXT, fbp TEXT, source TEXT NOT NULL DEFAULT 'manual',
+      utm_source ${T}, utm_campaign ${T}, campaign_key ${T}, adset_key ${T}, ad_key ${T}, value DOUBLE PRECISION NOT NULL DEFAULT 0, created BIGINT NOT NULL, updated BIGINT NOT NULL);
+    CREATE INDEX IF NOT EXISTS contacts_site_stage ON contacts(site, stage_id);
+    CREATE INDEX IF NOT EXISTS contacts_email ON contacts(site, email_hash) WHERE email_hash IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS contacts_phone ON contacts(site, phone_hash) WHERE phone_hash IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS contacts_lead ON contacts(site, lead_id) WHERE lead_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS crm_log(id ${ID}, site TEXT NOT NULL, contact_id BIGINT NOT NULL, ts BIGINT NOT NULL, text ${T});
+    CREATE INDEX IF NOT EXISTS crm_log_contact ON crm_log(contact_id, ts);
+    CREATE TABLE IF NOT EXISTS audit_log(id ${ID}, site TEXT NOT NULL, ts BIGINT NOT NULL, actor ${T}, action ${T});
+    CREATE TABLE IF NOT EXISTS erased(site TEXT NOT NULL, bidx TEXT NOT NULL, ts BIGINT NOT NULL, PRIMARY KEY(site, bidx));
+    CREATE UNIQUE INDEX IF NOT EXISTS contacts_email_once ON contacts(site, email_hash) WHERE email_hash IS NOT NULL;
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS meta_page_token TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_id BIGINT, ADD COLUMN IF NOT EXISTS platform INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS agency_id BIGINT;
     -- Domínio do cliente na borda (Cloudflare for SaaS) e o último teste da conexão com a Meta.

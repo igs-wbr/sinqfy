@@ -20,7 +20,7 @@ const MSG = {
 export const msg = r => Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null;
 
 // Tabelas ligadas a um site / a um usuário. Apagadas explicitamente: o schema não usa chave estrangeira.
-const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['deliveries', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
+const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['deliveries', 'site'], ['contacts', 'site'], ['crm_log', 'site'], ['stages', 'site'], ['erased', 'site'], ['audit_log', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
   ['funnels', 'site_id'], ['user_sites', 'site_id'], ['sites', 'id']];
 const USER_TABLES = [['user_sites', 'user_id'], ['sessions', 'user_id'], ['users', 'id']];
 

@@ -159,3 +159,17 @@ A partir daí:
 - A fila tenta de novo em 1 min, 5 min, 30 min e 6 h. Depois disso, a entrega aparece como falha na aba Eventos, com o motivo e um botão **Reenviar**.
 - IP e user agent saem do banco assim que o envio termina ([ADR 0014](adr/0014-fila-de-envio-server-side.md)).
 - A tela Integrações mostra quantos eventos foram enviados, estão na fila ou falharam nas últimas 24 h.
+
+## 6. Leads e CRM
+
+Precisa de `DATA_KEY` no servidor (veja `.env.example`). Nome, e-mail e telefone ficam cifrados; o painel mostra mascarado na lista e aberto só na ficha.
+
+**Como os leads chegam:**
+
+- **Formulários do site:** automático pela borda (subdomínio `t.`). Ao enviar um formulário com campo de e-mail ou telefone, o snippet manda um `Lead` com os dados. Formulário de login (com senha), de pagamento (cartão) ou com `data-rastro-ignore` não é capturado, nem campo oculto. Com `data-consent="required"` e sem aceite, os dados não saem do navegador. O contato já nasce ligado ao clique (`rid`, `fbc`) e à campanha.
+- **Webhook de leads:** `POST` JSON com `name`, `email`, `phone` e, se tiver, `rid`, `value` e `utm_*` (Elementor, RD Station, n8n, Make). A URL está em CRM, Colunas e entradas. Com o segredo `leads` cadastrado, exige o cabeçalho `X-Rastro-Signature: sha256=<HMAC-SHA256 do corpo>`. Limite de 60 leads por minuto.
+- **Lead Ads da Meta:** assine o campo `leadgen` da página no app da Meta com a URL mostrada na tela (o token de verificação é o trecho da URL depois de `/hooks/`). Informe o token da página (permissão `leads_retrieval`, guardado cifrado) e a chave secreta do app: sem ela o Rastro recusa os avisos, porque não há como provar que vieram da Meta.
+
+**Quadro:** colunas editáveis (padrão: Novo, Em conversa, Qualificado, Proposta, Ganhou, Perdeu). Cada coluna pode ter um evento: quando um contato entra nela, a Meta recebe a conversão offline (`action_source: system_generated`, e-mail e telefone em hash, `lead_id` do Lead Ads quando houver), uma vez por contato e coluna.
+
+**Venda e lead:** a venda que chega sem `rid` procura o lead pelo e-mail ou telefone e usa o clique dele (origem "Lead (e-mail ou telefone)" em Pedidos). O comprador vai para a coluna do tipo Ganho sem mandar outro `Purchase`.
