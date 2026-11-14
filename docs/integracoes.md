@@ -173,3 +173,18 @@ Precisa de `DATA_KEY` no servidor (veja `.env.example`). Nome, e-mail e telefone
 **Quadro:** colunas editáveis (padrão: Novo, Em conversa, Qualificado, Proposta, Ganhou, Perdeu). Cada coluna pode ter um evento: quando um contato entra nela, a Meta recebe a conversão offline (`action_source: system_generated`, e-mail e telefone em hash, `lead_id` do Lead Ads quando houver), uma vez por contato e coluna.
 
 **Venda e lead:** a venda que chega sem `rid` procura o lead pelo e-mail ou telefone e usa o clique dele (origem "Lead (e-mail ou telefone)" em Pedidos). O comprador vai para a coluna do tipo Ganho sem mandar outro `Purchase`.
+
+## 7. WhatsApp
+
+Tela **WhatsApp** (Configurar).
+
+**Link rastreável:** crie um link (nome, número, mensagem pronta) e use o endereço `t.seudominio.com.br/w/<link>` no botão do site, no lugar do `wa.me`. O clique conta como `Contact` e a mensagem sai com um código curto, por exemplo `Quero saber mais [R7K2Q]`. Com o domínio próprio ativo, o clique leva o visitante (cookie) junto.
+
+**Sem API (app WhatsApp Business):** quando o lead chegar, cadastre no CRM e digite o código da primeira mensagem na ficha. O contato passa a ter o clique e a campanha.
+
+**Com a Cloud API oficial:** no app da Meta, em WhatsApp, Configuração, cadastre a URL de retorno da tela, use como token de verificação o trecho depois de `/hooks/` e assine `messages`. Informe o ID da conta do WhatsApp Business e a chave secreta do app (sem ela os avisos são recusados). Ligue o pixel à conta do WhatsApp Business no Gerenciador de Eventos.
+
+- Cada mensagem recebida cria ou atualiza o contato pelo número (dados cifrados) e aparece em **Conversas** (90 dias).
+- O código do link na mensagem liga a conversa ao clique sozinho.
+- Quem veio de anúncio de clique para WhatsApp traz o `ctwa_clid`: o primeiro contato vai à Meta como `LeadSubmitted` e as colunas do CRM como conversões de mensagem (`business_messaging`).
+- **Sugestão de coluna:** "Perguntou sobre preço" sugere Qualificado, "paguei" sugere Ganhou, "não tenho interesse" sugere Perdeu. Com `GEMINI_API_KEY`, a IA decide a partir das últimas mensagens, sempre sem e-mail, telefone, CPF ou números longos. Você aceita ou ignora na conversa.

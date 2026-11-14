@@ -87,6 +87,21 @@ async function collect(req, env, ctx) {
   return new Response(null, { status: 202, headers });
 }
 
+/** Link rastreável do WhatsApp: a origem registra o clique com o visitante e devolve o redirecionamento para o wa.me. */
+async function whatsapp(req, env, pathname) {
+  const jar = cookies(req), id = identify(jar, req.headers.get('referer') || '');
+  const r = await fetch(`${env.ORIGIN}${pathname}`, { redirect: 'manual', signal: AbortSignal.timeout(10e3), headers: {
+    'user-agent': req.headers.get('user-agent') || '', referer: req.headers.get('referer') || '', 'x-edge-secret': env.EDGE_SECRET || '',
+    'x-rastro-ip': req.headers.get('cf-connecting-ip') || '', 'cf-ipcountry': req.headers.get('cf-ipcountry') || '',
+    // sem cookie de visitante (sem consentimento ou primeiro acesso direto ao link) vai sem rid
+    ...(ID_RE.test(jar._rid || '') && { 'x-rastro-rid': id.rid, 'x-rastro-fbp': id.fbp, ...(id.fbc && { 'x-rastro-fbc': id.fbc }) }),
+    'x-rastro-host': new URL(req.url).hostname,
+  } }).catch(() => null);
+  const loc = r?.headers.get('location');
+  if (!loc || !/^https:\/\/(wa\.me|api\.whatsapp\.com)\//.test(loc)) return new Response('Link indisponível', { status: r?.status === 404 ? 404 : 502 });
+  return new Response(null, { status: 302, headers: { location: loc, 'cache-control': 'no-store' } });
+}
+
 export default {
   async fetch(req, env, ctx) {
     const { pathname } = new URL(req.url);
@@ -99,6 +114,7 @@ export default {
       return new Response(null, { status: 204, headers: { ...cors(req), 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type' } });
     }
     if (pathname === '/e' && req.method === 'POST') return collect(req, env, ctx);
+    if (/^\/w\/[\w-]{3,40}$/.test(pathname) && req.method === 'GET') return whatsapp(req, env, pathname);
     return new Response('Not found', { status: 404 });
   },
 };

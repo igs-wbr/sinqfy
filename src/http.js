@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { env } from './db.js';
 
 export class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -32,3 +33,19 @@ export const route = (method, pattern, o, fn) =>
   routes.push({ method, o, fn, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '/?$') });
 
 export const sitePath = (site, p = '') => `/sites/${encodeURIComponent(site.id)}${p}`;
+
+/**
+ * Beacon repassado pelo Worker da borda (edge/worker.js): só confia nos cabeçalhos x-rastro-* com o segredo certo.
+ * Retorna { rid, fbp, fbc, ip } ou null.
+ */
+const ID_RE = /^[\w-]{8,64}$/, FB_RE = /^fb\.\d\.\d{10,13}\.[\w.-]{1,255}$/;
+export function edgeInfo(h) {
+  const want = Buffer.from(env.EDGE_SECRET || ''), got = Buffer.from(String(h['x-edge-secret'] || ''));
+  if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) {
+    if (h['x-rastro-rid'] || h['x-edge-secret']) console.warn('Beacon com cabeçalhos da borda e EDGE_SECRET inválido: confira o segredo no Worker e no painel.');
+    return null;
+  }
+  const ok = (v, re) => re.test(v || '') ? v : null;
+  return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null };
+}
+

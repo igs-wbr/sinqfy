@@ -100,3 +100,19 @@ test('entrada inválida, preflight e snippet', async () => {
   assert.equal((await run(new Request('https://t.cliente.com.br/qualquer'))).status, 404);
   assert.equal(calls.length, 2, 'nada além do snippet chega à origem');
 });
+
+test('link do WhatsApp: repassa com o visitante e só redireciona para o wa.me', async () => {
+  const realStatus = originStatus;
+  globalThis.fetch = async (url, init = {}) => { calls.push({ url: String(url), init }); return new Response(null, { status: 302, headers: { location: String(url).includes('/w/mau') ? 'https://evil.com/' : 'https://wa.me/5511999990000?text=oi%20%5BABCDE%5D' } }); };
+  const ok = await run(new Request('https://t.cliente.com.br/w/abc1234', { headers: { cookie: '_rid=RidAntigo123', referer: 'https://www.cliente.com.br/?fbclid=IwARw', 'cf-connecting-ip': '203.0.113.9' } }));
+  assert.equal(ok.status, 302);
+  assert.match(ok.headers.get('location'), /^https:\/\/wa\.me\//);
+  const h = calls.at(-1).init.headers;
+  assert.deepEqual([calls.at(-1).url, h['x-edge-secret'], h['x-rastro-rid'], h['x-rastro-ip']], ['https://app.rastro.dev/w/abc1234', 's3gredo', 'RidAntigo123', '203.0.113.9']);
+  assert.match(h['x-rastro-fbc'], /IwARw$/);
+  assert.equal((await run(new Request('https://t.cliente.com.br/w/mau1234'))).status, 502, 'redirecionamento fora do WhatsApp é barrado');
+  const semCookie = await run(new Request('https://t.cliente.com.br/w/abc1234'));
+  assert.equal(calls.at(-1).init.headers['x-rastro-rid'], undefined, 'sem cookie, sem rid');
+  assert.equal(semCookie.status, 302);
+  originStatus = realStatus;
+});

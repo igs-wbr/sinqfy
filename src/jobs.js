@@ -17,7 +17,7 @@ export async function runJobs() {
   // Retenção (ADR 0013): contatos sem atualização e eventos com mais de 13 meses; histórico de contato apagado junto.
   const old = Date.now() - 395 * 864e5;
   await db.batch([['DELETE FROM crm_log WHERE contact_id IN (SELECT id FROM contacts WHERE updated<?)', [old]], ['DELETE FROM contacts WHERE updated<?', [old]],
-    ['DELETE FROM events WHERE ts<?', [old]]]);
+    ['DELETE FROM events WHERE ts<?', [old]], ['DELETE FROM messages WHERE ts<?', [Date.now() - 90 * 864e5]], ['DELETE FROM wa_clicks WHERE ts<?', [old]]]); // mensagens: 90 dias
   if (cfReady()) for (const s of [...sites.values()].filter(s => s.edge_host && (s.edge_status === 'dns' || s.edge_status === 'ssl'))) await checkHost(s); // erro só com Verificar agora
   // Contas com erro (last_sync antigo) tentam a cada execução do cron, ou seja, no máximo uma vez por hora.
   for (const acc of await db.all("SELECT * FROM ad_accounts WHERE platform='meta' AND COALESCE(last_sync, 0) < ?", [Date.now() - META_EVERY])) {

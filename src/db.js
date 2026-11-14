@@ -142,6 +142,15 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS erased(site TEXT NOT NULL, bidx TEXT NOT NULL, ts BIGINT NOT NULL, PRIMARY KEY(site, bidx));
     CREATE UNIQUE INDEX IF NOT EXISTS contacts_email_once ON contacts(site, email_hash) WHERE email_hash IS NOT NULL;
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS meta_page_token TEXT;
+    -- Etapa 6: WhatsApp. Links rastreáveis (código curto na mensagem), cliques, mensagens cifradas (90 dias) e a conta da Cloud API.
+    CREATE TABLE IF NOT EXISTS wa_links(id ${ID}, site TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, phone TEXT NOT NULL, message ${T}, created BIGINT NOT NULL);
+    CREATE TABLE IF NOT EXISTS wa_clicks(code TEXT PRIMARY KEY, site TEXT NOT NULL, link_id BIGINT NOT NULL, ts BIGINT NOT NULL, rid TEXT, fbc TEXT, fbp TEXT, contact_id BIGINT);
+    CREATE INDEX IF NOT EXISTS wa_clicks_link ON wa_clicks(site, link_id, ts);
+    CREATE TABLE IF NOT EXISTS messages(id ${ID}, site TEXT NOT NULL, contact_id BIGINT NOT NULL, ts BIGINT NOT NULL, dir TEXT NOT NULL CHECK(dir IN ('in','out')), text_enc TEXT, wa_msg_id TEXT UNIQUE);
+    CREATE INDEX IF NOT EXISTS messages_contact ON messages(contact_id, ts);
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ctwa_clid TEXT, ADD COLUMN IF NOT EXISTS last_msg BIGINT, ADD COLUMN IF NOT EXISTS suggest_stage BIGINT, ADD COLUMN IF NOT EXISTS suggest_reason TEXT;
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS waba_id TEXT, ADD COLUMN IF NOT EXISTS ai_suggest INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS suggest_at BIGINT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_id BIGINT, ADD COLUMN IF NOT EXISTS platform INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS agency_id BIGINT;
     -- Domínio do cliente na borda (Cloudflare for SaaS) e o último teste da conexão com a Meta.

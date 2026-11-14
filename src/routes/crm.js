@@ -8,6 +8,7 @@ import { stages, upsertContact, moveContact, reveal, eraseContact, metaCrmEvent,
 import { enqueue, metaReady } from '../dispatch.js';
 import { hookToken, adKey, secretsOf } from '../sales/webhooks.js';
 import { piiReady, seal, open } from '../pii.js';
+import { claimCode } from '../whatsapp.js';
 import * as V from '../views/crm.js';
 
 const siteByHook = (token, platform) => {
@@ -66,6 +67,9 @@ route('POST', '/sites/:id/contacts/:cid', { site: 'edit' }, async r => {
     if (!(v >= 0 && v < 1e9)) throw new HttpError(400, 'Valor inválido.');
     await db.run('UPDATE contacts SET value=?, updated=? WHERE id=?', [v, Date.now(), c.id]);
     await log(r.site.id, c.id, `Valor alterado para ${v} (${r.user.email})`);
+  } else if (action === 'code') {
+    const click = await claimCode(r.site, c, (f.get('code') || '').trim().replace(/[\[\]\s]/g, ''));
+    if (!click) return redirect(r, sitePath(r.site, `/contacts/${c.id}?erro=codigo`));
   } else if (action === 'erase') {
     if (f.get('confirm') !== 'EXCLUIR') throw new HttpError(400, 'Digite EXCLUIR para confirmar.');
     await eraseContact(r.site, c.id, r.user.email);

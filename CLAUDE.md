@@ -1,6 +1,6 @@
 # Rastro: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 5 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 6 concluídas, painel no design system Rastro Azul). Produção: Docker na VM da Oracle com PostgreSQL ([deploy](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -17,10 +17,11 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/cloudflare.js`: domínio do cliente na borda (Cloudflare for SaaS, custom hostnames). `src/routes/setup.js` + `src/views/setup.js`: assistente de 6 passos.
 - Agências ([ADR 0009](docs/adr/0009-multi-cliente.md)): todo acesso a site, equipe e convite filtra por `agency_id`; `users.platform` é o dono da instalação.
 - `src/pii.js` (cifra e hash de dados pessoais, `DATA_KEY`) e `src/crm.js` (contatos, colunas, evento offline por coluna, compra leva o contato para Ganhou). `src/routes/crm.js` é importado antes de `sales.js` por causa das rotas `/hooks/:token/leads` e `/meta-leads`.
+- `src/whatsapp.js` + `src/routes/whatsapp.js`: link rastreável `/w/:slug` com código, webhook da Cloud API, conversas e sugestão de coluna ([ADR 0016](docs/adr/0016-whatsapp.md)). `routes/whatsapp.js` também vem antes de `sales.js`.
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 3 KB) é minificado à mão e servido aos sites pelo Worker.
-- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0016`), fluxo com skills.
+- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0017`), fluxo com skills.
 
 ## Regras
 - Toda consulta é `await db.…`; consultas independentes vão em `Promise.all`/`awaitAll`.

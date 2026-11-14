@@ -223,6 +223,23 @@ table.txt th,table.txt td{text-align:left}table.txt .num{text-align:right}table.
 @media (max-width:719px){.stages thead{display:none}.stages tbody tr{display:grid;grid-template-columns:88px 1fr;gap:10px 12px;padding:14px 0;border-top:1px solid var(--line)}.stages tbody tr:first-child{border-top:0}
 .stages td{padding:0;border:0;text-align:left!important}.stages td::before{content:attr(data-label);display:block;margin-bottom:4px;color:var(--muted);font:600 10.5px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.1em}
 .stages td.nm,.stages td.ev,.stages td.kd{grid-column:2}.stages td.ps{grid-row:1/3}.stages td.ct,.stages td.ac{align-self:end}}
+/* WhatsApp: caixa de entrada, conversa e sugestão */
+.inbox-card{padding:8px}.inbox{list-style:none;margin:0;padding:0}.inbox li+li{border-top:1px solid var(--line)}
+.convo{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 12px;align-items:center;padding:12px;border-radius:12px;text-decoration:none;color:var(--ink)}
+@media (hover:hover){.convo:hover{background:var(--hover)}}
+.ava{grid-row:1/3;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;background:var(--surface3);color:var(--link);font:700 14px/1 var(--sans)}
+.convo .who{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}.convo .who b{font-weight:600}.convo .who .tag{margin:0}
+.convo time{align-self:start;color:var(--muted);font:500 11.5px var(--mono);white-space:nowrap}
+.convo .prev{grid-column:2/4;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.convo .prev b{color:var(--ink2);font-weight:600}
+.tag.sug{color:var(--link);background:var(--info-bg);border-color:transparent}
+.suggest{display:flex;gap:12px;align-items:flex-start;padding:16px;margin-bottom:16px;border:1px solid var(--line2);border-radius:16px;background:var(--info-bg)}.suggest>.ic{color:var(--link);margin-top:2px}.suggest p{margin:0 0 10px}
+.chat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:16px;align-items:start}@media (max-width:899px){.chat{grid-template-columns:1fr}}
+.thread{list-style:none;margin:12px 0 0;padding:4px 2px;display:flex;flex-direction:column;gap:6px;max-height:65vh;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.thread .day{align-self:center;margin:10px 0 4px;padding:2px 10px;border-radius:999px;background:var(--surface2);color:var(--muted);font:600 10.5px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.08em}
+@media (max-width:719px){.rows-sm thead{display:none}.rows-sm,.rows-sm tbody,.rows-sm tr,.rows-sm td{display:block}.rows-sm tr{padding:12px 0;border-top:1px solid var(--line)}.rows-sm tbody tr:first-child{border-top:0}.rows-sm td{padding:4px 0;border:0;text-align:left!important;white-space:normal!important}.rows-sm td[data-label]::before{content:attr(data-label);display:block;color:var(--muted);font:600 10.5px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.1em}.rows-sm code{overflow-wrap:anywhere}}
+.msg{position:relative;align-self:flex-start;max-width:min(78%,520px);padding:8px 12px 6px;border-radius:16px 16px 16px 4px;background:var(--surface2);border:1px solid var(--line);white-space:pre-wrap;word-break:break-word;line-height:1.45}
+.msg.out{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--primary);border-color:var(--primary);color:#fff}
+.msg time{display:block;margin-top:2px;text-align:right;font:500 10.5px var(--mono);color:var(--muted)}.msg.out time{color:rgba(255,255,255,.85)}
 .steps{margin:10px 0 12px;padding-left:20px;display:grid;gap:6px;color:var(--ink2)}textarea{font:500 12.5px/1.5 var(--mono)}
 .tag.ok{color:var(--ok);background:var(--ok-bg);border-color:transparent}.tag.bad{color:var(--bad);background:var(--bad-bg);border-color:transparent}.tag.warn{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 details.dl{display:inline-block}details.dl>summary{list-style:none;cursor:pointer}details.dl>summary::-webkit-details-marker{display:none}details.dl[open]>div{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);font-size:12px;max-width:360px;white-space:normal}
@@ -312,8 +329,8 @@ const NAV = [
   { label: 'Visão', items: [['', 'Resumo', 'house'], ['/events', 'Eventos', 'activity', 'ao vivo']] },
   { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list']] },
   { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/attribution', 'Atribuição', 'target']] },
-  { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban'], ['/contacts', 'Contatos', 'users']] },
-  { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/settings', 'Configurações', 'settings']] },
+  { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban'], ['/contacts', 'Contatos', 'users'], ['/conversations', 'Conversas', 'message-circle']] },
+  { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/whatsapp', 'WhatsApp', 'phone'], ['/settings', 'Configurações', 'settings']] },
 ];
 const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);
 

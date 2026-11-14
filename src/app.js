@@ -1,15 +1,16 @@
 // Handler HTTP único (painel + beacons + webhooks + cron). Usado pela função da Vercel (api/index.js)
 // e pelo servidor local (src/server.js).
 import { readFileSync, readdirSync } from 'node:fs';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { ready, refreshSites, sites, env } from './db.js';
-import { routes, readBody, send, redirect, clientIp, HttpError } from './http.js';
+import { routes, readBody, send, redirect, clientIp, edgeInfo, HttpError } from './http.js';
 import { ctx, currentUser, canView, canEdit } from './auth.js';
 import { record } from './tracking/ingest.js';
 import { messagePage } from './views/admin.js';
 import './routes/auth.js';
 import './routes/admin.js';
 import './routes/traffic.js';
+import './routes/whatsapp.js'; // antes de sales.js: /hooks/:token/whatsapp vem antes da rota genérica
 import './routes/crm.js'; // antes de sales.js: /hooks/:token/leads vem antes da rota genérica
 import './routes/sales.js';
 import './routes/setup.js';
@@ -25,21 +26,6 @@ try {
   add('/manifest.webmanifest', 'manifest.webmanifest', 'application/manifest+json', 'public, max-age=86400');
   for (const f of readdirSync(new URL('fonts/', PUBLIC)).filter(f => f.endsWith('.woff2'))) add(`/fonts/${f}`, `fonts/${f}`, 'font/woff2', 'public, max-age=31536000, immutable');
 } catch {}
-
-/**
- * Beacon repassado pelo Worker da borda (edge/worker.js): só confia nos cabeçalhos x-rastro-* com o segredo certo.
- * Retorna { rid, fbp, fbc, ip } ou null.
- */
-const ID_RE = /^[\w-]{8,64}$/, FB_RE = /^fb\.\d\.\d{10,13}\.[\w.-]{1,255}$/;
-export function edgeInfo(h) {
-  const want = Buffer.from(env.EDGE_SECRET || ''), got = Buffer.from(String(h['x-edge-secret'] || ''));
-  if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) {
-    if (h['x-rastro-rid'] || h['x-edge-secret']) console.warn('Beacon com cabeçalhos da borda e EDGE_SECRET inválido: confira o segredo no Worker e no painel.');
-    return null;
-  }
-  const ok = (v, re) => re.test(v || '') ? v : null;
-  return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null };
-}
 
 async function handle(r) {
   const { req, res } = r;

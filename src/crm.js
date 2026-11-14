@@ -23,7 +23,7 @@ export const log = (site, contact, text, now = Date.now()) => db.run('INSERT INT
 
 /** Contato com os dados abertos (só para a ficha e o quadro; nunca para log nem IA). */
 export function reveal(c) {
-  return c && { ...c, name: open(c.name_enc), email: open(c.email_enc), phone: open(c.phone_enc) };
+  return c && { ...c, name: open(c.name_enc), email: open(c.email_enc), phone: open(c.phone_enc), ...(String(c.suggest_reason || '').startsWith('v1.') && { suggest_reason: open(c.suggest_reason) }) };
 }
 
 export async function findContact(site, { emailHash, phoneHash, leadId }) {
@@ -66,7 +66,21 @@ export async function upsertContact(site, d, now = Date.now()) {
 }
 
 /** Evento offline da Meta para a entrada numa coluna (integração de CRM / Conversion Leads). */
+/** Conversão de conversa de anúncio de clique para WhatsApp (Conversions API para mensagens: WABA + ctwa_clid). */
+// Eventos que a Conversions API para mensagens aceita; fora da lista, a conversão vai pelo caminho comum (e-mail e telefone em hash).
+export const BM_EVENTS = new Set(['LeadSubmitted', 'QualifiedLead', 'Purchase', 'InitiateCheckout', 'AddToCart', 'ViewContent', 'OrderCreated', 'OrderShipped', 'OrderDelivered', 'OrderCanceled', 'OrderReturned', 'CartAbandoned', 'RatingProvided', 'ReviewProvided']);
+export function metaWhatsappEvent(site, c, eventName, eventId, now = Date.now()) {
+  if (!c.ctwa_clid || !site.waba_id || !BM_EVENTS.has(eventName)) return null;
+  const custom_data = {};
+  if (c.value > 0) Object.assign(custom_data, { value: c.value, currency: site.currency });
+  return { event_name: eventName, event_time: Math.floor(now / 1000), event_id: eventId, action_source: 'business_messaging', messaging_channel: 'whatsapp',
+    user_data: { whatsapp_business_account_id: site.waba_id, ctwa_clid: c.ctwa_clid }, ...(Object.keys(custom_data).length && { custom_data }) };
+}
+
 export function metaCrmEvent(site, c, stage, now = Date.now()) {
+  // Quem veio de anúncio de clique para WhatsApp: a conversão volta como mensagem (ligada ao anúncio pelo ctwa_clid).
+  const wa = metaWhatsappEvent(site, c, stage.event_name, `crm-${c.id}-${stage.id}`, now);
+  if (wa) return wa;
   const user_data = {};
   const em = metaEmail(open(c.email_enc)), ph = metaPhone(open(c.phone_enc));
   if (em) user_data.em = [em];
@@ -88,7 +102,7 @@ export function metaCrmEvent(site, c, stage, now = Date.now()) {
 export async function moveContact(site, c, stageId, { by = 'painel', silent = false, now = Date.now() } = {}) {
   const st = await db.get('SELECT * FROM stages WHERE id=? AND site=?', [stageId, site.id]);
   if (!st || c.stage_id === st.id) return false;
-  await db.run('UPDATE contacts SET stage_id=?, stage_since=?, updated=? WHERE id=? AND site=?', [st.id, now, now, c.id, site.id]);
+  await db.run('UPDATE contacts SET stage_id=?, stage_since=?, updated=?, suggest_stage=NULL, suggest_reason=NULL WHERE id=? AND site=?', [st.id, now, now, c.id, site.id]);
   let sent = '';
   if (!silent && st.event_name && metaReady(site)) {
     const ev = metaCrmEvent(site, c, st, now);
@@ -113,8 +127,9 @@ export async function eraseContact(site, id, actor, now = Date.now()) {
   const c = await db.get('SELECT * FROM contacts WHERE site=? AND id=?', [site.id, id]);
   if (!c) return;
   await db.batch([
-    ['DELETE FROM crm_log WHERE site=? AND contact_id=?', [site.id, id]],
-    ["DELETE FROM deliveries WHERE site=? AND event_id LIKE 'crm-' || ? || '-%'", [site.id, String(id)]], // nada pendente vai mais à Meta
+    ['DELETE FROM crm_log WHERE site=? AND contact_id=?', [site.id, id]], ['DELETE FROM messages WHERE site=? AND contact_id=?', [site.id, id]],
+    ['UPDATE wa_clicks SET rid=NULL, fbc=NULL, fbp=NULL, contact_id=NULL WHERE site=? AND contact_id=?', [site.id, id]],
+    ["DELETE FROM deliveries WHERE site=? AND (event_id LIKE 'crm-' || ? || '-%' OR event_id LIKE 'wa-' || ? || '-%')", [site.id, String(id), String(id)]], // nada pendente vai mais à Meta
     ...(c.rid ? [['UPDATE events SET rid=NULL, ua=NULL, ga_cid=NULL, fbc=NULL, fbp=NULL WHERE site=? AND rid=?', [site.id, c.rid]],
       ['UPDATE sales SET rid=NULL WHERE site=? AND rid=?', [site.id, c.rid]]] : []),
     ...[c.email_hash, c.phone_hash].filter(Boolean).map(b => ['INSERT INTO erased(site, bidx, ts) VALUES (?,?,?) ON CONFLICT DO NOTHING', [site.id, b, now]]),
