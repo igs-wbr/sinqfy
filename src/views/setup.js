@@ -23,12 +23,12 @@ ${notice(d.msg)}${notice(d.err, true)}${ctx.q.get('meta') === 'erro' ? notice('A
 ${step(1, 'Projeto', st.project, html`<p>Nome <b>${s.name}</b>, fuso ${s.timezone}, moeda ${s.currency}.</p><a class="btn" href="${base}/settings">Alterar em Configurações</a>`, { open: next === 'project' })}
 
 ${step(2, 'Domínio de rastreamento', st.domain, html`
-<p class="muted">Um subdomínio <code>t.</code> do seu site, apontado para o Rastro. Os cookies passam a ser do seu domínio e duram 400 dias, inclusive no Safari.</p>
+<p class="muted">Um subdomínio <code>t.</code> do seu site, apontado para o Trackify. Os cookies passam a ser do seu domínio e duram 400 dias, inclusive no Safari.</p>
 ${s.edge_host ? html`<p><b>${s.edge_host}</b> · <span class="tag ${s.edge_status === 'active' ? 'ok' : s.edge_status === 'error' ? 'bad' : 'warn'}">${STATUS[s.edge_status] || s.edge_status}</span></p>
 ${s.edge_error ? notice(`Cloudflare: ${s.edge_error}`, true) : ''}
 ${s.edge_status !== 'active' ? html`<p>No painel do seu domínio (Registro.br, Hostinger, Cloudflare, GoDaddy), crie este registro:</p>
 <div class="tw"><table class="data txt"><thead><tr><th>Tipo</th><th>Nome</th><th>Destino</th></tr></thead><tbody><tr><td>CNAME</td><td><code>t</code></td><td><code>${d.target}</code></td></tr></tbody></table></div>
-<p class="muted">A propagação leva de minutos a algumas horas.${d.cf ? '' : ' A integração automática com a Cloudflare não está configurada nesta instalação: o suporte do Rastro ativa o domínio para você.'}</p>` : ''}
+<p class="muted">A propagação leva de minutos a algumas horas.${d.cf ? '' : ' A integração automática com a Cloudflare não está configurada nesta instalação: o suporte do Trackify ativa o domínio para você.'}</p>` : ''}
 <div class="row"><form method="post" action="${base}/setup"><input type="hidden" name="action" value="domain_check"><button>${icon('refresh-cw', 16)} Verificar agora</button></form>
 <form method="post" action="${base}/setup"><input type="hidden" name="action" value="domain_remove"><button class="link danger">Trocar domínio</button></form></div>`
     : html`<form method="post" action="${base}/setup" class="row"><input type="hidden" name="action" value="domain_add">

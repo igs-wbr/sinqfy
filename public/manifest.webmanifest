@@ -1,11 +1,11 @@
 {
-  "name": "Rastro",
-  "short_name": "Rastro",
+  "name": "Trackify",
+  "short_name": "Trackify",
   "description": "Vendas, tráfego e campanhas, sem cookies.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ECF1FB",
-  "theme_color": "#0B4DB4",
+  "background_color": "#FAFAFA",
+  "theme_color": "#F4F4F5",
   "lang": "pt-BR",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

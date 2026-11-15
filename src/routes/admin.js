@@ -143,7 +143,7 @@ route('POST', '/agencies', {}, async r => {
   platformOnly(r);
   const f = await form(r.req), name = (f.get('name') || '').trim().slice(0, 80), email = (f.get('email') || '').trim().toLowerCase();
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return agenciesView(r, { err: 'Informe o nome da agência e o e-mail do dono.' });
-  if (await db.get('SELECT 1 FROM users WHERE lower(email)=lower(?)', [email])) return agenciesView(r, { err: 'Esse e-mail já tem conta no Rastro.' });
+  if (await db.get('SELECT 1 FROM users WHERE lower(email)=lower(?)', [email])) return agenciesView(r, { err: 'Esse e-mail já tem conta no Trackify.' });
   const { rows: [{ id: aid }] } = await db.run('INSERT INTO agencies(name, created) VALUES (?,?) RETURNING id', [name, Date.now()]);
   const { rows: [{ id: uid }] } = await db.run("INSERT INTO users(email, name, role, created, agency_id) VALUES (?,?,'admin',?,?) RETURNING id", [email, '', Date.now(), aid]);
   agenciesView(r, { ...await issueLink(r, await db.get('SELECT * FROM users WHERE id=?', [uid])), agency: name });

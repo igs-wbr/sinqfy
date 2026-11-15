@@ -1,5 +1,5 @@
 // Páginas administrativas: configurações do site, sites, equipe, conta, login e convite.
-import { html, raw, layout, pageHead, notice, num, money, ROLES } from './ui.js';
+import { html, raw, MARK, layout, pageHead, notice, num, money, ROLES } from './ui.js';
 
 const TIMEZONES = ['UTC', ...Intl.supportedValuesOf('timeZone').filter(t => t !== 'UTC')];
 const tzSelect = cur => html`<select name="timezone">${TIMEZONES.map(t => html`<option${t === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
@@ -65,7 +65,7 @@ ${notice(msg)}${notice(err, true)}
 <label class="f">Confirmar<input type="password" name="confirm" required minlength="8" autocomplete="new-password"></label><div><button class="primary">Trocar senha</button></div></form></section>`);
 }
 
-const authCard = body => html`<div class="auth"><a class="brand" href="/"><span class="mark" aria-hidden="true">r</span><span>rastro</span></a><div class="card">${body}</div></div>`;
+const authCard = body => html`<div class="auth"><a class="brand" href="/">${MARK}<span>Trackify</span></a><div class="card">${body}</div></div>`;
 
 export function loginPage(ctx, { next = '', email = '', err } = {}) {
   return layout(ctx, 'Entrar', authCard(html`<div class="eyebrow">Acesso</div><h1>Entrar</h1>${notice(err, true)}
@@ -83,11 +83,11 @@ export function invitePage(ctx, user, err) {
 
 export function messagePage(ctx, title, text) {
   if (!ctx.user) return layout(ctx, title, authCard(html`<h1>${title}</h1><p class="sub" style="margin-bottom:16px">${text}</p><a class="btn" href="/">Voltar</a>`), { bare: true });
-  return layout(ctx, title, html`${pageHead(`Rastro · ${title}`, title, html`${text} Confira o endereço ou volte para os seus sites.`)}<a class="btn" href="/">Ir para os meus sites</a>`);
+  return layout(ctx, title, html`${pageHead(`Trackify · ${title}`, title, html`${text} Confira o endereço ou volte para os seus sites.`)}<a class="btn" href="/">Ir para os meus sites</a>`);
 }
 
 export function agenciesPage(ctx, rows, { link: inviteLink, agency, err } = {}) {
-  return layout(ctx, 'Agências', html`${pageHead('Rastro · Agências', raw('Cada agência com os <em>seus</em> clientes'), 'Uma agência só vê os próprios sites e a própria equipe. O dono entra pelo link de convite.')}
+  return layout(ctx, 'Agências', html`${pageHead('Trackify · Agências', raw('Cada agência com os <em>seus</em> clientes'), 'Uma agência só vê os próprios sites e a própria equipe. O dono entra pelo link de convite.')}
 ${notice(err, true)}${inviteLink ? notice(html`Agência <b>${agency}</b> criada. Envie este link ao dono (vale 7 dias): <code>${inviteLink}</code>`) : ''}
 <div class="grid two" style="align-items:start">
 <section class="card"><h2>Agências</h2><div class="tw"><table class="data txt"><thead><tr><th>Agência</th><th class="num">Sites</th><th class="num">Pessoas</th></tr></thead>

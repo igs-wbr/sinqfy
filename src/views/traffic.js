@@ -19,7 +19,7 @@ export function overviewPage(ctx, p, f, d) {
   return layout(ctx, `${ctx.share ? 'Tráfego' : 'Visão geral'} · ${site.name}`, html`
 ${pageHead(`${site.name} · ${ctx.share ? 'Tráfego' : 'Visão geral'}`, raw(`Quem chega, <em>de onde</em> e o que faz`), null, live)}
 ${tl(ctx, p, f)}
-<div class="hero">${kpi('visitors', 'Visitantes', cur.visitors, prev.visitors, num, { feature: true, spark: d.series.map(x => x.v) })}${kpi('visits', 'Visitas', cur.visits, prev.visits, num)}
+<div class="hero">${kpi('visitors', 'Visitantes', cur.visitors, prev.visitors, num, { feature: true })}${kpi('visits', 'Visitas', cur.visits, prev.visits, num)}
 ${kpi('pageviews', 'Visualizações', cur.pageviews, prev.pageviews, num)}${kpi('bounce', 'Rejeição', cur.bounce, prev.bounce, pct, { invert: true })}</div>
 <div class="kpis">${kpi('duration', 'Duração da visita', cur.duration, prev.duration, dur)}${kpi('ppv', 'Páginas por visita', cur.visits ? cur.pageviews / cur.visits : null, prev.visits ? prev.pageviews / prev.visits : null, v => v == null ? '-' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }))}
 ${rev ? kpi('revenue', 'Receita (eventos)', cur.revenue, prev.revenue, m) : ''}</div>
@@ -40,7 +40,7 @@ ${tabs('Eventos', [['Eventos', list(ctx, d.events, 'name', { head: 'Evento', col
 export function realtimeBody(ctx, r) {
   const time = ts => new Date(ts).toLocaleTimeString('pt-BR', { timeZone: ctx.site.timezone });
   const mins = r.perMin.map((n, i) => ({ label: i === 29 ? 'agora' : `-${29 - i} min`, v: n }));
-  return html`<div class="hero">${kpi('online', 'Online agora · 5 min', r.online, null, num, { feature: true, spark: r.perMin })}${kpi('v30', 'Visitantes · 30 min', r.visitors30, null, num)}${kpi('pv30', 'Visualizações · 30 min', r.perMin.reduce((a, b) => a + b, 0), null, num)}</div>
+  return html`<div class="hero">${kpi('online', 'Online agora · 5 min', r.online, null, num, { feature: true })}${kpi('v30', 'Visitantes · 30 min', r.visitors30, null, num)}${kpi('pv30', 'Visualizações · 30 min', r.perMin.reduce((a, b) => a + b, 0), null, num)}</div>
 <section class="card"><h2>Visualizações por minuto</h2>${chart(mins, null, { label: 'Visualizações', h: 170 })}</section>
 <div class="grid"><section class="card"><h2>Atividade ao vivo</h2>${r.feed.length ? html`<ul class="feed">${r.feed.map(e => html`<li><time>${time(e.ts)}</time><div>${e.name === 'pageview' ? e.path : html`<span class="ev">${icon('activity', 14)}${e.name}</span> em ${e.path}`}<small>${countryName(e.country)} · ${SCREEN[e.screen] ?? e.screen} · ${e.browser} · ${e.referrer || 'Direto'}</small></div></li>`)}</ul>` : html`<p class="empty">Nenhuma atividade nos últimos 30 minutos.</p>`}</section>
 ${tabs('Páginas ativas', [['Páginas', list(ctx, r.pages, 'path', { head: 'Página', filter: false, ...L })]])}
