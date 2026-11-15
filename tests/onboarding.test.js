@@ -65,7 +65,9 @@ test('agências: a outra agência não vê nem mexe em nada da primeira', async 
 });
 
 test('domínio: cadastra na Cloudflare, mostra o CNAME, confere e vira o endereço do snippet', async () => {
-  assert.equal((await req('/sites/loja/setup', { cookie: owner, form: { action: 'domain_add', host: 'www.loja.com.br' } })).status, 400, 'só subdomínio t.');
+  assert.equal((await req('/sites/loja/setup', { cookie: owner, form: { action: 'domain_add', host: 'loja' } })).status, 400, 'precisa ser um domínio');
+  const { normalizeHost } = await import('../src/cloudflare.js');
+  assert.deepEqual(['loja.com.br', 'https://www.loja.com.br/x', 'T.Loja.com.br'].map(normalizeHost), ['t.loja.com.br', 't.loja.com.br', 't.loja.com.br'], 'só o domínio: o t. entra sozinho');
   assert.equal((await req('/sites/loja/setup', { cookie: owner, form: { action: 'domain_add', host: 'https://t.loja.com.br/' } })).status, 303);
   const post = cfCalls.find(c => c.method === 'POST');
   assert.deepEqual([post.path, post.auth, post.body.hostname, post.body.ssl.method], ['/client/v4/zones/zona1/custom_hostnames', 'Bearer cf-token', 't.loja.com.br', 'http']);

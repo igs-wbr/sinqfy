@@ -11,7 +11,8 @@ export const saasTarget = () => env.CF_SAAS_TARGET || 'edge.seudominio.com.br';
 export const HOST_RE = /^t\.[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 /** t.com.br, t.co.uk: o domínio raiz seria um sufixo público. */
 export const publicSuffix = host => /^t\.(com|net|org|gov|edu|co|art|blog|app|dev|ind|inf|log|med|nom|eco|tur|vet)\.[a-z]{2}$/.test(host) || /^t\.[a-z]+$/.test(host);
-export const normalizeHost = h => String(h || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+export const normalizeHost = h => String(h || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  .replace(/^(?!t\.)(www\.)?(?=[^.]+\.)/, 't.'); // só o domínio (com ou sem www.): o t. entra sozinho
 
 async function cf(method, path, body) {
   const res = await fetch(`${API}/zones/${encodeURIComponent(env.CF_ZONE_ID)}${path}`, {

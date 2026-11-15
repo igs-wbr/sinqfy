@@ -12,6 +12,8 @@ export function setupPage(ctx, d) {
   const s = ctx.site, base = `/sites/${encodeURIComponent(s.id)}`, st = d.steps;
   const order = ['project', 'domain', 'script', 'meta', 'checkout', 'final'], next = order.find(k => !st[k]);
   const pct = Math.round(d.done / 6 * 100);
+  // Exemplo com o domínio do próprio site (Configurações), para a pessoa ver o formato certo já com o domínio dela.
+  const hostExample = `t.${String(s.domains || '').split(',')[0].trim().replace(/^www\./, '') || 'seudominio.com.br'}`;
   const snippet = `<script defer data-site="${s.id}" src="${d.edgeUrl}/s.js"></script>`;
   const back = html`<input type="hidden" name="back" value="setup">`;
 
@@ -32,7 +34,7 @@ ${s.edge_status !== 'active' ? html`<p>No painel do seu domínio (Registro.br, H
 <div class="row"><form method="post" action="${base}/setup"><input type="hidden" name="action" value="domain_check"><button>${icon('refresh-cw', 16)} Verificar agora</button></form>
 <form method="post" action="${base}/setup"><input type="hidden" name="action" value="domain_remove"><button class="link danger">Trocar domínio</button></form></div>`
     : html`<form method="post" action="${base}/setup" class="row"><input type="hidden" name="action" value="domain_add">
-<label class="f" style="flex:1">Subdomínio<input name="host" required placeholder="t.seudominio.com.br" pattern="[Tt]\\..+" autocomplete="off"></label><button style="align-self:end"${next === 'domain' ? raw(' class="primary"') : ''}>Cadastrar</button></form>`}`, { open: next === 'domain' })}
+<label class="f" style="flex:1">Subdomínio<span>O domínio do seu site com <code>t.</code> na frente, ex.: <code>${hostExample}</code>. Se digitar só o domínio, o <code>t.</code> entra sozinho.</span><input name="host" required placeholder="${hostExample}" title="Exemplo: ${hostExample}" autocomplete="off" autocapitalize="off" spellcheck="false"></label><button style="align-self:end"${next === 'domain' ? raw(' class="primary"') : ''}>Cadastrar</button></form>`}`, { open: next === 'domain' })}
 
 ${step(3, 'Script no site', st.script, html`
 <p class="muted">Cole no <code>&lt;head&gt;</code> de todas as páginas (WordPress: plugin de cabeçalho ou o tema; Elementor: Código personalizado; Google Tag Manager: tag HTML personalizada em todas as páginas).</p>
