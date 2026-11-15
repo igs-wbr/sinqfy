@@ -5,7 +5,7 @@ O Rastro roda como uma função serverless na Vercel. O banco é o Turso (libSQL
 ```
 visitante ──beacon──▶ Vercel (api/index.js) ──▶ Turso
 Hotmart/Kiwify ─webhook─▶ │
-GitHub Actions ─/cron (de hora em hora)─▶ │──▶ Meta Marketing API
+cron externo   ─/cron (de hora em hora)─▶ │──▶ Meta Marketing API
 ```
 
 > **Plano da Vercel:** o plano Hobby (gratuito) é **apenas para uso não comercial**. Se o Rastro rastreia as vendas do seu negócio, use o plano Pro.
@@ -54,17 +54,7 @@ Suba a pasta do projeto para um repositório privado. O `.gitignore` já exclui 
 
 O sync da Meta (gastos, campanhas, status) roda quando alguém chama `GET /cron` com o cabeçalho `Authorization: Bearer <CRON_SECRET>`. Sem o segredo, a rota responde 404.
 
-**Opção A: GitHub Actions** (já incluído em `.github/workflows/cron.yml`)
-
-Em *Settings → Secrets and variables → Actions* do repositório, crie:
-- `RASTRO_URL`: `https://stats.seudominio.com`
-- `CRON_SECRET`: o mesmo valor configurado na Vercel
-
-Para testar na hora, use *Actions → Rastro cron → Run workflow*.
-
-**Opção B: [cron-job.org](https://cron-job.org)**
-
-Crie um job para `https://stats.seudominio.com/cron`, a cada hora, com o cabeçalho `Authorization: Bearer <CRON_SECRET>`.
+O workflow do GitHub Actions que fazia isso foi removido em 15/11/2026: na instalação em Docker ([deploy-oracle.md](deploy-oracle.md)) o próprio servidor roda as tarefas a cada 5 minutos. Na Vercel, use um agendador externo, como o [cron-job.org](https://cron-job.org): crie um job para `https://stats.seudominio.com/cron`, a cada hora, com o cabeçalho `Authorization: Bearer <CRON_SECRET>`.
 
 A resposta é um JSON como `{"meta":1,"errors":[]}`, e os erros também aparecem nos logs da Vercel. As telas Resumo e Campanhas recarregam sozinhas a cada hora e mostram o horário do último sync.
 
@@ -94,5 +84,5 @@ npm start              # http://127.0.0.1:8080
 |---|---|
 | Página de erro em todas as rotas | `DATABASE_URL` ou `DATABASE_AUTH_TOKEN` errados, ou falta `ADMIN_EMAIL`/`ADMIN_PASSWORD` no primeiro deploy. Veja os logs da função |
 | Formulários ou webhooks chegam vazios | Defina `NODEJS_HELPERS=0` nas variáveis da Vercel (desliga o pré-processamento do corpo da requisição) |
-| Gastos da Meta não atualizam | O cron não está chamando `/cron`. Veja o histórico do GitHub Actions ou do cron-job.org |
+| Gastos da Meta não atualizam | O cron não está chamando `/cron`. Veja o histórico do cron-job.org |
 | Painel lento | Turso e funções em regiões distantes; aproxime as regiões |
