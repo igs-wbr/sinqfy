@@ -1,0 +1,22 @@
+name: Bug
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: textarea
+    id: passos
+    attributes:
+      label: O que você fez
+      description: Passos para reproduzir, na ordem. Não cole dados de clientes, tokens ou segredos.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que esperava e o que aconteceu
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão
+      description: Commit (git rev-parse --short HEAD) e onde roda (local, Docker)

@@ -11,7 +11,13 @@ export async function login(r, userId) {
   await db.run('INSERT INTO sessions VALUES (?,?,?)', [sha(t), userId, Date.now() + 30 * DAY]);
   return { 'set-cookie': cookie(r.req, t, 30 * 86400) };
 }
+// LOGIN=off: ferramenta interna, sem tela de login; todo acesso entra como o dono da instalação.
+// Só vale com o servidor preso ao próprio computador (HOST de loopback, fora da Vercel). Em produção o login continua.
+export const NO_LOGIN = env.LOGIN === 'off' && !env.VERCEL && ['127.0.0.1', 'localhost', '::1'].includes(env.HOST ?? '127.0.0.1');
+if (env.LOGIN === 'off' && !NO_LOGIN) console.warn('LOGIN=off ignorado: o servidor não está restrito a 127.0.0.1.');
+
 export async function currentUser(req) {
+  if (NO_LOGIN) return await db.get("SELECT * FROM users WHERE role='admin' ORDER BY platform DESC, id LIMIT 1") ?? null;
   const t = cookieToken(req);
   return t ? await db.get('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?', [sha(t), Date.now()]) ?? null : null;
 }

@@ -21,7 +21,7 @@ Arquivos em `public/brand/` (SVG vetorial, nome em traço desenhado, sem depende
 
 | Arquivo | Uso |
 |---|---|
-| `favicon.svg` | Favicon e ícone do app (`public/icon.svg` é cópia). Traço mais grosso e trecho inicial em 50% para ler em 16px |
+| `../favicon.svg` | Favicon e ícone do app, servido em `/favicon.svg`. Traço mais grosso e trecho inicial em 50% para ler em 16px |
 | `trackify-mark.svg` | Símbolo completo (rastro tracejado virando linha até o ponto), avatar e redes |
 | `trackify-mark-mono.svg` | Símbolo de uma cor (`currentColor`), sem fundo |
 | `trackify-logo-light.svg` / `-dark.svg` | Logo horizontal sobre fundo claro / escuro |

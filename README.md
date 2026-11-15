@@ -1,68 +1,89 @@
-# Rastro
+<p align="center"><img src="public/brand/trackify-logo-light.svg" alt="Trackify" height="56"></p>
 
-Vendas, tráfego e campanhas da Meta em um painel só, **sem cookies**.
+<p align="center">Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.</p>
 
-- **Vendas:** faturamento, lucro, ROAS, ROI, CPA, reembolsos e Pix/cartão/boleto, vindos de webhooks da Hotmart, Kiwify, Eduzz ou de um formato genérico.
+<p align="center">
+<a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-0E58DB"></a>
+<img alt="Node 24" src="https://img.shields.io/badge/node-24.x-171717">
+<img alt="PostgreSQL" src="https://img.shields.io/badge/banco-PostgreSQL-171717">
+</p>
+
+## O que faz
+
+- **Vendas:** faturamento, lucro, ROAS, ROI, CPA, reembolsos e Pix, cartão ou boleto, vindos dos webhooks da Hotmart, Kiwify, Eduzz ou de um formato genérico.
 - **Anúncios:** gastos da Meta (API, somente leitura), cruzados com as vendas por campanha, conjunto e anúncio.
-- **Tráfego:** analytics com visão geral, tempo real, funis, jornadas e atribuição.
+- **Tráfego:** visão geral, tempo real, funis, caminhos e atribuição, com visitante anônimo (hash com salt diário).
+- **Envio server-side:** Conversions API da Meta e Measurement Protocol do GA4, com fila e reenvio.
+- **Relacionamento:** CRM em quadro, contatos com dados pessoais cifrados e conversas do WhatsApp ligadas ao anúncio.
+- **Agências:** vários clientes na mesma instalação, cada um com a sua equipe e os seus sites.
 
-Em produção, roda na **Vercel** com o banco **Turso**; para desenvolvimento, `npm start` sobe tudo local. A interface segue o design system *Digital Naturalism*.
-
-> **Nota honesta:** o Rastro foi feito para uso pessoal e equipes pequenas, na faixa de milhares de visitas e centenas de vendas por dia. Funis, jornadas e atribuição são calculados a cada consulta. Com tráfego sério, use um [Plausible](https://github.com/plausible/analytics) ou [Umami](https://github.com/umami-software/umami) para o tráfego, e uma ferramenta comercial de tracking de vendas para o que ficou de fora: Google, TikTok e Kwai, e pausar campanhas.
-
-## Colocar no ar
-
-O passo a passo está em **[docs/deploy-vercel.md](docs/deploy-vercel.md)**. Em resumo:
-
-1. Crie um banco no Turso.
-2. Suba o código para o GitHub e importe na Vercel com as variáveis do `.env.example`.
-3. Aponte o domínio pela Cloudflare.
-4. Ative o cron de hora em hora (o workflow do GitHub Actions já vem pronto). Ele sincroniza os gastos da Meta; as telas de Vendas recarregam sozinhas a cada hora.
-
-Depois, entre no painel e siga a tela **Integrações**: snippet, template de UTM, webhook da plataforma de vendas e conta da Meta. Detalhes em [docs/integracoes.md](docs/integracoes.md).
+> Feito para uso pessoal e equipes pequenas, na faixa de milhares de visitas e centenas de vendas por dia. Funis, caminhos e atribuição são calculados a cada consulta.
 
 ## Rodar localmente
 
+Requisitos: Node 24 e Docker (para o PostgreSQL).
+
 ```sh
 npm install
-cp .env.example .env       # ADMIN_EMAIL, ADMIN_PASSWORD
-npm start                  # http://127.0.0.1:8080 (banco em analytics.db)
+docker run -d --name trackify-pg -p 55432:5432 -e POSTGRES_USER=rastro -e POSTGRES_PASSWORD=rastro -e POSTGRES_DB=rastro postgres:16
+cp .env.example .env    # preencha ADMIN_EMAIL e ADMIN_PASSWORD
+node --env-file=.env src/server.js   # http://127.0.0.1:8080
 ```
+
+### Sem tela de login (ferramenta interna)
+
+Com `LOGIN=off` no `.env`, o painel abre direto como o dono da instalação. Só funciona com o servidor preso ao próprio computador (`HOST=127.0.0.1`). Em qualquer outro endereço a variável é ignorada e o login continua, para não expor vendas e contatos na internet.
+
+## Colocar no ar
+
+Produção roda em Docker com PostgreSQL e Cloudflare Tunnel: passo a passo em [docs/deploy-oracle.md](docs/deploy-oracle.md). Depois, entre no painel e siga **Primeiros passos** e **Integrações** ([docs/integracoes.md](docs/integracoes.md)).
 
 ## Comandos
 
 | Comando | O que faz |
 |---|---|
-| `npm start` | Servidor local: painel, beacons, webhooks e tarefas a cada 5 min |
-| `npm test` | 20 testes ponta a ponta (`node:test`), com a API da Meta simulada |
+| `npm start` | Servidor: painel, beacons, webhooks e tarefas a cada 5 min |
+| `npm test` | Testes ponta a ponta (`node:test`) com a Graph API da Meta simulada. Precisa do PostgreSQL local ou de `TEST_DATABASE_URL` |
 
 ## Estrutura
 
 ```
-api/index.js          função da Vercel (reaproveita src/app.js)
-vercel.json           rotas, CDN de public/, cache
 src/
-  app.js              handler: estáticos, beacon /e, despacho, CSRF
-  server.js           servidor local (node:http) + tarefas a cada 5 min
-  http.js auth.js     rotas/respostas · sessão e papéis
-  db.js time.js       cliente libSQL, schema e migrações · fusos e períodos
-  jobs.js             tarefas do /cron: sync da Meta e limpeza
-  tracking/           ingestão de beacons + consultas de tráfego
-  sales/              webhooks das plataformas + métricas de vendas
-  ads/meta.js         Meta: sync de campanhas e gastos + Conversions API
-  routes/             auth · admin (inclui /cron) · traffic · sales
-  views/              ui.js (design system e componentes) + páginas por área
-public/               s.js (snippet), fontes, ícone, manifest
-tests/                tracking · sales · app (+ helpers)
-docs/                 SPEC · deploy · integrações · design system · ADRs · fluxo com skills
-.github/workflows/    cron.yml: chama /cron de hora em hora
+  app.js server.js    handler único e servidor (node:http)
+  http.js auth.js     rotas e respostas · sessão, papéis e LOGIN=off
+  db.js time.js       pool pg, schema e migrações · fusos e períodos
+  dispatch.js         fila de envio server-side (Meta CAPI e GA4)
+  tracking/ sales/    ingestão e métricas de tráfego · webhooks e métricas de vendas
+  ads/meta.js         sync de campanhas e gastos da Meta
+  crm.js whatsapp.js  CRM e WhatsApp
+  routes/ views/      rotas por área · páginas e design system (views/ui.js)
+edge/                 Worker da Cloudflare (cookies primários)
+deploy/               docker-compose, backup e dados de demonstração
+public/               snippet s.js, fontes, favicon, manifest e marca (brand/)
+docs/                 especificação, deploy, integrações, design system e ADRs
 ```
 
 ## Privacidade e segurança
 
-- **Visitantes:** o id é um hash com salt diário aleatório, que é apagado no dia seguinte. IP, e-mail e telefone nunca são gravados ([ADR 0002](docs/adr/0002-sem-cookies-salt-diario.md)).
-- **Login:** sessão com cookie HttpOnly e SameSite, senhas em scrypt e bloqueio após 10 tentativas (guardado no banco, então vale entre instâncias).
-- **Requisições:** POSTs de outra origem são recusados; a CSP é estrita, com nonce, e todo o HTML é escapado.
-- **Tokens:** os da Meta ficam no banco e nunca são exibidos. As URLs de webhook usam um token por site que pode ser trocado a qualquer momento, e `/cron` exige `CRON_SECRET`.
+- **Visitantes:** id em hash com salt diário, apagado no dia seguinte. IP, e-mail e telefone nunca são gravados ([ADR 0002](docs/adr/0002-sem-cookies-salt-diario.md)).
+- **Contatos do CRM:** nome, e-mail e telefone cifrados com AES-256-GCM (`DATA_KEY`), com hash ao lado ([ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md)).
+- **Login:** cookie HttpOnly e SameSite, senhas em scrypt e bloqueio após 10 tentativas.
+- **Requisições:** POST de outra origem recusado, CSP estrita com nonce e HTML sempre escapado.
 
-Mais em [docs/](docs/README.md): especificação, métricas, design system, decisões (ADRs) e o [mapa de skills do Claude Code](docs/fluxo-com-skills.md) para evoluir o projeto.
+Achou uma falha? Veja [SECURITY.md](SECURITY.md) antes de abrir uma issue.
+
+## Contribuir
+
+Issues e pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBUTING.md) e o [código de conduta](CODE_OF_CONDUCT.md).
+
+## Criador
+
+**Iegos Weber**
+
+- Instagram: [@iegos_](https://instagram.com/iegos_)
+- GitHub: [@igs-wbr](https://github.com/igs-wbr)
+- E-mail: [iegosweber@gmail.com](mailto:iegosweber@gmail.com)
+
+## Licença
+
+[MIT](LICENSE) © 2026 Iegos Weber. Componentes de terceiros e as licenças deles estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

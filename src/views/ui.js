@@ -1,6 +1,7 @@
 // Base da interface: template com escape, formatação, design system "Rastro Azul" (docs/design-system.md), layout e componentes.
 import { RANGES } from '../time.js';
 import { iconSvg } from './icons.js';
+import { NO_LOGIN } from '../auth.js';
 
 // ---------- template com escape automático ----------
 class Raw { constructor(s) { this.s = s; } }
@@ -314,7 +315,7 @@ else{if(h.dataset.side==='mini')delete h.dataset.side;else h.dataset.side='mini'
 export function layout(ctx, title, body, { bare = false, refresh = 0 } = {}) {
   const shell = bare ? html`<main>${body}</main>` : ctx.share ? html`${shareBar(ctx)}<main>${body}</main>` : html`<a class="skip" href="#main">Pular para o conteúdo</a>${sidebar(ctx)}<div class="page"><main id="main" tabindex="-1">${body}</main></div>`;
   return html`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="referrer" content="same-origin"><meta name="theme-color" content="#F4F4F5"><script nonce="${ctx.nonce}">${raw(HEAD_JS)}</script>${refresh ? html`<meta http-equiv="refresh" content="${refresh}">` : ''}<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg">
+<meta name="referrer" content="same-origin"><meta name="theme-color" content="#F4F4F5"><script nonce="${ctx.nonce}">${raw(HEAD_JS)}</script>${refresh ? html`<meta http-equiv="refresh" content="${refresh}">` : ''}<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/figtree.woff2" as="font" type="font/woff2" crossorigin><title>${title} · Trackify</title><style>${raw(CSS)}</style></head>
 <body${bare ? raw(' class="bare"') : ''}>${shell}<script nonce="${ctx.nonce}">${raw(TIP_JS)};${raw(UI_JS)}</script></body></html>`;
 }
@@ -349,7 +350,7 @@ ${site ? html`<details class="menu"><summary class="it" title="Trocar de site">$
 <nav class="foot" aria-label="Conta">${user?.role === 'admin' ? html`${item('/sites', 'Sites', 'globe', ctx.tab === 'sites')}${item('/team', 'Equipe', 'users', ctx.tab === 'team')}` : ''}${user?.platform ? item('/agencies', 'Agências', 'layers', ctx.tab === 'agencies') : ''}
 ${user ? item('/account', 'Conta', 'user', ctx.tab === 'account') : ''}
 <button type="button" class="it theme" data-act="theme"><span class="tl">${icon('moon')}</span><span class="td">${icon('sun')}</span><span class="t tl">Tema escuro</span><span class="t td">Tema claro</span></button>
-${user ? html`<form method="post" action="/logout"><button class="it">${icon('log-out')}<span class="t">Sair</span></button></form>` : ''}</nav>
+${user && !NO_LOGIN ? html`<form method="post" action="/logout"><button class="it">${icon('log-out')}<span class="t">Sair</span></button></form>` : ''}</nav>
 </aside><label for="nav-t" class="scrim" aria-hidden="true"></label>
 <button type="button" class="collapse" data-act="side" aria-controls="side" aria-expanded="true" aria-label="Recolher menu">${icon('chevron-left', 16)}</button>`;
 }
