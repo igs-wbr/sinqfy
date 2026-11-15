@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Onde cada peça roda</title>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#525252"/></marker></defs>
+  <rect width="960" height="400" rx="16" fill="#FAFAFA"/>
+  <text x="32" y="44" font-size="20" font-weight="600" fill="#171717">Onde cada peça roda</text>
+  <text x="32" y="68" font-size="13" fill="#525252">A VPS não abre nenhuma porta: tudo entra pelo túnel da Cloudflare.</text>
+
+  <!-- internet -->
+  <g font-size="13" fill="#171717">
+    <rect x="32" y="110" width="170" height="70" rx="12" fill="#fff" stroke="#D8D8DC"/>
+    <text x="117" y="140" text-anchor="middle" font-weight="600">Visitantes</text>
+    <text x="117" y="160" text-anchor="middle" font-size="12" fill="#525252">do seu site</text>
+    <rect x="32" y="210" width="170" height="70" rx="12" fill="#fff" stroke="#D8D8DC"/>
+    <text x="117" y="240" text-anchor="middle" font-weight="600">Você</text>
+    <text x="117" y="260" text-anchor="middle" font-size="12" fill="#525252">abrindo o painel</text>
+    <rect x="32" y="310" width="170" height="60" rx="12" fill="#fff" stroke="#D8D8DC"/>
+    <text x="117" y="336" text-anchor="middle" font-weight="600">Hotmart, Meta...</text>
+    <text x="117" y="354" text-anchor="middle" font-size="12" fill="#525252">mandando webhooks</text>
+  </g>
+
+  <!-- cloudflare -->
+  <rect x="262" y="96" width="300" height="284" rx="14" fill="#FFF5EC" stroke="#E0602C"/>
+  <text x="412" y="124" text-anchor="middle" font-size="15" font-weight="600" fill="#171717">Cloudflare (grátis)</text>
+  <g font-size="12" fill="#171717">
+    <rect x="282" y="140" width="260" height="46" rx="10" fill="#fff" stroke="#F0C9AE"/>
+    <text x="298" y="160" font-weight="600">Worker em t.seudominio</text>
+    <text x="298" y="176" fill="#525252">script e cookies; repassa pelo túnel</text>
+    <rect x="282" y="196" width="260" height="46" rx="10" fill="#fff" stroke="#F0C9AE"/>
+    <text x="298" y="216" font-weight="600">Túnel em app.seudominio</text>
+    <text x="298" y="232" fill="#525252">leva o tráfego até a VPS</text>
+    <rect x="282" y="252" width="260" height="46" rx="10" fill="#fff" stroke="#F0C9AE"/>
+    <text x="298" y="272" font-weight="600">DNS e certificado (HTTPS)</text>
+    <text x="298" y="288" fill="#525252">do seu domínio e dos clientes</text>
+    <rect x="282" y="308" width="260" height="46" rx="10" fill="#fff" stroke="#F0C9AE"/>
+    <text x="298" y="328" font-weight="600">R2: backup diário</text>
+    <text x="298" y="344" fill="#525252">cópia cifrada do banco</text>
+  </g>
+
+  <!-- oracle -->
+  <rect x="622" y="96" width="306" height="284" rx="14" fill="#EEF3FD" stroke="#0E58DB"/>
+  <text x="775" y="124" text-anchor="middle" font-size="15" font-weight="600" fill="#171717">VPS da Oracle (Always Free)</text>
+  <text x="775" y="144" text-anchor="middle" font-size="12" fill="#525252">Ubuntu + Docker, ligado 24 horas</text>
+  <g font-size="12" fill="#171717">
+    <rect x="642" y="160" width="266" height="46" rx="10" fill="#fff" stroke="#B9CDF3"/>
+    <text x="658" y="180" font-weight="600">cloudflared</text>
+    <text x="658" y="196" fill="#525252">a ponta do túnel dentro da VPS</text>
+    <rect x="642" y="216" width="266" height="46" rx="10" fill="#fff" stroke="#B9CDF3"/>
+    <text x="658" y="236" font-weight="600">app (o Trackify)</text>
+    <text x="658" y="252" fill="#525252">painel, webhooks, envios a cada 5 s</text>
+    <rect x="642" y="272" width="266" height="46" rx="10" fill="#fff" stroke="#B9CDF3"/>
+    <text x="658" y="292" font-weight="600">postgres</text>
+    <text x="658" y="308" fill="#525252">o banco de dados</text>
+    <text x="775" y="350" text-anchor="middle" fill="#525252">reiniciam sozinhos se a VPS religar</text>
+  </g>
+
+  <g fill="none" stroke="#525252" stroke-width="2">
+    <path d="M202 145H278" marker-end="url(#a)"/>
+    <path d="M202 245C240 245 250 219 278 219" marker-end="url(#a)"/>
+    <path d="M202 340C240 340 250 225 278 222" marker-end="url(#a)"/>
+    <path d="M542 219C600 219 600 183 638 183" marker-end="url(#a)"/>
+    <path d="M642 300C600 300 600 331 546 331" marker-end="url(#a)"/>
+  </g>
+</svg>

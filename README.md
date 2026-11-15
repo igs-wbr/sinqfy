@@ -17,6 +17,16 @@
 - **Relacionamento:** CRM em quadro, contatos com dados pessoais cifrados e conversas do WhatsApp ligadas ao anúncio.
 - **Agências:** vários clientes na mesma instalação, cada um com a sua equipe e os seus sites.
 
+### Recursos que cada site liga quando quiser
+
+Em **Configurações → Recursos** ([ADR 0017](docs/adr/0017-recursos-modulares.md)):
+
+- **Recuperação de venda pendente:** boleto ou Pix gerado e não pago recebe uma sequência no WhatsApp (modelos aprovados pela Meta). Para quando paga, recusa ou a pessoa responde.
+- **Públicos para remarketing:** CSV em SHA-256 de compradores, de quem não pagou e de cada coluna do CRM, para subir como público personalizado na Meta.
+- **Retenção de vídeo:** eventos `video_25` a `video_100` dos vídeos do site, para usar nos funis.
+- **Robô por palavra-chave:** resposta automática no WhatsApp quando a mensagem tem uma palavra-chave.
+- **Checkout com Pix:** página de pagamento com Pix copia e cola e QR Code na sua chave, sem intermediador.
+
 > Feito para uso pessoal e equipes pequenas, na faixa de milhares de visitas e centenas de vendas por dia. Funis, caminhos e atribuição são calculados a cada consulta.
 
 ## Rodar localmente
@@ -36,7 +46,17 @@ Com `LOGIN=off` no `.env`, o painel abre direto como o dono da instalação. Só
 
 ## Colocar no ar
 
-Produção roda em Docker com PostgreSQL e Cloudflare Tunnel: passo a passo em [docs/deploy-oracle.md](docs/deploy-oracle.md). Depois, entre no painel e siga **Primeiros passos** e **Integrações** ([docs/integracoes.md](docs/integracoes.md)).
+Nunca configurou rastreamento? Comece pelo **[guia do iniciante](docs/guia-iniciante.md)**: ele leva do zero ao rastreamento funcionando e diz onde pegar cada token e ID.
+
+| Guia | Para quê |
+|---|---|
+| [Guia do iniciante](docs/guia-iniciante.md) | As 7 etapas, na ordem, com o sinal de que cada uma deu certo |
+| [Manual](docs/manual.md) | O que o sistema faz e para que serve cada tela |
+| [Servidor na Oracle](docs/deploy-oracle.md) | VPS grátis ligada 24 horas, com Docker e backup diário |
+| [Cloudflare](docs/guia-cloudflare.md) | Domínio, túnel do painel e subdomínio de rastreamento `t.` |
+| [Integrações](docs/integracoes.md) | Referência técnica de cada integração |
+
+![Como o dado anda: anúncio, site, subdomínio t., painel, checkout e a volta para a Meta](docs/img/fluxo-dos-dados.svg)
 
 ## Comandos
 

@@ -8,7 +8,7 @@ Na interface, este guia corresponde à tela **Integrações** de cada site. Só 
 <script defer data-site="SEU_ID" src="https://t.seudominio.com.br/s.js"></script>
 ```
 
-Use o subdomínio `t.` servido pelo Worker da borda (veja [deploy](deploy-oracle.md#6-worker-da-borda)). Assim os cookies `_rid`, `_fbp` e `_fbc` são gravados pelo servidor no seu domínio e duram 400 dias, inclusive no Safari. Apontar o snippet direto para o painel ainda funciona, mas sem cookie (visitante por hash diário).
+Use o subdomínio `t.` servido pelo Worker da borda (veja o [guia da Cloudflare](guia-cloudflare.md#parte-3-worker-da-borda-tseudominio)). Assim os cookies `_rid`, `_fbp` e `_fbc` são gravados pelo servidor no seu domínio e duram 400 dias, inclusive no Safari. Apontar o snippet direto para o painel ainda funciona, mas sem cookie (visitante por hash diário).
 
 - **Consentimento (LGPD):** com `data-consent="required"` no `<script>`, nenhum cookie é gravado até o banner chamar `rastro('consent')`.
 - **Cada evento leva um id** (`event_id`), usado na etapa 2 para deduplicar com o Pixel.
@@ -144,7 +144,7 @@ O que acontece depois:
 
 - A sincronização busca campanhas, conjuntos, anúncios (status e orçamento), o gasto diário por anúncio e as **conversões que a Meta reporta**: compras, valor de compra e leads, na janela de atribuição configurada na conta.
 - Essas conversões aparecem como **Compras (Meta)** e **ROAS (Meta)** ao lado das vendas reais dos webhooks. A diferença entre os dois mostra o quanto a Meta está atribuindo a mais (ou a menos) do que realmente entrou.
-- A primeira traz 30 dias. Depois disso, roda de hora em hora (a cada chamada de `/cron`, veja [deploy-vercel.md](deploy-vercel.md)) e refaz os últimos 3 dias, porque a Meta ainda ajusta gastos recentes. O botão **Sincronizar agora** força na hora.
+- A primeira traz 30 dias. Depois disso, roda de hora em hora (o próprio servidor agenda; na instalação antiga da Vercel, pela rota `/cron`) e refaz os últimos 3 dias, porque a Meta ainda ajusta gastos recentes. O botão **Sincronizar agora** força na hora.
 - A versão da API é configurável em `META_API_VERSION` (padrão `v23.0`).
 - O gasto é somado como está, sem conversão de moeda. Se a moeda da conta for diferente da moeda do site, a tela mostra um aviso.
 

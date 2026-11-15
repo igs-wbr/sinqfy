@@ -1,21 +1,29 @@
-# Documentação
+# Documentação do Trackify
 
-| Documento | Para quê |
+## Comece por aqui
+
+| Documento | Para quem | O que tem |
+|---|---|---|
+| [Guia do iniciante](guia-iniciante.md) | Quem vai configurar pela primeira vez | Passo a passo do zero ao rastreamento funcionando, onde pegar cada token e ID, problemas comuns |
+| [Manual](manual.md) | Quem usa o painel no dia a dia | O que o sistema faz, para que serve cada tela, glossário, recursos opcionais, papéis |
+| [Servidor na Oracle](deploy-oracle.md) | Quem vai hospedar | VPS grátis ligada 24 horas, Docker, `.env`, backup, atualização |
+| [Cloudflare](guia-cloudflare.md) | Quem vai hospedar | Domínio, túnel do painel, subdomínio `t.`, domínio dos clientes, R2 |
+
+## Referência técnica
+
+| Documento | O que tem |
 |---|---|
-| [SPEC.md](SPEC.md) | O que o Rastro faz, definições das métricas, modelo de dados, fora do escopo |
-| [deploy-vercel.md](deploy-vercel.md) | Colocar no ar: Vercel + Turso + cron de hora em hora + domínio na Cloudflare |
-| [integracoes.md](integracoes.md) | Snippet, template de UTM, webhooks (Hotmart, Kiwify, Eduzz, genérico), Meta, Conversions API |
-| [design-system.md](design-system.md) | Digital Naturalism: tokens, tipografia, elementos de assinatura, paleta de gráficos validada |
-| [fluxo-com-skills.md](fluxo-com-skills.md) | Qual skill ou plugin do Claude Code usar em cada tipo de tarefa |
-| [adr/](adr/) | Decisões de arquitetura e por que foram tomadas |
+| [integracoes.md](integracoes.md) | Detalhe de cada integração: script, UTM, webhooks por plataforma, assinaturas, formato genérico, Meta, CAPI, GA4, CRM, WhatsApp |
+| [SPEC.md](SPEC.md) | Definições das métricas, modelo de dados, fora do escopo |
+| [design-system.md](design-system.md) | Cores, tipografia, componentes e a marca |
+| [deploy-vercel.md](deploy-vercel.md) | Instalação antiga na Vercel (legado) |
+| [fluxo-com-skills.md](fluxo-com-skills.md) | Qual skill do Claude Code usar em cada tipo de tarefa |
+| [adr/](adr/) | Decisões de arquitetura (0001 a 0017) e por que foram tomadas |
 
-## Decisões (ADRs)
+## Diagramas
 
-1. [Um processo Node com SQLite nativo](adr/0001-processo-unico-sqlite.md) (parcialmente substituído pelo 6)
-2. [Visitante por hash com salt diário, sem cookies](adr/0002-sem-cookies-salt-diario.md)
-3. [Vendas por webhook, ligadas às campanhas pela chave da UTM](adr/0003-vendas-por-webhook-e-chave-utm.md)
-4. [Meta somente leitura; demais plataformas por CSV](adr/0004-meta-somente-leitura-e-csv.md) (CSV substituído pelo 7)
-5. [Interface renderizada no servidor, sem framework](adr/0005-ui-renderizada-no-servidor.md)
-6. [Produção na Vercel com Turso e cron externo](adr/0006-vercel-turso-cron-externo.md)
-7. [Anúncios só da Meta, por enquanto](adr/0007-anuncios-so-meta.md)
-8. [Sem e-mail: o painel se atualiza sozinho](adr/0008-sem-email.md)
+| Imagem | Mostra |
+|---|---|
+| [img/fluxo-dos-dados.svg](img/fluxo-dos-dados.svg) | Do clique no anúncio até a venda voltar para a Meta |
+| [img/hospedagem.svg](img/hospedagem.svg) | Onde cada peça roda: Cloudflare e VPS da Oracle |
+| [img/caminho-do-iniciante.svg](img/caminho-do-iniciante.svg) | As 7 etapas da configuração |
