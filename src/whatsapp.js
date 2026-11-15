@@ -6,6 +6,56 @@ import { seal, open, normPhone } from './pii.js';
 import { upsertContact, stages, log, metaWhatsappEvent } from './crm.js';
 import { enqueue, metaReady } from './dispatch.js';
 import { adKey } from './sales/webhooks.js';
+import { enabled } from './modules.js';
+
+// ---------- envio pela Cloud API (recuperação e robô) ----------
+export const waReady = s => !!(s.wa_phone_id && s.wa_token);
+class SendError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
+/** 4xx (menos 429) não melhora tentando de novo: token, número ou modelo errados. */
+export const permanentSend = e => e.status >= 400 && e.status < 500 && e.status !== 429;
+/**
+ * Envia uma mensagem. `msg`: { text } (só dentro de 24 h da última mensagem da pessoa) ou { template, lang, params }.
+ * Grava a mensagem cifrada na conversa e devolve o id da Meta. O token vai no cabeçalho e nunca volta em erro.
+ */
+export async function sendWhatsapp(site, contact, to, msg, now = Date.now()) {
+  const body = msg.template
+    ? { messaging_product: 'whatsapp', to, type: 'template', template: { name: msg.template, language: { code: msg.lang || 'pt_BR' },
+      ...(msg.params?.length && { components: [{ type: 'body', parameters: msg.params.map(t => ({ type: 'text', text: String(t || '-').slice(0, 500) })) }] }) } }
+    : { messaging_product: 'whatsapp', to, type: 'text', text: { body: String(msg.text).slice(0, 4096), preview_url: true } };
+  const res = await fetch(`https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}/${encodeURIComponent(site.wa_phone_id)}/messages`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${open(site.wa_token)}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(10e3) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.error) throw new SendError(j.error?.error_user_msg || j.error?.message || `HTTP ${res.status}`, res.ok ? 400 : res.status);
+  const id = j.messages?.[0]?.id || null;
+  await db.run('INSERT INTO messages(site, contact_id, ts, dir, text_enc, wa_msg_id) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING',
+    [site.id, contact.id, now, 'out', seal(msg.template ? `[modelo ${msg.template}] ${(msg.params || []).join(' · ')}` : msg.text), id]);
+  await db.run('UPDATE contacts SET last_msg=GREATEST(COALESCE(last_msg, 0), ?) WHERE id=?', [now, contact.id]);
+  return id;
+}
+
+// ---------- robô por palavra-chave ----------
+const fold = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/** "preço, valor = O valor é R$ 97" por linha → [{ words, reply }]. Até 30 regras. */
+export const parseRules = text => String(text || '').split(/\r?\n/).map(l => l.trim()).filter(l => l.includes('=')).slice(0, 30).map(l => {
+  const i = l.indexOf('=');
+  return { words: l.slice(0, i).split(',').map(w => w.trim()).filter(Boolean).slice(0, 10).map(w => w.slice(0, 40)), reply: l.slice(i + 1).trim().slice(0, 1000) };
+}).filter(r => r.words.length && r.reply);
+export const rulesOf = site => { try { return JSON.parse(site.bot_rules || '[]'); } catch { return []; } };
+/** Primeira regra cuja palavra-chave aparece inteira na mensagem (sem diferenciar acento nem maiúscula). */
+export function matchRule(rules, text) {
+  const t = ` ${fold(text).replace(/[^a-z0-9]+/g, ' ')} `;
+  return rules.find(r => r.words.some(w => t.includes(` ${fold(w).replace(/[^a-z0-9]+/g, ' ').trim()} `))) || null;
+}
+async function botReply(site, contact, phone, text, now) {
+  const rule = matchRule(rulesOf(site), text);
+  if (!rule) return;
+  // Uma resposta por minuto por contato: quem manda várias mensagens seguidas não recebe uma resposta para cada.
+  if (await db.get("SELECT 1 FROM messages WHERE contact_id=? AND dir='out' AND ts>?", [contact.id, now - 60e3])) return;
+  try {
+    await sendWhatsapp(site, contact, phone, { text: rule.reply }, now);
+    await log(site.id, contact.id, `Robô respondeu (palavra-chave: ${rule.words[0]})`, now);
+  } catch (e) { await log(site.id, contact.id, `Robô não conseguiu responder: ${e.message}`.slice(0, 300), now); }
+}
 
 const ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sem 0/O, 1/I/L: o cliente pode digitar o código
 export const CODE_RE = /\[([A-HJ-KM-NP-Z2-9]{5})\]/i;
@@ -125,6 +175,10 @@ export async function handleCloud(site, payload, now = Date.now()) {
         if (ev) await enqueue(site.id, 'meta', ev.event_id, 'LeadSubmitted', ev, now);
       }
       await db.run('UPDATE contacts SET last_msg=GREATEST(COALESCE(last_msg, 0), ?) WHERE id=?', [ts, contact.id]);
+      // A pessoa respondeu: a recuperação para, e a conversa segue com gente (ou com o robô).
+      const { rowCount: paused } = await db.run("UPDATE pending_orders SET status='stopped', next_at=NULL, last_error='respondeu no WhatsApp' WHERE contact_id=? AND status='waiting'", [contact.id]);
+      if (paused) await log(site.id, contact.id, 'Respondeu no WhatsApp: recuperação parada', ts);
+      if (enabled(site, 'bot') && waReady(site) && m.type === 'text') await botReply(site, contact, normPhone(m.from), text, now);
       touched.set(contact.id, contact);
       n++;
     }

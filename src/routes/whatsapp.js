@@ -5,10 +5,11 @@ import { db, sites, loadSites } from '../db.js';
 import { route, send, redirect, form, readBody, origin, sitePath, edgeInfo, clientIp, HttpError } from '../http.js';
 import { siteCtx } from '../auth.js';
 import { record, allowedHost } from '../tracking/ingest.js';
-import { clickLink, handleCloud, newSlug } from '../whatsapp.js';
+import { clickLink, handleCloud, newSlug, waReady, parseRules, rulesOf } from '../whatsapp.js';
+import { enabled } from '../modules.js';
 import { stages, reveal, moveContact } from '../crm.js';
 import { hookToken, secretsOf } from '../sales/webhooks.js';
-import { open, normPhone, piiReady } from '../pii.js';
+import { open, seal, normPhone, piiReady } from '../pii.js';
 import * as V from '../views/whatsapp.js';
 
 // ---------- link público: t.seudominio.com.br/w/<slug> (pelo Worker) ou direto no painel ----------
@@ -40,10 +41,11 @@ async function settingsView(r, msg, err) {
     FROM wa_links l WHERE l.site=? ORDER BY l.id`, [r.site.id]);
   const o = origin(r.req), s = r.site;
   const base = s.edge_host && s.edge_status === 'active' ? `https://${s.edge_host}` : o;
-  send(r, err ? 400 : 200, V.settingsPage(await siteCtx(r, '/whatsapp'), links, { base, hook: `${o}/hooks/${hookToken(s, 'whatsapp')}/whatsapp`, hasSecret: !!secretsOf(s).whatsapp, aiKey: !!process.env.GEMINI_API_KEY }, msg, err));
+  send(r, err ? 400 : 200, V.settingsPage(await siteCtx(r, '/whatsapp'), links, { base, hook: `${o}/hooks/${hookToken(s, 'whatsapp')}/whatsapp`, hasSecret: !!secretsOf(s).whatsapp, aiKey: !!process.env.GEMINI_API_KEY,
+    send: waReady(s), sendNeeded: enabled(s, 'recovery') || enabled(s, 'bot'), bot: enabled(s, 'bot'), rules: rulesOf(s) }, msg, err));
 }
-route('GET', '/sites/:id/whatsapp', { site: 'edit' }, r => settingsView(r, { link: 'Link criado.', cloud: 'Cloud API salva.', del: 'Link apagado.' }[r.q.get('ok')] || null));
-route('POST', '/sites/:id/whatsapp', { site: 'edit' }, async r => {
+route('GET', '/sites/:id/whatsapp', { site: 'edit', module: 'whatsapp' }, r => settingsView(r, { link: 'Link criado.', cloud: 'Cloud API salva.', del: 'Link apagado.', bot: 'Respostas do robô salvas.' }[r.q.get('ok')] || null));
+route('POST', '/sites/:id/whatsapp', { site: 'edit', module: 'whatsapp' }, async r => {
   const f = await form(r.req), action = f.get('action'), s = r.site, back = ok => redirect(r, sitePath(s, `/whatsapp?ok=${ok}`));
   if (action === 'link') {
     const name = (f.get('name') || '').trim().slice(0, 60), phone = normPhone(f.get('phone')), message = (f.get('message') || '').trim().slice(0, 300);
@@ -61,6 +63,11 @@ route('POST', '/sites/:id/whatsapp', { site: 'edit' }, async r => {
   if (action === 'cloud') {
     const waba = (f.get('waba_id') || '').trim(), secret = (f.get('app_secret') || '').trim();
     if (waba && !/^\d{5,25}$/.test(waba)) return settingsView(r, null, 'O ID da conta do WhatsApp Business tem só números.');
+    const phoneId = (f.get('wa_phone_id') || '').trim(), token = (f.get('wa_token') || '').trim();
+    if (phoneId && !/^\d{5,25}$/.test(phoneId)) return settingsView(r, null, 'O ID do número de telefone tem só números.');
+    if (token && token !== '-' && !piiReady()) return settingsView(r, null, 'Guardar o token exige a chave DATA_KEY no servidor.');
+    // Token de envio (usuário do sistema): cifrado com a DATA_KEY e nunca exibido. Vazio mantém; "-" apaga.
+    await db.run('UPDATE sites SET wa_phone_id=?, wa_token=? WHERE id=?', [phoneId || null, token === '-' ? null : token ? seal(token.slice(0, 1000)) : s.wa_token, s.id]);
     // IA nas conversas: desligada por padrão; ligar é decisão do cliente (texto anonimizado vai ao Google).
     await db.run('UPDATE sites SET waba_id=?, ai_suggest=? WHERE id=?', [waba || null, f.get('ai_suggest') === '1' ? 1 : 0, s.id]);
     await db.run('INSERT INTO audit_log(site, ts, actor, action) VALUES (?,?,?,?)', [s.id, Date.now(), r.user.email, `Cloud API: WABA ${waba || '-'}, IA ${f.get('ai_suggest') === '1' ? 'ligada' : 'desligada'}${secret ? ', chave do app trocada' : ''}`]);
@@ -71,6 +78,13 @@ route('POST', '/sites/:id/whatsapp', { site: 'edit' }, async r => {
     }
     await loadSites();
     return back('cloud');
+  }
+  if (action === 'bot') {
+    const rules = parseRules(f.get('rules'));
+    await db.run('UPDATE sites SET bot_rules=? WHERE id=?', [JSON.stringify(rules), s.id]);
+    await db.run('INSERT INTO audit_log(site, ts, actor, action) VALUES (?,?,?,?)', [s.id, Date.now(), r.user.email, `respostas do robô salvas (${rules.length})`]);
+    await loadSites();
+    return back('bot');
   }
   throw new HttpError(400, 'Ação inválida.');
 });
@@ -97,7 +111,7 @@ route('POST', '/hooks/:token/whatsapp', { auth: false }, async r => {
 });
 
 // ---------- conversas ----------
-route('GET', '/sites/:id/conversations', { site: 'view' }, async r => {
+route('GET', '/sites/:id/conversations', { site: 'view', module: 'whatsapp' }, async r => {
   if (!piiReady()) throw new HttpError(503, 'Conversas precisam da chave DATA_KEY configurada no servidor.');
   const [cols, rows] = await Promise.all([stages(r.site.id), db.all('SELECT * FROM contacts WHERE site=? AND last_msg IS NOT NULL ORDER BY last_msg DESC LIMIT 200', [r.site.id])]);
   const last = new Map((await db.all(`SELECT DISTINCT ON (contact_id) contact_id, text_enc, dir FROM messages WHERE site=? AND contact_id = ANY(?::bigint[]) ORDER BY contact_id, ts DESC`,
@@ -105,7 +119,7 @@ route('GET', '/sites/:id/conversations', { site: 'view' }, async r => {
   await db.run('INSERT INTO audit_log(site, ts, actor, action) VALUES (?,?,?,?)', [r.site.id, Date.now(), r.user.email, 'lista de conversas aberta']);
   send(r, 200, V.conversationsPage(await siteCtx(r, '/conversations'), cols, rows.map(reveal), last));
 });
-route('GET', '/sites/:id/conversations/:cid', { site: 'view' }, async r => {
+route('GET', '/sites/:id/conversations/:cid', { site: 'view', module: 'whatsapp' }, async r => {
   if (!piiReady()) throw new HttpError(503, 'Conversas precisam da chave DATA_KEY configurada no servidor.');
   const c = await db.get('SELECT * FROM contacts WHERE id=? AND site=?', [Number(r.params.cid) || 0, r.site.id]);
   if (!c) throw new HttpError(404, 'Conversa não encontrada.');
@@ -114,7 +128,7 @@ route('GET', '/sites/:id/conversations/:cid', { site: 'view' }, async r => {
   await db.run('INSERT INTO audit_log(site, ts, actor, action) VALUES (?,?,?,?)', [r.site.id, Date.now(), r.user.email, `conversa do contato ${c.id} aberta`]);
   send(r, 200, V.threadPage(await siteCtx(r, '/conversations'), reveal(c), cols, msgs.map(m => ({ ...m, text: open(m.text_enc) })), click));
 });
-route('POST', '/sites/:id/conversations/:cid', { site: 'edit' }, async r => {
+route('POST', '/sites/:id/conversations/:cid', { site: 'edit', module: 'whatsapp' }, async r => {
   const f = await form(r.req), c = await db.get('SELECT * FROM contacts WHERE id=? AND site=?', [Number(r.params.cid) || 0, r.site.id]);
   if (!c) throw new HttpError(404, 'Conversa não encontrada.');
   if (f.get('action') === 'accept' && c.suggest_stage) await moveContact(r.site, c, c.suggest_stage, { by: `sugestão aceita por ${r.user.email}` });

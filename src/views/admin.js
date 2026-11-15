@@ -1,5 +1,6 @@
 // Páginas administrativas: configurações do site, sites, equipe, conta, login e convite.
 import { html, raw, MARK, layout, pageHead, notice, num, money, ROLES } from './ui.js';
+import { MODULES, chosen } from '../modules.js';
 
 const TIMEZONES = ['UTC', ...Intl.supportedValuesOf('timeZone').filter(t => t !== 'UTC')];
 const tzSelect = cur => html`<select name="timezone">${TIMEZONES.map(t => html`<option${t === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
@@ -17,6 +18,10 @@ ${notice(msg)}
 <label class="f">Imposto sobre o faturamento (%)<span>Descontado do lucro. Ex.: 6 para Simples Nacional na faixa inicial.</span><input name="tax_rate" type="number" min="0" max="100" step="0.01" value="${s.tax_rate}"></label>
 <div><button class="primary">Salvar</button></div></form></section>
 <div class="stack">
+<section class="card"><h2>Recursos</h2><p class="muted">Ligue só o que este site usa. Desligado, o item some do menu e as telas, envios e tarefas do recurso param.</p>
+<form method="post" action="${base}/settings" class="stack" style="max-width:none"><input type="hidden" name="action" value="modules"><div class="mods">
+${Object.entries(MODULES).map(([id, m]) => html`<label><input type="checkbox" name="module" value="${id}"${chosen(s, id) ? raw(' checked') : ''}><span><b>${m.label}</b><small>${m.desc}${m.needs ? ` Depende de ${MODULES[m.needs].label}.` : ''}</small></span></label>`)}</div>
+<div><button>Salvar recursos</button></div></form></section>
 <section class="card"><h2>Link público</h2><p class="muted">Quem tiver o link vê a visão geral de tráfego, somente leitura e sem login. Dados de vendas nunca são públicos.</p>
 ${s.share_token ? html`<pre><code>${originUrl}/share/${s.share_token}</code></pre><form method="post" action="${base}/settings" class="row"><input type="hidden" name="action" value="share_off"><a class="btn" href="/share/${s.share_token}" target="_blank" rel="noopener">Abrir</a><button class="danger">Desativar link</button></form>`
     : html`<form method="post" action="${base}/settings"><input type="hidden" name="action" value="share_on"><button>Gerar link público</button></form>`}</section>

@@ -5,6 +5,7 @@ import { SESSION_GAP } from './stats.js';
 import { enqueueWeb } from '../dispatch.js';
 import { upsertContact } from '../crm.js';
 import { adKey } from '../sales/webhooks.js';
+import { enabled } from '../modules.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
 const UTM = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
@@ -77,6 +78,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   if (!allowedHost(site, url.hostname)) return 403; // beacon de um domínio que não é do site
   const name = e.n == null || e.n === 'pageview' ? 'pageview' : String(e.n).trim().slice(0, 64);
   if (!name) return 400;
+  if (/^video_\d+$/.test(name) && !enabled(site, 'video')) return 202; // retenção de vídeo desligada: o snippet manda, o painel ignora
 
   const visitor = (e.c !== 0 && edge?.rid) || createHash('sha256').update(await dailySalt(new Date(now).toISOString().slice(0, 10)))
     .update(`${site.id}|${ip}|${ua}`).digest('hex').slice(0, 16);
@@ -114,7 +116,8 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
     consent ? ua.slice(0, 300) : null, url.host.slice(0, 253), consent ? clientId : null]);
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
-  if (consent && name !== 'Purchase') await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
+  // Retenção de vídeo fica só no painel (funis): não vira evento personalizado na Meta nem no GA4.
+  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
   // Formulário com e-mail ou telefone (campo `l` do snippet): vira contato do CRM, cifrado. Nunca entra no evento.
   // Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
   if (consent && edge && e.l && typeof e.l === 'object' && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {

@@ -8,7 +8,7 @@ export const DEFAULT_STAGES = [
   ['Novo', null, 'open'], ['Em conversa', null, 'open'], ['Qualificado', 'QualifiedLead', 'open'],
   ['Proposta', null, 'open'], ['Ganhou', 'Purchase', 'won'], ['Perdeu', null, 'lost'],
 ];
-export const SOURCES = { site: 'Formulário do site', webhook: 'Webhook de leads', meta_lead: 'Lead Ads da Meta', manual: 'Cadastro manual', venda: 'Compra', whatsapp: 'WhatsApp' };
+export const SOURCES = { site: 'Formulário do site', webhook: 'Webhook de leads', meta_lead: 'Lead Ads da Meta', manual: 'Cadastro manual', venda: 'Compra', whatsapp: 'WhatsApp', checkout: 'Pedido pendente' };
 
 export async function stages(site) {
   let rows = await db.all('SELECT * FROM stages WHERE site=? ORDER BY position, id', [site]);
@@ -114,7 +114,7 @@ export async function moveContact(site, c, stageId, { by = 'painel', silent = fa
 
 /** Compra aprovada: o contato (criado se preciso) vai para a coluna de ganho, sem novo evento (o Purchase já saiu). */
 export async function saleToCrm(site, sale, click, now = Date.now()) {
-  const { contact } = await upsertContact(site, { email: sale.email, phone: sale.phone, rid: click?.rid, fbc: click?.fbc, fbp: click?.fbp, source: 'venda',
+  const { contact } = await upsertContact(site, { email: sale.email, phone: sale.phone, name: sale.name, rid: click?.rid, fbc: click?.fbc, fbp: click?.fbp, source: 'venda',
     utm: sale.utm, value: sale.gross }, now);
   if (!contact) return;
   const won = (await stages(site.id)).find(s => s.kind === 'won');

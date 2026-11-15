@@ -2,6 +2,7 @@
 import { RANGES } from '../time.js';
 import { iconSvg } from './icons.js';
 import { NO_LOGIN } from '../auth.js';
+import { enabled } from '../modules.js';
 
 // ---------- template com escape automático ----------
 class Raw { constructor(s) { this.s = s; } }
@@ -287,6 +288,8 @@ details.data summary{cursor:pointer;display:inline-flex;align-items:center;min-h
 body.bare{background:var(--bg)}
 .auth{max-width:440px;margin:0 auto;padding:12vh 16px 40px}.auth>.brand{margin:0 0 20px;padding:0}.bare main{padding:0}.auth .card{padding:32px;border:0;box-shadow:var(--shadow)}
 .auth h1{font-size:28px;margin-bottom:16px}
+.pay .price{font:500 28px/1.2 var(--sans);font-variant-numeric:tabular-nums;margin:8px 0 20px}.pay .qr{max-width:240px;margin:8px auto 16px;padding:8px;border-radius:12px;background:#fff}.pay .qr svg{display:block;width:100%;height:auto}.pay .small{font-size:13px;margin:12px 0 0}.pay .stack{max-width:none}.pay button.primary{width:100%}
+.okline{display:flex;gap:8px;align-items:center;color:var(--ok)}.step-box{border:1px solid var(--line);border-radius:12px;padding:12px 16px 16px;margin:0;display:grid;gap:12px}.step-box legend{padding:0 6px;font-weight:500}.mods{display:grid;gap:12px}.mods label{display:flex;gap:12px;align-items:flex-start}.mods input{flex:none;margin-top:3px}.mods small{display:block;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 @media (forced-colors:active){.it.on,.seg a.on,.tabs>input:checked+label{outline:1px solid CanvasText}.funnel .fill,.bar-bg,.sw,.meter i{forced-color-adjust:none}}
 .skip{position:absolute;left:12px;top:-60px;z-index:100;padding:10px 14px;border-radius:10px;background:var(--primary);color:#fff;font-weight:600;text-decoration:none}.skip:focus{top:12px}
@@ -308,6 +311,7 @@ function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function side(){var b=d.querySelector('.collapse');if(!b)return;var mini=h.dataset.side==='mini';b.setAttribute('aria-expanded',String(!mini));b.setAttribute('aria-label',mini?'Expandir menu':'Recolher menu')}
 if(innerWidth<600)d.querySelectorAll('details.filters').forEach(function(x){x.open=false});side();if(mq.addEventListener)mq.addEventListener('change',meta);
 d.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;
+if(b.dataset.act==='copy'){var i=d.getElementById(b.dataset.for);if(i){i.select();try{navigator.clipboard.writeText(i.value)}catch(x){d.execCommand('copy')}b.textContent='Código copiado'}return}
 if(b.dataset.act==='theme'){var t=dark()?'light':'dark';h.dataset.theme=t;save('rastro-theme',t);meta()}
 else{if(h.dataset.side==='mini')delete h.dataset.side;else h.dataset.side='mini';save('rastro-side',h.dataset.side||'open');side()}})})()`;
 
@@ -326,10 +330,10 @@ const shareBar = ctx => html`<header class="sbar">${brand('?')}<strong>${ctx.sit
 
 const NAV = [
   { label: 'Visão', items: [['', 'Resumo', 'house'], ['/events', 'Eventos', 'activity', 'ao vivo']] },
-  { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list']] },
+  { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list'], ['/checkout', 'Checkout Pix', 'qr-code', null, 'checkout'], ['/recovery', 'Recuperação', 'refresh-cw', null, 'recovery']] },
   { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/attribution', 'Atribuição', 'target']] },
-  { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban'], ['/contacts', 'Contatos', 'users'], ['/conversations', 'Conversas', 'message-circle']] },
-  { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/whatsapp', 'WhatsApp', 'phone'], ['/settings', 'Configurações', 'settings']] },
+  { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban', null, 'crm'], ['/contacts', 'Contatos', 'users', null, 'crm'], ['/conversations', 'Conversas', 'message-circle', null, 'whatsapp'], ['/audiences', 'Públicos', 'target', null, 'audiences', true]] },
+  { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/whatsapp', 'WhatsApp', 'phone', null, 'whatsapp'], ['/settings', 'Configurações', 'settings']] },
 ];
 const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);
 
@@ -339,7 +343,8 @@ function sidebar(ctx) {
   const { user, site } = ctx;
   const keep = new URLSearchParams([...(ctx.q || [])].filter(([k]) => ['range', 'from', 'to', 'compare'].includes(k))).toString();
   const href = p => `/sites/${encodeURIComponent(site.id)}${p}${keep && KEEP_PERIOD.has(p) ? '?' + keep : ''}`;
-  const groups = site ? NAV.filter(g => !g.edit || ctx.canEdit) : [];
+  // Item com recurso (src/modules.js) some quando o recurso está desligado; o 6º campo marca item só de quem edita.
+  const groups = site ? NAV.filter(g => !g.edit || ctx.canEdit).map(g => ({ ...g, items: g.items.filter(([, , , , mod, ed]) => (!mod || enabled(site, mod)) && (!ed || ctx.canEdit)) })).filter(g => g.items.length) : [];
   return html`<input type="checkbox" id="nav-t" class="nav-t" aria-label="Abrir menu de navegação">
 <header class="mtop"><label for="nav-t" class="menu-btn" title="Menu">${icon('menu', 22)}</label>${brand('/')}${site ? html`<span class="site">${site.name}</span>` : ''}</header>
 <aside class="side" id="side" aria-label="Barra lateral">

@@ -29,9 +29,17 @@ ${links.map(l => html`<tr><td data-label="Link"><b>${l.name}</b>${l.message ? ht
 <pre class="code"><code>${d.hook}</code></pre>
 <form method="post" action="${base}" class="stack"><input type="hidden" name="action" value="cloud"><div class="fields">
 <label class="f">ID da conta do WhatsApp Business<input name="waba_id" value="${s.waba_id || ''}" inputmode="numeric" pattern="[0-9]{5,25}"></label>
-<label class="f">Chave secreta do app<span>${d.hasSecret ? 'Configurada. Vazio mantém; "-" apaga.' : 'Ainda não configurada.'}</span><input name="app_secret" type="password" autocomplete="off"></label></div>
+<label class="f">Chave secreta do app<span>${d.hasSecret ? 'Configurada. Vazio mantém; "-" apaga.' : 'Ainda não configurada.'}</span><input name="app_secret" type="password" autocomplete="off"></label>
+<label class="f">ID do número de telefone<span>Para enviar mensagens (recuperação e robô). Em WhatsApp, Configuração da API.</span><input name="wa_phone_id" value="${s.wa_phone_id || ''}" inputmode="numeric" pattern="[0-9]{5,25}"></label>
+<label class="f">Token de acesso<span>${s.wa_token ? 'Configurado. Vazio mantém; "-" apaga.' : 'Token permanente de um usuário do sistema, com whatsapp_business_messaging.'}</span><input name="wa_token" type="password" autocomplete="off"></label></div>
+${d.sendNeeded && !d.send ? notice('A recuperação ou o robô estão ligados, mas o envio só funciona com o ID do número e o token.', true) : ''}
 ${d.aiKey ? html`<label class="row" style="align-items:flex-start"><input type="checkbox" name="ai_suggest" value="1"${s.ai_suggest ? raw(' checked') : ''} style="margin-top:4px"><span><b>Sugerir a coluna do CRM com IA (Gemini)</b><br><small class="muted">As últimas mensagens vão ao Google sem e-mail, telefone, CPF, CNPJ, CEP, links e chaves Pix, no máximo uma vez por minuto por contato. Nomes e endereços escritos na conversa podem seguir. Ligue só se o seu contrato com os clientes permitir. Desligado, valem as regras simples.</small></span></label>` : html`<p class="muted" style="margin:0">Sugestão de coluna por regras simples. A sugestão por IA aparece aqui quando a instalação tiver uma chave do Gemini.</p>`}
-<div><button>Salvar Cloud API</button></div></form></section>`);
+<div><button>Salvar Cloud API</button></div></form></section>
+${d.bot ? html`<section class="card" style="margin-top:16px"><h2>Robô por palavra-chave</h2>
+<p class="muted">Uma regra por linha: palavras separadas por vírgula, um sinal de igual e a resposta. Vale a primeira regra cuja palavra aparece na mensagem, sem diferença de acento ou maiúscula, com no máximo uma resposta por minuto para cada contato. A resposta sai como texto, porque a pessoa acabou de escrever.</p>
+<form method="post" action="${base}" class="stack" style="max-width:none"><input type="hidden" name="action" value="bot">
+<label class="f">Regras<textarea name="rules" style="min-height:140px" placeholder="preço, valor, quanto custa = O investimento é R$ 97 no Pix ou 12x no cartão: https://...&#10;acesso, login, senha = O acesso chega no e-mail da compra. Não achou? Responda com o e-mail que usou.">${d.rules.map(x => `${x.words.join(', ')} = ${x.reply}`).join('\n')}</textarea></label>
+<div><button class="primary">Salvar respostas</button></div></form></section>` : ''}`);
 }
 
 const initials = c => (c.name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '#';

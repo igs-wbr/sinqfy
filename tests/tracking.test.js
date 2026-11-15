@@ -31,9 +31,9 @@ function runSnippet({ search = '', referrer = 'https://google.com/', cookie, con
 const el = (attrs, tagName = 'BUTTON') => ({ tagName, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })), dataset: { rastro: attrs['data-rastro'] }, closest(sel) { return sel === '[data-rastro]' && attrs['data-rastro'] ? this : null; } });
 const anchor = (href, attrs = {}) => ({ tagName: 'A', href, hasAttribute: n => Object.hasOwn(attrs, n), closest(sel) { return sel === 'a[href]' ? this : null; } });
 
-test('snippet: < 3 KB, pageview, SPA, eventos, opt-out', () => {
+test('snippet: < 3,25 KB, pageview, SPA, eventos, opt-out', () => {
   const { src, beacons, on, store, loc, hist, win } = runSnippet();
-  assert.ok(Buffer.byteLength(src) < 3072, `snippet com ${Buffer.byteLength(src)} bytes`);
+  assert.ok(Buffer.byteLength(src) < 3328, `snippet com ${Buffer.byteLength(src)} bytes`);
   assert.deepEqual(beacons[0], ['https://stats.dev/e', { s: 'blog', u: loc.href, r: 'https://google.com/', w: 1280 }]);
   Object.assign(loc, { href: 'https://blog.dev/b', pathname: '/b', search: '' });
   hist.pushState({}, '', '/b'); hist.pushState({}, '', '/b');

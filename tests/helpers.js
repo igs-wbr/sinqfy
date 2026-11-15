@@ -25,6 +25,7 @@ export async function boot() {
   const login = async (email = ADMIN.email, password = ADMIN.password) => (await req('/login', { form: { email, password } })).cookie;
   const { db } = await import('../src/db.js');
   const close = async () => {
+    await server.jobs; // tarefas da subida ainda rodando seguram tabelas: DROP SCHEMA no meio delas dá deadlock
     server.closeAllConnections(); server.close();
     await db.exec(`DROP SCHEMA ${process.env.DATABASE_SCHEMA} CASCADE`);
     await db.end();

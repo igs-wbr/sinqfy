@@ -5,9 +5,10 @@ import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { enqueue, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
 import { findContact, saleToCrm } from '../crm.js';
-import { hashEmail, hashPhone, piiReady } from '../pii.js';
+import { hashEmail, hashPhone, piiReady, open } from '../pii.js';
+import { trackPending } from '../recovery.js';
 
-export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
+export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
 /** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
 export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)' };
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
@@ -59,7 +60,7 @@ export const PARSERS = {
     return {
       order_id: str(p.transaction), status, method: method(p.payment?.type), gross, net: producer ? num(producer.value) : gross,
       currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date),
-      utm: utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, rid: ridOf(o.xcod),
+      utm: utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, rid: ridOf(o.xcod),
     };
   },
   // Kiwify: valores em centavos; UTMs completas em TrackingParameters.
@@ -72,7 +73,7 @@ export const PARSERS = {
       order_id: str(b.order_id), status, method: method(b.payment_method), gross, net: c.my_commission != null ? num(c.my_commission) / 100 : gross,
       currency: str(c.currency || 'BRL', 3), product: str(b.Product?.product_name), ts: time(b.created_at),
       utm: utm({ source: t.utm_source || t.src, medium: t.utm_medium, campaign: t.utm_campaign || (ridOf(t.sck) ? '' : t.sck), content: t.utm_content, term: t.utm_term }),
-      email: b.Customer?.email, phone: b.Customer?.mobile, rid: ridOf(t.rid) || ridOf(t.sck),
+      email: b.Customer?.email, phone: b.Customer?.mobile, name: b.Customer?.full_name, rid: ridOf(t.rid) || ridOf(t.sck),
     };
   },
   // Eduzz: aceita o webhook novo (JSON com `data`) e o legado (form com trans_*). Valide com um pedido de teste.
@@ -91,7 +92,7 @@ export const PARSERS = {
       net: d.netGain?.value != null ? num(d.netGain.value) : gross, currency: str(d.price?.currency || 'BRL', 3),
       product: str(d.items?.[0]?.name ?? d.product?.name ?? d.content_title), ts: time(d.createdAt ?? d.trans_createdate),
       utm: utm({ source: u.source ?? d.utm_source, medium: u.medium ?? d.utm_medium, campaign: u.campaign ?? d.utm_campaign, content: u.content ?? d.utm_content, term: u.term ?? d.utm_term }),
-      email: d.buyer?.email ?? d.customer?.email ?? d.cus_email, phone: d.buyer?.cellphone ?? d.cus_cel,
+      email: d.buyer?.email ?? d.customer?.email ?? d.cus_email, phone: d.buyer?.cellphone ?? d.cus_cel, name: d.buyer?.name ?? d.cus_name,
     };
   },
   // Formato próprio (docs/integracoes.md): use com Stripe/Zapier/Make ou qualquer outra plataforma.
@@ -104,9 +105,11 @@ export const PARSERS = {
       order_id: str(b.order_id), status, method: method(b.method), gross, net: b.net != null ? num(b.net) : gross,
       currency: str(b.currency || 'BRL', 3), product: str(b.product), ts: time(b.created_at),
       utm: utm({ source: b.utm_source, medium: b.utm_medium, campaign: b.utm_campaign, content: b.utm_content, term: b.utm_term }),
-      email: b.email, phone: b.phone, rid: ridOf(b.rid),
+      email: b.email, phone: b.phone, name: b.name, rid: ridOf(b.rid),
     };
   },
+  // Pix do checkout próprio (src/checkout.js): o banco ou o painel confirmam no mesmo formato do genérico, com o id do pedido.
+  pix: b => PARSERS.generic(b),
   // Shopify (webhooks orders/create, orders/paid, orders/updated). UTMs, fbclid e rid vêm do landing_site; o user agent, de client_details.
   shopify(b) {
     const fs = String(b.financial_status || '').toLowerCase();
@@ -133,7 +136,7 @@ export const PARSERS = {
       order_id: str(b.id), status, method: method(b.payment_method_title || b.payment_method), gross, net: gross, currency: str(b.currency || 'BRL', 3),
       product: str(b.line_items?.[0]?.name), ts: time(b.date_created_gmt ? b.date_created_gmt + 'Z' : b.date_created),
       utm: utm({ source: a('utm_source'), medium: a('utm_medium'), campaign: a('utm_campaign'), content: a('utm_content'), term: a('utm_term') }),
-      email: b.billing?.email, phone: b.billing?.phone, rid: ridOf(meta.rastro_rid), ua: a('user_agent'),
+      email: b.billing?.email, phone: b.billing?.phone, name: [b.billing?.first_name, b.billing?.last_name].filter(Boolean).join(' '), rid: ridOf(meta.rastro_rid), ua: a('user_agent'),
     };
   },
   // Stripe (Checkout e Payment Links). O snippet põe o rid em client_reference_id; o pedido é o payment_intent.
@@ -149,7 +152,7 @@ export const PARSERS = {
       order_id: str(id), status, method: method(o.payment_method_types?.[0] || o.payment_method_details?.type), gross, net: gross,
       currency: str(o.currency || 'brl', 3).toUpperCase(), product: str(md.product), ts: o.created ? o.created * 1000 : null,
       utm: utm({ source: md.utm_source, medium: md.utm_medium, campaign: md.utm_campaign, content: md.utm_content, term: md.utm_term }),
-      email: o.customer_details?.email || o.billing_details?.email, phone: o.customer_details?.phone || o.billing_details?.phone, rid: ridOf(o.client_reference_id || md.rid),
+      email: o.customer_details?.email || o.billing_details?.email, phone: o.customer_details?.phone || o.billing_details?.phone, name: o.customer_details?.name, rid: ridOf(o.client_reference_id || md.rid),
     };
   },
 };
@@ -296,6 +299,12 @@ export const MATCH_PT = { rid: 'Clique (rid)', email: 'Lead (e-mail ou telefone)
 /** Grava a venda normalizada, casa com o clique e enfileira a compra para Meta e GA4. */
 export async function ingestSale(site, platform, s, now = Date.now()) {
   if (!s.order_id) { await log(site.id, platform, s, false, 'Pedido sem identificador'); return { ok: false, message: 'Pedido sem identificador' }; }
+  // Confirmação sem dados do comprador (Pix do checkout próprio, banco ou botão do painel): usa o contato e o valor do pedido pendente.
+  if (!s.email && !s.phone && piiReady()) {
+    const p = await db.get(`SELECT p.product, p.gross, c.email_enc, c.phone_enc, c.name_enc FROM pending_orders p JOIN contacts c ON c.id=p.contact_id
+      WHERE p.site=? AND p.platform=? AND p.order_id=?`, [site.id, platform, s.order_id]);
+    if (p) s = { ...s, email: open(p.email_enc), phone: open(p.phone_enc), name: open(p.name_enc), product: s.product || p.product, gross: s.gross || p.gross, net: s.net || p.gross };
+  }
   const ts = s.ts ?? now;
   const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
   const m = await matchSale(site, { ...s, ts }), u = m.utm;
@@ -303,6 +312,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || m.click?.rid || null, m.rule]);
   const message = `${before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[saved.status]}` : 'Nova venda'} · origem: ${MATCH_PT[m.rule]}`;
   await log(site.id, platform, s, true, message);
+  await trackPending(site, platform, { ...s, status: saved.status, ts, utm: u, rid: s.rid || m.click?.rid || null }, now); // públicos e recuperação
 
   // Compra aprovada vai para a fila (src/dispatch.js), uma vez só.
   if (saved.status === 'paid' && before?.status !== 'paid' && s.gross > 0) {

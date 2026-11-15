@@ -158,6 +158,18 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS edge_error TEXT, ADD COLUMN IF NOT EXISTS meta_checked BIGINT, ADD COLUMN IF NOT EXISTS meta_pixel_name TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS sites_edge_host ON sites(edge_host);
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS ga4_id TEXT, ADD COLUMN IF NOT EXISTS ga4_secret TEXT, ADD COLUMN IF NOT EXISTS meta_test_code TEXT;
+    -- Recursos liga/desliga (src/modules.js) e envio pela Cloud API do WhatsApp (token cifrado com a DATA_KEY).
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS modules TEXT, ADD COLUMN IF NOT EXISTS wa_phone_id TEXT, ADD COLUMN IF NOT EXISTS wa_token TEXT,
+      ADD COLUMN IF NOT EXISTS recovery TEXT, ADD COLUMN IF NOT EXISTS bot_rules TEXT;
+    -- Venda pendente com contato (públicos e recuperação, src/recovery.js). waiting/sending: na sequência; paid, stopped, done, failed: encerrada.
+    CREATE TABLE IF NOT EXISTS pending_orders(id ${ID}, site TEXT NOT NULL, platform TEXT NOT NULL, order_id TEXT NOT NULL, contact_id BIGINT NOT NULL,
+      product ${T}, gross DOUBLE PRECISION NOT NULL DEFAULT 0, created BIGINT NOT NULL, status TEXT NOT NULL DEFAULT 'waiting'
+      CHECK(status IN ('waiting','sending','paid','stopped','done','failed')), step INTEGER NOT NULL DEFAULT 0, next_at BIGINT, last_error TEXT, UNIQUE(site, platform, order_id));
+    CREATE INDEX IF NOT EXISTS pending_orders_due ON pending_orders(next_at) WHERE status IN ('waiting','sending');
+    CREATE INDEX IF NOT EXISTS pending_orders_contact ON pending_orders(contact_id);
+    -- Checkout com Pix próprio (src/checkout.js). O preço vem sempre daqui, nunca do formulário.
+    CREATE TABLE IF NOT EXISTS products(id ${ID}, site TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, price DOUBLE PRECISION NOT NULL,
+      pix_key TEXT NOT NULL, pix_name TEXT NOT NULL, pix_city TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created BIGINT NOT NULL);
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

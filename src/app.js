@@ -7,6 +7,7 @@ import { routes, readBody, send, redirect, clientIp, edgeInfo, HttpError } from 
 import { ctx, currentUser, canView, canEdit } from './auth.js';
 import { record } from './tracking/ingest.js';
 import { messagePage } from './views/admin.js';
+import { enabled } from './modules.js';
 import './routes/auth.js';
 import './routes/admin.js';
 import './routes/traffic.js';
@@ -14,6 +15,9 @@ import './routes/whatsapp.js'; // antes de sales.js: /hooks/:token/whatsapp vem 
 import './routes/crm.js'; // antes de sales.js: /hooks/:token/leads vem antes da rota genérica
 import './routes/sales.js';
 import './routes/setup.js';
+import './routes/audiences.js';
+import './routes/recovery.js';
+import './routes/checkout.js';
 
 // ---------- arquivos públicos (na Vercel a CDN serve public/ antes de chegar aqui) ----------
 const CORS = { 'access-control-allow-origin': '*' };
@@ -63,6 +67,7 @@ async function handle(r) {
       if (!r.site || !await canView(r.user, r.site.id)) throw new HttpError(404, 'Site não encontrado.');
       r.canEdit = await canEdit(r.user, r.site.id);
       if (rt.o.site === 'edit' && !r.canEdit) throw new HttpError(403, 'Você não tem permissão para alterar este site.');
+      if (rt.o.module && !enabled(r.site, rt.o.module)) throw new HttpError(404, 'Este recurso está desligado. Ligue em Configurações, Recursos.');
     }
     return await rt.fn(r);
   }

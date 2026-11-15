@@ -9,18 +9,19 @@ import { salesTotals } from '../sales/stats.js';
 import { runJobs } from '../jobs.js';
 import { ROLES } from '../views/ui.js';
 import { removeHost } from '../cloudflare.js';
+import { MODULES, fromForm } from '../modules.js';
 import * as V from '../views/admin.js';
 
 const TIMEZONES = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
 const DEFAULT_TZ = env.DEFAULT_TIMEZONE || 'America/Sao_Paulo';
 const MSG = {
-  saved: 'Configurações salvas.', share_on: 'Link público criado.', share_off: 'Link público desativado.',
+  saved: 'Configurações salvas.', modules: 'Recursos salvos.', share_on: 'Link público criado.', share_off: 'Link público desativado.',
   password: 'Senha alterada.',
 };
 export const msg = r => Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null;
 
 // Tabelas ligadas a um site / a um usuário. Apagadas explicitamente: o schema não usa chave estrangeira.
-const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['deliveries', 'site'], ['contacts', 'site'], ['crm_log', 'site'], ['stages', 'site'], ['erased', 'site'], ['audit_log', 'site'], ['wa_links', 'site'], ['wa_clicks', 'site'], ['messages', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
+const SITE_TABLES = [['events', 'site'], ['sales', 'site'], ['webhook_log', 'site'], ['deliveries', 'site'], ['contacts', 'site'], ['crm_log', 'site'], ['stages', 'site'], ['erased', 'site'], ['audit_log', 'site'], ['wa_links', 'site'], ['wa_clicks', 'site'], ['messages', 'site'], ['pending_orders', 'site'], ['products', 'site'], ['ad_accounts', 'site'], ['ad_entities', 'site'], ['ad_spend', 'site'],
   ['funnels', 'site_id'], ['user_sites', 'site_id'], ['sites', 'id']];
 const USER_TABLES = [['user_sites', 'user_id'], ['sessions', 'user_id'], ['users', 'id']];
 
@@ -51,6 +52,11 @@ route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
     await db.run('UPDATE sites SET name=?, timezone=?, currency=?, tax_rate=?, domains=? WHERE id=?', [name, tz, cur, tax, domains.join(', ') || null, id]);
   } else if (action === 'share_on') await db.run('UPDATE sites SET share_token=? WHERE id=?', [newToken(), id]);
   else if (action === 'share_off') await db.run('UPDATE sites SET share_token=NULL WHERE id=?', [id]);
+  else if (action === 'modules') {
+    const on = f.getAll('module').filter(m => Object.hasOwn(MODULES, m));
+    await db.run('UPDATE sites SET modules=? WHERE id=?', [fromForm(on), id]);
+    await db.run('INSERT INTO audit_log(site, ts, actor, action) VALUES (?,?,?,?)', [id, Date.now(), r.user.email, `recursos: ${on.join(', ') || 'nenhum'}`]);
+  }
   else throw new HttpError(400, 'Ação inválida.');
   await loadSites();
   redirect(r, sitePath(r.site, `/settings?ok=${action === 'save' ? 'saved' : action}`));

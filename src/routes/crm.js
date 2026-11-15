@@ -23,18 +23,18 @@ const contactOf = async (r, id) => {
 const need = () => { if (!piiReady()) throw new HttpError(503, 'O CRM precisa da chave DATA_KEY configurada no servidor.'); };
 
 // ---------- quadro ----------
-route('GET', '/sites/:id/crm', { site: 'view' }, async r => {
+route('GET', '/sites/:id/crm', { site: 'view', module: 'crm' }, async r => {
   need();
   const [cols, rows] = await Promise.all([stages(r.site.id), db.all('SELECT * FROM contacts WHERE site=? ORDER BY stage_since DESC LIMIT 1000', [r.site.id])]);
   send(r, 200, V.boardPage(await siteCtx(r, '/crm'), cols, rows.map(reveal), r.q.get('erro')));
 });
-route('POST', '/sites/:id/crm/move', { site: 'edit' }, async r => {
+route('POST', '/sites/:id/crm/move', { site: 'edit', module: 'crm' }, async r => {
   const f = await form(r.req), c = await contactOf(r, f.get('contact'));
   await moveContact(r.site, c, Number(f.get('stage')) || 0, { by: r.user.email });
   if (f.get('js') === '1') return r.res.writeHead(204).end(); // arrastar e soltar
   redirect(r, f.get('back') === 'contact' ? sitePath(r.site, `/contacts/${c.id}`) : sitePath(r.site, '/crm'));
 });
-route('POST', '/sites/:id/crm/new', { site: 'edit' }, async r => {
+route('POST', '/sites/:id/crm/new', { site: 'edit', module: 'crm' }, async r => {
   need();
   const f = await form(r.req);
   const { contact } = await upsertContact(r.site, { name: f.get('name'), email: f.get('email'), phone: f.get('phone'), value: f.get('value'), source: 'manual', note: `Cadastrado por ${r.user.email}` });
@@ -43,7 +43,7 @@ route('POST', '/sites/:id/crm/new', { site: 'edit' }, async r => {
 });
 
 // ---------- contatos ----------
-route('GET', '/sites/:id/contacts', { site: 'view' }, async r => {
+route('GET', '/sites/:id/contacts', { site: 'view', module: 'crm' }, async r => {
   need();
   // ponytail: busca decifrando até 2000 contatos em memória; índice de busca cifrado se o CRM passar disso
   const q = (r.q.get('q') || '').trim().toLowerCase().slice(0, 100);
@@ -80,13 +80,13 @@ route('POST', '/sites/:id/contacts/:cid', { site: 'edit' }, async r => {
 
 // ---------- colunas ----------
 const EVENT_RE = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
-route('GET', '/sites/:id/crm/stages', { site: 'edit' }, async r => {
+route('GET', '/sites/:id/crm/stages', { site: 'edit', module: 'crm' }, async r => {
   const cols = await stages(r.site.id);
   const counts = new Map((await db.all('SELECT stage_id, COUNT(*) n FROM contacts WHERE site=? GROUP BY stage_id', [r.site.id])).map(x => [x.stage_id, x.n]));
   const o = origin(r.req), urls = { leads: `${o}/hooks/${hookToken(r.site, 'leads')}/leads`, metaLeads: `${o}/hooks/${hookToken(r.site, 'meta-leads')}/meta-leads` };
   send(r, 200, V.stagesPage(await siteCtx(r, '/crm'), cols, counts, r.q.get('erro'), urls));
 });
-route('POST', '/sites/:id/crm/stages', { site: 'edit' }, async r => {
+route('POST', '/sites/:id/crm/stages', { site: 'edit', module: 'crm' }, async r => {
   const f = await form(r.req), action = f.get('action'), cols = await stages(r.site.id), back = e => redirect(r, sitePath(r.site, `/crm/stages${e ? `?erro=${e}` : ''}`));
   if (action === 'save') {
     const stmts = [];
@@ -116,7 +116,7 @@ route('POST', '/sites/:id/crm/stages', { site: 'edit' }, async r => {
 });
 
 // ---------- Lead Ads da Meta: token da página para buscar os dados do lead ----------
-route('POST', '/sites/:id/crm/meta-leads', { site: 'edit' }, async r => {
+route('POST', '/sites/:id/crm/meta-leads', { site: 'edit', module: 'crm' }, async r => {
   const f = await form(r.req), token = (f.get('page_token') || '').trim(), secret = (f.get('app_secret') || '').trim();
   if (token) await db.run('UPDATE sites SET meta_page_token=? WHERE id=?', [token === '-' ? null : seal(token.slice(0, 500)), r.site.id]); // cifrado como os contatos
   const leads = (f.get('leads_secret') || '').trim();

@@ -78,7 +78,7 @@ test('cron: só responde com o segredo e executa as tarefas', async () => {
   assert.equal((await req('/cron', { headers: { authorization: 'Bearer errado' } })).status, 404);
   const ok = await req('/cron', { headers: { authorization: 'Bearer segredo-de-teste' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(JSON.parse(ok.text), { meta: 0, errors: [], dispatch: { sent: 0, failed: 0, retry: 0 } });
+  assert.deepEqual(JSON.parse(ok.text), { meta: 0, errors: [], dispatch: { sent: 0, failed: 0, retry: 0 }, recovery: { sent: 0, skipped: 0, failed: 0 } });
 });
 
 test('força bruta: 10 falhas bloqueiam o IP', async () => {

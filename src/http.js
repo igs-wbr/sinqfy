@@ -27,7 +27,7 @@ export function send(r, status, body, headers = {}) {
 }
 export const redirect = (r, location, headers = {}) => r.res.writeHead(303, { location, ...headers }).end();
 
-/** Tabela de rotas. o = { auth=true, admin, site: 'view'|'edit' } */
+/** Tabela de rotas. o = { auth=true, admin, site: 'view'|'edit', module: id de src/modules.js } */
 export const routes = [];
 export const route = (method, pattern, o, fn) =>
   routes.push({ method, o, fn, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '/?$') });

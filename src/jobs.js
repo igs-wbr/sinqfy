@@ -4,6 +4,7 @@
 import { db, sites, ready } from './db.js';
 import { syncMeta } from './ads/meta.js';
 import { dispatch } from './dispatch.js';
+import { runRecovery } from './recovery.js';
 import { checkHost, cfReady } from './cloudflare.js';
 
 const META_EVERY = 55 * 60e3; // < 1 h, para o cron horário sempre pegar
@@ -14,6 +15,7 @@ export async function runJobs() {
   await db.batch([['DELETE FROM sessions WHERE expires<?', [Date.now()]], ['DELETE FROM login_fails WHERE until<?', [Date.now()]],
     ["DELETE FROM deliveries WHERE created<? AND status IN ('sent','failed')", [Date.now() - 30 * 864e5]]]); // histórico de envios: 30 dias
   out.dispatch = await dispatch();
+  out.recovery = await runRecovery();
   // Retenção (ADR 0013): contatos sem atualização e eventos com mais de 13 meses; histórico de contato apagado junto.
   const old = Date.now() - 395 * 864e5;
   await db.batch([['DELETE FROM crm_log WHERE contact_id IN (SELECT id FROM contacts WHERE updated<?)', [old]], ['DELETE FROM contacts WHERE updated<?', [old]],
