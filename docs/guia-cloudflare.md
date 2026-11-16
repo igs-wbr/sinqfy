@@ -1,6 +1,6 @@
 # Cloudflare: domínio, túnel e subdomínio de rastreamento
 
-A Cloudflare fica na frente do Trackify e faz quatro trabalhos, todos no plano grátis:
+A Cloudflare é a opção usada nos guias, mas não é obrigatória: sem ela, o painel publica com o Caddy ou outro proxy, e só o cookie de 400 dias da borda fica de fora ([Onde hospedar](hospedagem.md#e-sem-cloudflare)). Com ela, faz quatro trabalhos, todos no plano grátis:
 
 | Peça | Endereço | Para quê |
 |---|---|---|
@@ -47,34 +47,56 @@ O túnel é uma ligação que **sai** do servidor para a Cloudflare. Por isso o 
 
 ## Parte 3: Worker da borda (`t.seudominio`)
 
-O Worker é um programinha que roda na Cloudflare, no seu domínio. Ele entrega o script, grava os cookies `_rid`, `_fbp` e `_fbc` **como se fosse o seu próprio site** (por isso duram 400 dias, inclusive no Safari) e repassa cada evento ao painel com o segredo `EDGE_SECRET`. Se o painel cair, os eventos ficam guardados no R2.
+O Worker é um programinha que roda na Cloudflare. Ele entrega o script, grava os cookies `_rid`, `_fbp` e `_fbc` **como se fosse o seu próprio site** (no seu domínio, duram 400 dias, inclusive no Safari) e repassa cada evento ao painel com o segredo `EDGE_SECRET`. Com o R2 ativado, os eventos que o painel não recebeu ficam guardados.
 
-Faça no seu computador, com o [Node.js](https://nodejs.org) instalado (versão 24) e o projeto baixado:
+Ele se chama `trackify` e já sai funcionando no endereço `trackify.<sua-conta>.workers.dev`, mesmo sem domínio na Cloudflare.
 
-1. Abra `edge/wrangler.toml` e troque os três endereços pelos seus:
-   ```toml
-   routes = [
-     { pattern = "t.seudominio.com.br", custom_domain = true },
-     { pattern = "*/*", zone_name = "seudominio.com.br" },
-   ]
+### 3.1 Publicar a primeira vez (no seu computador)
 
-   [vars]
-   ORIGIN = "https://app.seudominio.com.br"
-   ```
-2. No terminal, dentro da pasta `edge`:
-   ```bash
-   npx wrangler login
-   npx wrangler r2 bucket create rastro-raw
-   npx wrangler r2 bucket lifecycle add rastro-raw expira-30d failed/ --expire-days 30
-   npx wrangler secret put EDGE_SECRET
-   npx wrangler deploy
-   ```
-   - O `login` abre o navegador para autorizar.
-   - O R2 precisa estar ativado na conta (painel da Cloudflare → **R2**). Pode pedir um cartão; até 10 GB é grátis.
-   - No `secret put`, cole **o mesmo** `EDGE_SECRET` do `.env` do servidor.
-3. No servidor, confira no `.env` o `EDGE_SECRET` e o `EDGE_URL=https://t.seudominio.com.br`, e reinicie o painel: `docker compose up -d app`.
+Com o [Node.js](https://nodejs.org) 24 instalado e o projeto baixado, no terminal, dentro da pasta `edge`:
 
-**Deu certo quando:** `https://t.seudominio.com.br/s.js` mostra um código JavaScript. Depois de colar o script no site, abra uma página com `?fbclid=teste123` no endereço: em **Eventos**, a visita aparece com o selo `fbc`.
+```bash
+npx wrangler login
+npx wrangler deploy --var ORIGIN:https://app.seudominio.com.br
+npx wrangler secret put EDGE_SECRET
+```
+
+- O `login` abre o navegador para autorizar a conta da Cloudflare.
+- O `ORIGIN` é o endereço do painel (parte 2).
+- No `secret put`, cole **o mesmo** `EDGE_SECRET` do `.env` do servidor.
+
+No servidor, ponha no `.env` o endereço do Worker em `EDGE_URL` e reinicie o painel: `docker compose up -d app`.
+
+### 3.2 Painel no mesmo endereço (opcional)
+
+O Worker pode também mostrar o painel. Assim, um único endereço serve o script, os eventos e o login, e ele não muda quando o túnel reinicia. Publique com o host do Worker em `PANEL_HOST`:
+
+```bash
+npx wrangler deploy --var ORIGIN:https://app.seudominio.com.br --var PANEL_HOST:trackify.sua-conta.workers.dev
+```
+
+e use esse endereço em `PUBLIC_URL` e `EDGE_URL` no `.env`. O painel só aparece nesse host: em `t.seudominio` e nos domínios de clientes, o Worker continua mostrando só o script.
+
+### 3.3 Deploy automático pelo GitHub
+
+O workflow `.github/workflows/deploy-edge.yml` publica o Worker sozinho a cada push na `main` que mexe na pasta `edge/`. Configure uma vez em GitHub → seu repositório → **Settings** → **Secrets and variables** → **Actions**:
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| Secret | `CLOUDFLARE_API_TOKEN` | Token da Cloudflare: **My Profile** → **API Tokens** → **Create Token** → modelo **Edit Cloudflare Workers** → conta: a sua, zonas: todas (ou nenhuma, se não tiver domínio) |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | **Account ID** (página inicial do painel da Cloudflare, menu da conta) |
+| Variable | `TRACKIFY_ORIGIN` | O endereço do painel (o mesmo `ORIGIN`) |
+| Variable | `TRACKIFY_PANEL_HOST` | O host do Worker para mostrar o painel (3.2), ou vazio |
+
+Sem a variável `TRACKIFY_ORIGIN`, o workflow não roda (cópias do projeto não tentam publicar). Para publicar na hora: aba **Actions** → **Deploy do Worker** → **Run workflow**.
+
+### 3.4 Com domínio na Cloudflare: `t.seudominio`
+
+Em `edge/wrangler.toml`, descomente o bloco `routes` e troque `seudominio.com.br` pelo seu domínio. O Worker passa a responder também em `t.seudominio.com.br` (e nos domínios dos clientes, parte 4). Use `EDGE_URL=https://t.seudominio.com.br` no `.env`.
+
+Com o R2 ativado (painel da Cloudflare → **R2**; pode pedir um cartão, até 10 GB é grátis), crie o bucket com os dois comandos do `wrangler.toml` e descomente o bloco `r2_buckets`.
+
+**Deu certo quando:** o endereço do Worker com `/s.js` no fim mostra um código JavaScript. Depois de colar o script no site, abra uma página com `?fbclid=teste123` no endereço: em **Eventos**, a visita aparece com o selo `fbc`.
 
 ## Parte 4: domínio dos clientes (Cloudflare for SaaS)
 
@@ -100,7 +122,7 @@ Só para agência: faz cada cliente ter o próprio `t.dominiodocliente.com.br`, 
    CF_SAAS_TARGET=edge.seudominio.com.br
    ```
    e reinicie: `docker compose up -d app`.
-6. A rota `*/*` do Worker (já no `wrangler.toml` da parte 3) faz ele responder em todo domínio de cliente.
+6. Descomente as `routes` do `edge/wrangler.toml` (parte 3.4): a rota `*/*` faz o Worker responder em todo domínio de cliente.
 
 **O que o cliente faz:** cadastra o domínio em **Primeiros passos** e cria, no DNS dele, um CNAME `t` → `edge.seudominio.com.br` com proxy **desligado** (nuvem cinza). O Trackify registra o domínio na Cloudflare e confere DNS e certificado sozinho a cada 5 minutos.
 
@@ -108,9 +130,21 @@ Sem o passo 5, o Trackify mostra ao cliente o mesmo CNAME e você ativa o domín
 
 ## Parte 5: R2 para o backup
 
-1. Painel da Cloudflare → **R2** → **Create bucket** → nome `rastro-backups`.
-2. **R2** → **Manage R2 API Tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `rastro-backups`.
+1. Painel da Cloudflare → **R2** → **Create bucket** → nome `trackify-backups`.
+2. **R2** → **Manage R2 API Tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `trackify-backups`.
 3. Guarde o **Access Key ID**, o **Secret Access Key** e o **Account ID** (aparece na página do R2). Eles vão no `rclone config` do [guia da Oracle, parte 10](deploy-oracle.md#parte-10-backup-diário-no-r2).
+
+## Domínio em outra conta da Cloudflare
+
+Cada domínio fica numa conta só, e o túnel, o Worker e o subdomínio `t.` precisam estar **na mesma conta do domínio**. Há três caminhos:
+
+| Caminho | Como | Bom para |
+|---|---|---|
+| **1. Dar acesso à outra conta** (mais simples) | Na conta que tem o domínio: **Manage Account** → **Members** → **Invite**, com o e-mail que você usa hoje e o papel **Administrator**. Aceite o convite no e-mail. O mesmo login passa a enxergar as duas contas | Você é dono das duas e quer continuar com o domínio onde está. Crie o túnel e publique o Worker **na conta do domínio** (`CLOUDFLARE_ACCOUNT_ID` dela no GitHub) |
+| **2. Mudar o domínio de conta** | Na conta antiga: domínio → **DNS** → **Records** → **Import and Export** → **Export** (guarda os registros). Depois **Overview** → **Remove site from Cloudflare**. Na conta nova: **Add a domain**, importe o arquivo em **Import** e troque os nameservers no registro do domínio pelos dois novos | Quer tudo numa conta só. O site fica alguns minutos a algumas horas trocando de DNS |
+| **3. Domínio comprado na própria Cloudflare (Registrar)** | O registro do domínio também está preso à conta. Antes de remover, procure em **Domain Registration** a opção de mover para outra conta; se não houver, fale com o suporte da Cloudflare ou transfira para outro registrador | Só se o domínio foi **comprado** na Cloudflare |
+
+Cuidados no caminho 2: confira se os registros de e-mail (MX, SPF, DKIM) vieram na importação, e faça a troca num horário de pouco movimento. Workers, túneis e regras de página **não** vão junto: crie de novo na conta nova.
 
 ## Por que o subdomínio começa com `t.`?
 

@@ -52,7 +52,8 @@ Nunca configurou rastreamento? Comece pelo **[guia do iniciante](docs/guia-inici
 |---|---|
 | [Guia do iniciante](docs/guia-iniciante.md) | As 7 etapas, na ordem, com o sinal de que cada uma deu certo |
 | [Manual](docs/manual.md) | O que o sistema faz e para que serve cada tela |
-| [Servidor na Oracle](docs/deploy-oracle.md) | VPS grátis ligada 24 horas, com Docker e backup diário |
+| [Onde hospedar](docs/hospedagem.md) | Qualquer VPS com Docker; Oracle, Cloudflare e Vercel são exemplos |
+| [Servidor na Oracle](docs/deploy-oracle.md) | Exemplo completo com a VPS grátis da Oracle, tela por tela |
 | [Cloudflare](docs/guia-cloudflare.md) | Domínio, túnel do painel e subdomínio de rastreamento `t.` |
 | [Integrações](docs/integracoes.md) | Referência técnica de cada integração |
 

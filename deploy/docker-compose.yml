@@ -1,5 +1,10 @@
-# Rastro na VM da Oracle: banco, painel e túnel da Cloudflare. Nenhuma porta fica aberta na internet.
-# Uso: na pasta deploy/, `docker compose up -d --build` (variáveis em deploy/.env, veja docs/deploy-oracle.md).
+# Trackify em qualquer VPS com Docker (Oracle, Hetzner, DigitalOcean, Contabo, Hostinger, Magalu, AWS, a sua máquina...).
+# Uso: na pasta deploy/, `docker compose up -d --build` (variáveis em deploy/.env; veja docs/hospedagem.md).
+#
+# Como o painel chega à internet: escolha UM jeito em COMPOSE_PROFILES no .env.
+#   cloudflare  túnel da Cloudflare: nenhuma porta aberta na VPS (precisa de TUNNEL_TOKEN)
+#   caddy       HTTPS automático (Let's Encrypt) direto na VPS: abra as portas 80 e 443 (precisa de DOMAIN)
+#   (vazio)     só o painel em 127.0.0.1:8080, para pôr atrás do seu próprio Nginx, Traefik ou outro proxy
 services:
   postgres:
     image: postgres:17-alpine
@@ -20,14 +25,30 @@ services:
       DATABASE_URL: postgres://rastro:${POSTGRES_PASSWORD}@postgres:5432/rastro
       TRUST_PROXY: "1"
       COOKIE_SECURE: "1"
+    # Só nesta máquina: para um proxy próprio (sem perfil) ou para conferir com curl. Nunca aberto para a internet.
+    ports: ["127.0.0.1:8080:8080"]
 
   cloudflared:
+    profiles: [cloudflare]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on: [app]
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
     depends_on: [app]
 
 volumes:
   pgdata:
+  caddy_data:

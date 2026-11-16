@@ -1,16 +1,16 @@
 {
-  "name": "rastro",
+  "name": "trackify",
   "private": true,
   "description": "Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.",
   "license": "MIT",
   "author": "Iegos Weber <iegosweber@gmail.com> (https://github.com/igs-wbr)",
-  "homepage": "https://github.com/igs-wbr/rastro#readme",
+  "homepage": "https://github.com/igs-wbr/trackify#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/igs-wbr/rastro.git"
+    "url": "git+https://github.com/igs-wbr/trackify.git"
   },
   "bugs": {
-    "url": "https://github.com/igs-wbr/rastro/issues"
+    "url": "https://github.com/igs-wbr/trackify/issues"
   },
   "type": "module",
   "engines": {

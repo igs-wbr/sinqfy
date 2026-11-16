@@ -35,7 +35,7 @@ Para que vendas e gastos se encontrem, cada anúncio precisa levar a UTM com o *
 utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}
 ```
 
-O Rastro usa o trecho depois do último `|` como chave:
+O Trackify usa o trecho depois do último `|` como chave:
 
 - `utm_campaign` liga a venda à campanha;
 - `utm_medium` liga ao conjunto;
@@ -50,7 +50,7 @@ Cada site tem um token. As URLs aparecem prontas em Integrações:
 
 ```
 https://app.seudominio.com.br/hooks/<token>/hotmart      (também kiwify, eduzz, shopify, woocommerce, stripe)
-https://app.seudominio.com.br/hooks/<token>/generic      formato próprio do Rastro
+https://app.seudominio.com.br/hooks/<token>/generic      formato próprio do Trackify
 https://app.seudominio.com.br/hooks/<token>/custom       qualquer JSON, com mapa de campos
 https://app.seudominio.com.br/hooks/<token>/sheets       Google Sheets (script pronto na tela)
 ```
@@ -64,7 +64,7 @@ https://app.seudominio.com.br/hooks/<token>/sheets       Google Sheets (script p
 
 A tela Pedidos mostra a regra que valeu em cada venda (coluna Origem):
 
-1. **Clique (rid):** o snippet põe o id do visitante (`rid`) no link de checkout. A plataforma devolve esse valor no webhook e o Rastro acha o clique: herda as UTMs da última visita com campanha (quando o checkout perdeu as UTMs), e a compra vai à Meta como `website` com `fbc`, `fbp`, user agent e a página, e ao GA4 na sessão do navegador.
+1. **Clique (rid):** o snippet põe o id do visitante (`rid`) no link de checkout. A plataforma devolve esse valor no webhook e o Trackify acha o clique: herda as UTMs da última visita com campanha (quando o checkout perdeu as UTMs), e a compra vai à Meta como `website` com `fbc`, `fbp`, user agent e a página, e ao GA4 na sessão do navegador.
 2. **UTM:** sem rid, valem as UTMs que a plataforma mandou.
 3. **Sem origem:** nenhum dos dois. A compra ainda vai à Meta (como `other`, com e-mail e telefone em hash).
 
@@ -81,7 +81,7 @@ A tela Pedidos mostra a regra que valeu em cada venda (coluna Origem):
 
 ### Assinatura dos webhooks
 
-Com o segredo cadastrado em Integrações, Segredos de assinatura, o Rastro recusa (`401`) o que vier sem a assinatura da plataforma. Sem segredo, vale só o token da URL.
+Com o segredo cadastrado em Integrações, Segredos de assinatura, o Trackify recusa (`401`) o que vier sem a assinatura da plataforma. Sem segredo, vale só o token da URL.
 
 | Plataforma | O que conferimos | Onde pegar o segredo |
 |---|---|---|
@@ -168,7 +168,7 @@ Precisa de `DATA_KEY` no servidor (veja `.env.example`). Nome, e-mail e telefone
 
 - **Formulários do site:** automático pela borda (subdomínio `t.`). Ao enviar um formulário com campo de e-mail ou telefone, o snippet manda um `Lead` com os dados. Formulário de login (com senha), de pagamento (cartão) ou com `data-rastro-ignore` não é capturado, nem campo oculto. Com `data-consent="required"` e sem aceite, os dados não saem do navegador. O contato já nasce ligado ao clique (`rid`, `fbc`) e à campanha.
 - **Webhook de leads:** `POST` JSON com `name`, `email`, `phone` e, se tiver, `rid`, `value` e `utm_*` (Elementor, RD Station, n8n, Make). A URL está em CRM, Colunas e entradas. Com o segredo `leads` cadastrado, exige o cabeçalho `X-Rastro-Signature: sha256=<HMAC-SHA256 do corpo>`. Limite de 60 leads por minuto.
-- **Lead Ads da Meta:** assine o campo `leadgen` da página no app da Meta com a URL mostrada na tela (o token de verificação é o trecho da URL depois de `/hooks/`). Informe o token da página (permissão `leads_retrieval`, guardado cifrado) e a chave secreta do app: sem ela o Rastro recusa os avisos, porque não há como provar que vieram da Meta.
+- **Lead Ads da Meta:** assine o campo `leadgen` da página no app da Meta com a URL mostrada na tela (o token de verificação é o trecho da URL depois de `/hooks/`). Informe o token da página (permissão `leads_retrieval`, guardado cifrado) e a chave secreta do app: sem ela o Trackify recusa os avisos, porque não há como provar que vieram da Meta.
 
 **Quadro:** colunas editáveis (padrão: Novo, Em conversa, Qualificado, Proposta, Ganhou, Perdeu). Cada coluna pode ter um evento: quando um contato entra nela, a Meta recebe a conversão offline (`action_source: system_generated`, e-mail e telefone em hash, `lead_id` do Lead Ads quando houver), uma vez por contato e coluna.
 

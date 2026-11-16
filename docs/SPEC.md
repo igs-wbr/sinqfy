@@ -1,4 +1,4 @@
-# Especificação: Rastro
+# Especificação: Trackify
 
 ## Objetivo
 

@@ -1,4 +1,4 @@
-# Design system: Rastro
+# Design system: Trackify
 
 Moldura neutra (grafite), azul da marca só como acento. Revisado em 15/11/2026 com a skill [unslop](https://github.com/heydamir/unslop) (Damir Sokolovsky, CC BY 4.0), que substituiu o "Rastro Azul" (barra lateral e card de destaque azuis, fundos azul-marinho no escuro). Referências que continuam valendo:
 

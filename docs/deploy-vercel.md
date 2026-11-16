@@ -1,88 +1,59 @@
-# Deploy: Vercel + Turso
+# Vercel: o painel sem servidor, com limites
 
-O Rastro roda como uma função serverless na Vercel. O banco é o Turso (libSQL, compatível com SQLite). Um cron externo dispara as tarefas de hora em hora. Nenhum servidor para manter.
+Alternativa à VPS ([comparação](hospedagem.md#e-a-vercel)). O painel roda como função serverless na Vercel (`api/index.js`), com um PostgreSQL gerenciado. Serve para testar ou para operações pequenas.
+
+> **Antes de escolher:** o plano gratuito (Hobby) da Vercel é **só para uso não comercial**. E como não há processo ligado, os envios para a Meta e o GA4, a recuperação de vendas e a sincronização dos anúncios só rodam quando um agendador chama `/cron`.
 
 ```
-visitante ──beacon──▶ Vercel (api/index.js) ──▶ Turso
-Hotmart/Kiwify ─webhook─▶ │
-cron externo   ─/cron (de hora em hora)─▶ │──▶ Meta Marketing API
+visitante ──evento──▶ Vercel (api/index.js) ──▶ PostgreSQL gerenciado (Neon, Supabase...)
+Hotmart, Kiwify... ──webhook──▶ │
+agendador externo ──/cron a cada 5 a 15 min──▶ │──▶ Meta e GA4
 ```
 
-> **Plano da Vercel:** o plano Hobby (gratuito) é **apenas para uso não comercial**. Se o Rastro rastreia as vendas do seu negócio, use o plano Pro.
+## 1. Banco PostgreSQL gerenciado
 
-## 1. Banco no Turso
-
-1. Crie a conta em [turso.tech](https://turso.tech) e um banco. Pelo painel ou pela CLI:
-   ```sh
-   turso db create rastro
-   turso db show rastro --url        # libsql://rastro-<usuario>.turso.io
-   turso db tokens create rastro     # token de acesso
-   ```
-2. Escolha uma região próxima da região das funções da Vercel. O padrão da Vercel é Washington (`iad1`), e no Turso a equivalente é `aws-us-east-1`. Cada página do painel faz várias consultas, então a distância entre os dois pesa.
+Crie um banco num serviço com plano gratuito, como **Neon** (neon.tech) ou **Supabase** (supabase.com), e copie a **connection string** (`postgres://usuario:senha@host/banco?sslmode=require`). No Neon, prefira a versão com **pooler**, que aguenta melhor muitas funções ao mesmo tempo. Escolha a região mais perto da região das funções da Vercel (padrão: Washington, `iad1`).
 
 As tabelas são criadas sozinhas no primeiro acesso.
 
-## 2. Código no GitHub
+## 2. Projeto na Vercel
 
-Suba a pasta do projeto para um repositório privado. O `.gitignore` já exclui `node_modules`, `.env` e bancos locais.
-
-## 3. Projeto na Vercel
-
-1. **Add New → Project**, importe o repositório.
-2. Use **Framework Preset: Other**, deixe o build command vazio e mantenha o output directory `public` (já vem do `vercel.json`).
+1. **Add New → Project** e importe o repositório do GitHub.
+2. **Framework Preset: Other**, build command vazio; o resto vem do `vercel.json`.
 3. Em **Environment Variables**:
 
 | Variável | Valor |
 |---|---|
-| `DATABASE_URL` | `libsql://rastro-<usuario>.turso.io` |
-| `DATABASE_AUTH_TOKEN` | o token do Turso |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | o primeiro admin (só vale com o banco vazio) |
-| `PUBLIC_URL` | `https://stats.seudominio.com` (sem barra no final) |
-| `TRUST_PROXY` | `1` |
-| `CRON_SECRET` | uma string aleatória longa (ex.: `openssl rand -hex 32`) |
+| `DATABASE_URL` | a connection string do passo 1 |
+| `ADMIN_EMAIL` e `ADMIN_PASSWORD` | o primeiro admin (senha com 12 caracteres ou mais) |
+| `PUBLIC_URL` | `https://app.seudominio.com.br` (sem barra no fim) |
+| `TRUST_PROXY` e `COOKIE_SECURE` | `1` |
+| `CRON_SECRET` e `DATA_KEY` | `openssl rand -hex 32` cada um. Guarde a `DATA_KEY` fora da Vercel |
 | `DEFAULT_TIMEZONE` | `America/Sao_Paulo` |
+| `NODEJS_HELPERS` | `0` (sem isso, formulários e webhooks chegam vazios) |
 
-4. Faça o deploy e abra a URL `*.vercel.app`. A tela de login deve aparecer.
+4. Deploy e abra a URL `*.vercel.app`: a tela de login deve aparecer.
 
-## 4. Domínio (com Cloudflare)
+## 3. Domínio
 
-1. Na Vercel, abra **Settings → Domains** e adicione `stats.seudominio.com`.
-2. Na Cloudflare, crie um **CNAME** `stats` apontando para `cname.vercel-dns.com`, com a **nuvem cinza (DNS only)**. A Vercel emite o certificado sozinha. Com o proxy laranja ligado, a emissão e o IP dos visitantes podem dar problema.
-3. O país do visitante vem do cabeçalho `x-vercel-ip-country`, sem precisar do proxy da Cloudflare.
+Na Vercel, **Settings → Domains** → adicione `app.seudominio.com.br` e crie no seu DNS o registro que ela mostrar. Na Cloudflare, use a nuvem **cinza** (DNS only).
 
-## 5. Cron de hora em hora
+## 4. Agendador para o `/cron`
 
-O sync da Meta (gastos, campanhas, status) roda quando alguém chama `GET /cron` com o cabeçalho `Authorization: Bearer <CRON_SECRET>`. Sem o segredo, a rota responde 404.
+Crie um job num agendador externo (ex.: **cron-job.org**, gratuito) chamando `https://app.seudominio.com.br/cron` com o cabeçalho `Authorization: Bearer <CRON_SECRET>`. A cada **5 a 15 minutos** se usar a Conversions API ou a recuperação; a cada hora se for só a sincronização dos anúncios. Sem o segredo, a rota responde 404.
 
-O workflow do GitHub Actions que fazia isso foi removido em 15/11/2026: na instalação em Docker ([deploy-oracle.md](deploy-oracle.md)) o próprio servidor roda as tarefas a cada 5 minutos. Na Vercel, use um agendador externo, como o [cron-job.org](https://cron-job.org): crie um job para `https://stats.seudominio.com/cron`, a cada hora, com o cabeçalho `Authorization: Bearer <CRON_SECRET>`.
+A resposta é um JSON como `{"meta":1,"errors":[],...}`; os erros também aparecem nos logs da Vercel.
 
-A resposta é um JSON como `{"meta":1,"errors":[]}`, e os erros também aparecem nos logs da Vercel. As telas Resumo e Campanhas recarregam sozinhas a cada hora e mostram o horário do último sync.
+## 5. Conectar tudo
 
-## 6. Conectar tudo
-
-Entre com o admin, crie o site e siga a tela **Integrações** (detalhes em [integracoes.md](integracoes.md)):
-
-1. Snippet no `<head>` do site.
-2. Template de UTM nos anúncios da Meta.
-3. URL de webhook na Hotmart, Kiwify ou Eduzz.
-4. Conta de anúncios da Meta (token `ads_read`).
-5. Opcional: Conversions API.
-
-## Desenvolvimento local
-
-Sem `DATABASE_URL`, o Rastro usa o arquivo `analytics.db` (libSQL local) e roda as tarefas a cada 5 minutos dentro do próprio processo:
-
-```sh
-npm install
-cp .env.example .env   # ADMIN_EMAIL, ADMIN_PASSWORD
-npm start              # http://127.0.0.1:8080
-```
+Siga o [guia do iniciante](guia-iniciante.md) a partir da etapa 2.
 
 ## Problemas comuns
 
 | Sintoma | Causa provável |
 |---|---|
-| Página de erro em todas as rotas | `DATABASE_URL` ou `DATABASE_AUTH_TOKEN` errados, ou falta `ADMIN_EMAIL`/`ADMIN_PASSWORD` no primeiro deploy. Veja os logs da função |
-| Formulários ou webhooks chegam vazios | Defina `NODEJS_HELPERS=0` nas variáveis da Vercel (desliga o pré-processamento do corpo da requisição) |
-| Gastos da Meta não atualizam | O cron não está chamando `/cron`. Veja o histórico do cron-job.org |
-| Painel lento | Turso e funções em regiões distantes; aproxime as regiões |
+| Erro em todas as páginas | `DATABASE_URL` errada ou falta o admin no primeiro deploy. Veja os logs da função |
+| Formulários ou webhooks chegam vazios | Falta `NODEJS_HELPERS=0` |
+| Eventos demoram a aparecer na Meta | O agendador roda pouco; diminua o intervalo do `/cron` |
+| "too many connections" no banco | Use a connection string com pooler |
+| Painel lento | Banco e funções em regiões distantes |

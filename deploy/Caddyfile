@@ -1,0 +1,9 @@
+# Usado só com COMPOSE_PROFILES=caddy. O Caddy pede e renova o certificado HTTPS sozinho (Let's Encrypt).
+# Antes: aponte o DNS de DOMAIN (registro A) para o IP da VPS e libere as portas 80 e 443 no firewall do provedor.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8080 {
+		# Sem a Cloudflare na frente, esse cabeçalho viria do visitante: removido para ninguém forjar o IP e escapar do bloqueio de login.
+		header_up -Cf-Connecting-Ip
+	}
+}
