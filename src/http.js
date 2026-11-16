@@ -15,13 +15,16 @@ export function readBody(req, limit) {
 export const form = async (req, limit = 64 * 1024) => new URLSearchParams(await readBody(req, limit));
 // Atrás da Cloudflare, cf-connecting-ip é sobrescrito por ela e não dá para forjar. O primeiro item do X-Forwarded-For vem do cliente,
 // então sem cf-connecting-ip vale o último salto (o proxy imediatamente antes de nós).
-export const clientIp = req => (env.TRUST_PROXY === '1' && (req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']?.split(',').at(-1).trim())) || req.socket.remoteAddress;
+// Pelo Worker da borda (com o segredo), vale o IP que ele viu: senão todo acesso pelo Worker teria o IP da Cloudflare.
+export const clientIp = req => edgeInfo(req.headers)?.ip || (env.TRUST_PROXY === '1' && (req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']?.split(',').at(-1).trim())) || req.socket.remoteAddress;
 export const origin = req => env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http'}://${req.headers.host}`;
 
 export function send(r, status, body, headers = {}) {
   r.res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
     'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${r.nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+    // Em produção (HTTPS), o navegador não aceita mais abrir o painel por HTTP, nem por um link adulterado.
+    ...(env.COOKIE_SECURE === '1' && { 'strict-transport-security': 'max-age=31536000' }),
     ...headers,
   }).end(String(body?.s ?? body));
 }

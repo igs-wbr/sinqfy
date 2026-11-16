@@ -18,7 +18,7 @@ const rand = bytes => btoa(String.fromCharCode(...crypto.getRandomValues(new Uin
 const digits = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => b % 10).join('');
 
 /**
- * t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. Só para hosts "t.*" (o padrão do Rastro);
+ * t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. Só para hosts "t.*" (o padrão do Trackify);
  * qualquer outro host fica com cookie só do host, para nunca cair num sufixo público como com.br.
  */
 export const cookieDomain = host => /^t\.[^.]+\.[^.]+/.test(host) ? host.slice(2) : null;
@@ -102,9 +102,26 @@ async function whatsapp(req, env, pathname) {
   return new Response(null, { status: 302, headers: { location: loc, 'cache-control': 'no-store' } });
 }
 
+/**
+ * Painel pelo próprio Worker (opcional, só no host PANEL_HOST): o que não é script, evento nem link de WhatsApp
+ * vai para a origem como está. Cabeçalhos da borda vindos de fora são descartados; o IP real segue com o segredo,
+ * para o bloqueio de login por tentativas valer por pessoa e não para todos que passam pelo Worker.
+ */
+async function panel(req, env) {
+  const url = new URL(req.url), headers = new Headers(req.headers);
+  for (const k of [...headers.keys()]) if (k === 'host' || k === 'x-edge-secret' || k.startsWith('x-rastro-') || k.startsWith('cf-') || k === 'x-forwarded-for' || k === 'x-real-ip') headers.delete(k);
+  headers.set('x-edge-secret', env.EDGE_SECRET || '');
+  headers.set('x-rastro-ip', req.headers.get('cf-connecting-ip') || '');
+  headers.set('x-forwarded-proto', 'https');
+  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
+  const r = await fetch(`${env.ORIGIN}${url.pathname}${url.search}`, { method: req.method, headers, body, redirect: 'manual', signal: AbortSignal.timeout(30e3) })
+    .catch(() => null);
+  return r ? new Response(r.body, r) : new Response('Painel fora do ar. Tente de novo em instantes.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+}
+
 export default {
   async fetch(req, env, ctx) {
-    const { pathname } = new URL(req.url);
+    const { pathname, hostname } = new URL(req.url);
     if (pathname === '/s.js' && req.method === 'GET') {
       // Só cacheia resposta boa: um erro momentâneo da origem não pode deixar o snippet quebrado por 1 h em todos os sites.
       const r = await fetch(`${env.ORIGIN}/s.js`, { cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 3600, '400-599': 0 } }, signal: AbortSignal.timeout(10e3) });
@@ -115,6 +132,7 @@ export default {
     }
     if (pathname === '/e' && req.method === 'POST') return collect(req, env, ctx);
     if (/^\/w\/[\w-]{3,40}$/.test(pathname) && req.method === 'GET') return whatsapp(req, env, pathname);
+    if (env.PANEL_HOST && hostname === env.PANEL_HOST) return panel(req, env);
     return new Response('Not found', { status: 404 });
   },
 };

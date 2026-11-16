@@ -23,11 +23,37 @@ const beacon = (body, headers = {}) => new Request('https://t.cliente.com.br/e',
 const jar = res => Object.fromEntries(res.headers.getSetCookie().map(c => c.split(';')[0].split('=')));
 beforeEach(() => { calls.length = 0; puts.length = 0; originStatus = 202; });
 
+test('painel pelo Worker: só no PANEL_HOST, sem cabeçalho da borda forjado, com o IP real e os cookies da origem', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    const h = new Headers({ location: '/sites/loja' });
+    h.append('set-cookie', 'sid=abc; Path=/; HttpOnly'); h.append('set-cookie', 'outro=1; Path=/');
+    return new Response(null, { status: 303, headers: h });
+  };
+  try {
+    const penv = { ...env, PANEL_HOST: 'trackify.user.workers.dev' };
+    const req = new Request('https://trackify.user.workers.dev/login?next=%2Fsites', { method: 'POST', body: 'email=a%40b.c&password=x',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': '198.51.100.7', 'x-edge-secret': 'forjado', 'x-rastro-rid': 'RidForjado1234567890ab', cookie: 'sid=velho' } });
+    const res = await worker.fetch(req, penv, { waitUntil() {} });
+    const [c] = calls;
+    assert.equal(c.url, 'https://app.rastro.dev/login?next=%2Fsites');
+    assert.deepEqual([c.init.method, c.init.redirect, new TextDecoder().decode(c.init.body)], ['POST', 'manual', 'email=a%40b.c&password=x']);
+    const h = c.init.headers;
+    assert.deepEqual([h.get('x-edge-secret'), h.get('x-rastro-ip'), h.get('x-rastro-rid'), h.get('cookie'), h.get('host')], ['s3gredo', '198.51.100.7', null, 'sid=velho', null]);
+    assert.deepEqual([res.status, res.headers.get('location'), res.headers.getSetCookie().length], [303, '/sites/loja', 2]);
+    calls.length = 0;
+    assert.equal((await worker.fetch(new Request('https://t.cliente.com.br/login'), penv, { waitUntil() {} })).status, 404, 'domínio de cliente não mostra o painel');
+    assert.equal((await worker.fetch(new Request('https://trackify.user.workers.dev/login'), env, { waitUntil() {} })).status, 404, 'sem PANEL_HOST, nada de painel');
+    assert.equal(calls.length, 0);
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('domínio do cookie e identificadores', () => {
   assert.equal(cookieDomain('t.cliente.com.br'), 'cliente.com.br');
   assert.equal(cookieDomain('localhost'), null);
   assert.equal(cookieDomain('cliente.com.br'), null, 'nunca um sufixo público');
-  assert.equal(cookieDomain('rastro-edge.user.workers.dev'), null);
+  assert.equal(cookieDomain('trackify-edge.user.workers.dev'), null);
   assert.equal(scrubUrl('https://x.dev/p?email=a%40b.com&utm_source=FB&fbclid=I1'), 'https://x.dev/p?utm_source=FB&fbclid=I1');
   const now = 1700000000000;
   const fresh = identify({}, 'https://x.dev/?fbclid=IwAR1', now);

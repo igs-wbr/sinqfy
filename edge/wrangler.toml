@@ -1,28 +1,37 @@
-# Worker da borda do Rastro. Deploy: na pasta edge/, `npx wrangler deploy`.
-# Segredo (o mesmo EDGE_SECRET do painel): `npx wrangler secret put EDGE_SECRET`.
-name = "rastro-edge"
+# Worker da borda do Trackify: script, eventos, links de WhatsApp e, se quiser, o painel no mesmo endereço.
+# Deploy automático: .github/workflows/deploy-edge.yml (a cada push na main que mexe em edge/).
+# Deploy manual, na pasta edge/: npx wrangler deploy --var ORIGIN:https://app.seudominio.com.br
+# Segredo (o mesmo EDGE_SECRET do painel), uma vez só: npx wrangler secret put EDGE_SECRET
+name = "trackify"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
-# O seu subdomínio e os domínios dos clientes (Cloudflare for SaaS: os t.cliente.com.br cadastrados pelo painel chegam pela rota */*).
-# Antes, na zona: SSL/TLS, Custom Hostnames, defina o fallback origin (ex.: edge.seudominio.com.br, um registro proxied qualquer).
-routes = [
-  { pattern = "t.seudominio.com.br", custom_domain = true },
-  { pattern = "*/*", zone_name = "seudominio.com.br" },
-]
+# Endereço <nome>.<sua-conta>.workers.dev. Funciona sem domínio próprio na Cloudflare.
+workers_dev = true
+# Sem endereço extra por versão: o painel só responde no PANEL_HOST.
+preview_urls = false
 
+# Valores de cada instalação. No deploy automático vêm das variáveis do repositório (TRACKIFY_ORIGIN e TRACKIFY_PANEL_HOST).
+# ORIGIN: onde o painel roda (túnel da Cloudflare). PANEL_HOST: host em que o Worker também mostra o painel; vazio desliga.
 [vars]
 ORIGIN = "https://app.seudominio.com.br"
+PANEL_HOST = ""
 
-# Beacons que a origem não conseguiu receber ficam aqui para reprocessar, sem IP nem user agent. Crie o bucket e a regra de 30 dias:
-#   npx wrangler r2 bucket create rastro-raw
-#   npx wrangler r2 bucket lifecycle add rastro-raw expira-30d failed/ --expire-days 30
-[[r2_buckets]]
-binding = "RAW"
-bucket_name = "rastro-raw"
-
-# Limite de beacons por IP (protege a fila e a cota da Meta do cliente contra inundação).
+# Limite de eventos por IP (protege a fila e a cota da Meta contra inundação).
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "1001"
 simple = { limit = 120, period = 60 }
+
+# Com domínio na Cloudflare: descomente para servir em t.seudominio e nos domínios dos clientes (Cloudflare for SaaS).
+# routes = [
+#   { pattern = "t.seudominio.com.br", custom_domain = true },
+#   { pattern = "*/*", zone_name = "seudominio.com.br" },
+# ]
+
+# Com o R2 ativado na conta: eventos que o painel não recebeu ficam guardados 30 dias. Crie antes:
+#   npx wrangler r2 bucket create trackify-raw
+#   npx wrangler r2 bucket lifecycle add trackify-raw expira-30d failed/ --expire-days 30
+# [[r2_buckets]]
+# binding = "RAW"
+# bucket_name = "trackify-raw"

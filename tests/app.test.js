@@ -85,3 +85,12 @@ test('força bruta: 10 falhas bloqueiam o IP', async () => {
   for (let i = 0; i < 10; i++) await req('/login', { form: { email: 'admin@test.dev', password: 'x' }, headers: { 'x-forwarded-for': '10.9.9.9' } });
   assert.equal((await req('/login', { form: { email: 'admin@test.dev', password: 'admin-pass-123' }, headers: { 'x-forwarded-for': '10.9.9.9' } })).status, 429);
 });
+
+test('pelo Worker da borda, o bloqueio de login vale para o IP real, não para o da Cloudflare', async () => {
+  const via = ip => ({ 'x-edge-secret': 'segredo-da-borda', 'x-rastro-ip': ip, 'x-forwarded-for': '104.16.0.1' }); // todos chegam pelo mesmo IP da Cloudflare
+  for (let i = 0; i < 10; i++) await req('/login', { form: { email: `ninguem${i}@test.dev`, password: 'x' }, headers: via('203.0.113.50') });
+  assert.equal((await req('/login', { form: { email: 'outro1@test.dev', password: 'x' }, headers: via('203.0.113.50') })).status, 429, 'quem errou 10 vezes fica bloqueado');
+  assert.equal((await req('/login', { form: { email: 'outro2@test.dev', password: 'x' }, headers: via('203.0.113.51') })).status, 401, 'outra pessoa pelo mesmo Worker não');
+  const forjado = { 'x-edge-secret': 'errado', 'x-rastro-ip': '203.0.113.99', 'x-forwarded-for': '10.7.7.7' };
+  assert.equal((await req('/login', { form: { email: 'outro3@test.dev', password: 'x' }, headers: forjado })).status, 401, 'IP da borda sem o segredo é ignorado');
+});
