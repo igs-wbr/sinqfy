@@ -175,6 +175,8 @@ async function migrate() {
 
   if (!await db.get('SELECT 1 FROM users LIMIT 1')) {
     if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD) throw new Error('Defina ADMIN_EMAIL e ADMIN_PASSWORD (veja .env.example) para criar o primeiro admin');
+    // O admin nasce com a senha do .env: a de exemplo ou uma curta abriria o painel para qualquer um que tente.
+    if (env.ADMIN_PASSWORD.length < 12 || /troque|change|senha|password|123456/i.test(env.ADMIN_PASSWORD)) throw new Error('ADMIN_PASSWORD fraca: use pelo menos 12 caracteres e não a senha de exemplo (gere com: openssl rand -base64 18)');
     await db.run("INSERT INTO users(email, name, role, pass, created, platform) VALUES (?, 'Admin', 'admin', ?, ?, 1)", [env.ADMIN_EMAIL, hashPassword(env.ADMIN_PASSWORD), Date.now()]);
   }
   // Agência 1 para o que já existia antes da etapa 4; o primeiro usuário vira dono da plataforma.
