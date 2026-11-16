@@ -13,14 +13,14 @@ const tl = (ctx, p, f, compare = true) => toolbar(ctx, p, f, { compare, filters:
 
 export function overviewPage(ctx, p, f, d) {
   const cur = d.cur, prev = d.prev || {}, site = ctx.site, rev = cur.revenue || prev.revenue;
-  const m = v => money(v, site.currency);
+  const m = v => money(v, site.currency), sp = key => p.days > 1 ? d.series.map(x => ({ k: x.k, v: x[key] })) : null;
   const utm = [['Fonte', d.utm_source, 'utm_source'], ['Mídia', d.utm_medium, 'utm_medium'], ['Campanha', d.utm_campaign, 'utm_campaign'], ['Conteúdo', d.utm_content, 'utm_content']];
   const live = ctx.share ? html`<span class="live"><i></i>${num(d.online)} online agora</span>` : html`<a class="live" href="/sites/${encodeURIComponent(site.id)}/realtime"><i></i>${num(d.online)} online agora</a>`;
   return layout(ctx, `${ctx.share ? 'Tráfego' : 'Visão geral'} · ${site.name}`, html`
 ${pageHead(`${site.name} · ${ctx.share ? 'Tráfego' : 'Visão geral'}`, raw(`Quem chega, <em>de onde</em> e o que faz`), null, live)}
 ${tl(ctx, p, f)}
-<div class="hero">${kpi('visitors', 'Visitantes', cur.visitors, prev.visitors, num, { feature: true })}${kpi('visits', 'Visitas', cur.visits, prev.visits, num)}
-${kpi('pageviews', 'Visualizações', cur.pageviews, prev.pageviews, num)}${kpi('bounce', 'Rejeição', cur.bounce, prev.bounce, pct, { invert: true })}</div>
+<div class="hero">${kpi('visitors', 'Visitantes', cur.visitors, prev.visitors, num, { feature: true, spark: sp('v') })}${kpi('visits', 'Visitas', cur.visits, prev.visits, num)}
+${kpi('pageviews', 'Visualizações', cur.pageviews, prev.pageviews, num, { spark: sp('n') })}${kpi('bounce', 'Rejeição', cur.bounce, prev.bounce, pct, { invert: true })}</div>
 <div class="kpis">${kpi('duration', 'Duração da visita', cur.duration, prev.duration, dur)}${kpi('ppv', 'Páginas por visita', cur.visits ? cur.pageviews / cur.visits : null, prev.visits ? prev.pageviews / prev.visits : null, v => v == null ? '-' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }))}
 ${rev ? kpi('revenue', 'Receita (eventos)', cur.revenue, prev.revenue, m) : ''}</div>
 <section class="card"><h2>Visitantes ao longo do tempo</h2>${chart(d.series, d.prevSeries, { tip: x => [`${num(x.n)} visualizações`] })}</section>
@@ -50,7 +50,7 @@ ${tabs('Países', [['Países', list(ctx, r.countries, 'country', { head: 'País'
 export function realtimePage(ctx, r) {
   return layout(ctx, `Tempo real · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Tempo real`, raw('Acontecendo <em>agora</em>'), `O que está acontecendo em ${ctx.site.name} neste momento.`, html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
 <div id="rt" aria-live="polite">${realtimeBody(ctx, r)}</div>
-<script nonce="${ctx.nonce}">setInterval(function(){if(document.hidden)return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)document.getElementById('rt').innerHTML=h})},5000)</script>`);
+<script nonce="${ctx.nonce}">setInterval(function(){if(document.hidden)return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('rt'),h)})},5000)</script>`);
 }
 
 const short = (v, n = 10) => v && v.length > n ? v.slice(0, n) + '…' : v;
@@ -82,7 +82,7 @@ export function eventsBody(ctx, rows) {
 export function eventsPage(ctx, rows) {
   return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Eventos`, raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos, do mais novo para o mais antigo. Clique no selo de envio para ver a resposta da Meta ou do GA4.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
 <section class="card" id="ev">${eventsBody(ctx, rows)}</section>
-<script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)document.getElementById('ev').innerHTML=h})},5000)</script>`);
+<script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('ev'),h)})},5000)</script>`);
 }
 
 export function funnelsPage(ctx, p, f, funnels, err) {

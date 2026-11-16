@@ -12,7 +12,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `edge/`: Worker da Cloudflare (`worker.js`, `wrangler.toml`): cookies primários e repasse do beacon com `EDGE_SECRET`. Testado em `tests/edge.test.js` sem wrangler.
 - `deploy/`: `docker-compose.yml` (postgres e app; publicação por perfil: `cloudflare` com túnel, `caddy` com HTTPS automático, ou proxy próprio), `Caddyfile` e `backup.sh` (pg_dump cifrado para qualquer remoto do rclone).
 - `src/http.js` (rotas e respostas) · `src/auth.js` (sessão, papéis, força bruta no banco) · `src/time.js` (fusos e períodos).
-- `src/tracking/`, `src/sales/`, `src/ads/meta.js`: domínio. `src/jobs.js`: `runJobs()`, chamado por `GET /cron` (Bearer `CRON_SECRET`).
+- `src/tracking/`, `src/sales/`, `src/ads/meta.js`: domínio. `src/sales/funnel.js`: funil dos anúncios da aba Campanhas (fonte mais confiável por etapa: página pelo script, compra pelo webhook, impressão e clique pela Meta; gargalo é a etapa que mais caiu contra o período anterior da própria campanha, nunca média de mercado). `src/jobs.js`: `runJobs()`, chamado por `GET /cron` (Bearer `CRON_SECRET`).
 - `src/dispatch.js`: fila `deliveries` e envio server-side para Meta (CAPI) e GA4 (Measurement Protocol), com reenvio. Ingestão e webhooks só enfileiram; `dispatch()` roda a cada 5 s no servidor e no `/cron`.
 - `src/cloudflare.js`: domínio do cliente na borda (Cloudflare for SaaS, custom hostnames). `src/routes/setup.js` + `src/views/setup.js`: assistente de 6 passos.
 - Agências ([ADR 0009](docs/adr/0009-multi-cliente.md)): todo acesso a site, equipe e convite filtra por `agency_id`; `users.platform` é o dono da instalação.
@@ -22,7 +22,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/recovery.js` (venda pendente → `pending_orders` e sequência no WhatsApp, rodada em `runJobs`), `src/checkout.js` (BR Code do Pix e QR em SVG com `src/vendor/qrcode.cjs`, MIT), `src/routes/audiences.js` (CSV em SHA-256). Envio e robô em `src/whatsapp.js` (`sendWhatsapp`, `matchRule`).
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
-- `public/`: servido pela CDN na Vercel. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
+- `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
 - `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0018`), fluxo com skills.
 
 ## Regras

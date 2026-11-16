@@ -3,7 +3,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { boot, CHROME, IPHONE } from './helpers.js';
+import { boot, kv, CHROME, IPHONE } from './helpers.js';
 
 const { req, login, close, base } = await boot();
 const { db } = await import('../src/db.js');
@@ -176,11 +176,11 @@ test('funis, jornadas e atribuição', async () => {
 test('painel de tráfego: números, filtros e escape de XSS', async () => {
   const dash = await req('/sites/blog/traffic?range=today', { cookie: admin });
   assert.equal(dash.status, 200);
-  assert.match(dash.text, /id="visitors">2</);
+  assert.match(kv(dash.text, "visitors"), /^2$/);
   assert.ok(dash.text.includes('&#60;script&#62;alert(1)') && !dash.text.includes('<script>alert'), 'XSS escapado');
-  assert.match((await req('/sites/blog/traffic?range=today&f_channel=Social', { cookie: admin })).text, /id="visitors">1</);
+  assert.match(kv((await req('/sites/blog/traffic?range=today&f_channel=Social', { cookie: admin })).text, "visitors"), /^1$/);
   assert.match((await req('/sites/blog/traffic?range=today&f_name=signup', { cookie: admin })).text, /plan = pro/);
-  assert.match((await req('/sites/blog/realtime?partial=1', { cookie: admin })).text, /id="online">2</);
+  assert.match(kv((await req('/sites/blog/realtime?partial=1', { cookie: admin })).text, "online"), /^2$/);
   assert.equal((await req('/sites/blog/funnels', { cookie: admin, form: { name: 'Compra', steps: '/a\n/pricing\nevento:signup' } })).status, 303);
   assert.match((await req('/sites/blog/funnels?range=today', { cookie: admin })).text, /Conversão <b class="pos">50%<\/b>/);
 });

@@ -7,6 +7,7 @@ import * as S from '../sales/stats.js';
 import { edgeUrlFor } from '../cloudflare.js';
 import { handleWebhook, handleSheet, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, parseCustom, secretsOf } from '../sales/webhooks.js';
 import { syncMeta } from '../ads/meta.js';
+import { compareFunnel } from '../sales/funnel.js';
 import * as V from '../views/sales.js';
 
 const range = r => [period(r.q, r.site.timezone), S.saleFiltersFrom(r.q)];
@@ -21,6 +22,7 @@ route('GET', '/sites/:id', { site: 'view' }, async r => {
     platforms: distinct('platform'), products: distinct('product'),
     cur: S.salesTotals(site, p, f), prev: p.prev && S.salesTotals(site, p.prev, f),
     series: S.salesSeries(site, p, f, p.days), prevSeries: p.prev && S.salesSeries(site, p.prev, f, p.days),
+    marks: p.days > 1 && p.days <= 92 ? S.campaignMarks(site, p) : [],
     methods: S.byMethod(site, p, f), campaigns: S.topSales(site, p, f, 'utm_campaign'), sources: S.topSales(site, p, f, 'utm_source'),
     productsTop: S.topSales(site, p, f, 'product'), platformsTop: S.topSales(site, p, f, 'platform'),
   });
@@ -30,8 +32,11 @@ route('GET', '/sites/:id', { site: 'view' }, async r => {
 route('GET', '/sites/:id/campaigns', { site: 'view' }, async r => {
   const p = period(r.q, r.site.timezone);
   const level = Object.hasOwn(S.LEVEL_PT, r.q.get('level') || '') ? r.q.get('level') : 'campaign';
-  const [c, rows, ls] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level), lastSync(r.site.id)]);
-  send(r, 200, V.campaignsPage(c, p, level, rows, ls));
+  const fc = /^[\w-]{1,40}$/.test(r.q.get('fc') || '') ? r.q.get('fc') : null; // campanha do funil (vazio = todas)
+  const [c, rows, ls, funnel, before] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level), lastSync(r.site.id),
+    S.adFunnel(r.site, p, fc), p.prev && S.adFunnel(r.site, p.prev, fc)]);
+  compareFunnel(funnel.stages, before?.stages); // gargalo contra a própria campanha no período anterior, nunca contra média de mercado
+  send(r, 200, V.campaignsPage(c, p, level, rows, ls, { ...funnel, fc, prev: p.prev, options: level === 'campaign' ? rows : await S.campaigns(r.site, p) }));
 });
 
 route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
@@ -58,7 +63,7 @@ async function integrationsView(r, msg, err, extra = {}) {
 route('GET', '/sites/:id/integrations', { site: 'edit' }, r => integrationsView(r, Object.hasOwn(MSG, r.q.get('ok') || '') ? MSG[r.q.get('ok')] : null));
 route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
   const f = await form(r.req), action = f.get('action'), site = r.site;
-  const done = () => redirect(r, f.get('back') === 'setup' ? sitePath(site, '/setup') : sitePath(site, `/integrations?ok=${action}`));
+  const done = () => redirect(r, f.get('back') === 'setup' ? sitePath(site, '/setup') : sitePath(site, `/integrations?ok=${action}#${Object.hasOwn(V.INTEG_SECTION, action) ? V.INTEG_SECTION[action] : ''}`));
   const account = async () => {
     const a = await db.get('SELECT * FROM ad_accounts WHERE id=? AND site=?', [Number(f.get('account')) || 0, site.id]);
     if (!a) throw new HttpError(404, 'Conta não encontrada.');

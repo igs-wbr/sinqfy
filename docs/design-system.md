@@ -52,16 +52,18 @@ O azul cobre poucos por cento da tela: botão principal, item ativo, logo e a s�
 
 ## Tipografia
 
-- **Figtree** (OFL), pesos 400 e 500; 600 só para ênfase rara (título do tooltip, total de tabela).
-- **JetBrains Mono** (OFL): números de meta, horários, IDs, variações e eixos.
+- **Figtree** (OFL): texto da interface, pesos 400 a 600. Números com algarismos tabulares (`tabular-nums` no `body`).
+- **Display** (`--display`): título da página e números de KPI. Padrão **Bricolage Grotesque** (OFL); **Space Grotesk** (OFL) em teste, trocada no menu do perfil (`data-font=space`, salvo em `rastro-font`).
+- **JetBrains Mono** (OFL): só códigos, IDs e horários. Valores, variações e eixos ficam na sans.
+- Dinheiro em KPI com hierarquia: símbolo e centavos menores (`figure()` em `ui.js`), o inteiro grande.
 - Fontes servidas por `public/fonts`, nunca pelo Google (vazaria o IP de quem abre o painel).
 - Sem caixa alta com espaçamento largo, sem itálico, sem espaçamento negativo em texto pequeno. Hierarquia por tamanho e cor.
 
 | Papel | Tamanho / altura | Peso |
 |---|---|---|
-| Título da página (h1) | 32px / 1.15 (26px no celular) | 500 |
-| Número de destaque | 44px / 1, -0.02em | 500 |
-| Número de KPI / faixa | 28px / 20px | 500 |
+| Título da página (h1), display | 40px / 1.08, -0.03em (28px no celular) | 600 |
+| Número de destaque, display | 44px / 1, -0.02em | 600 |
+| Número de KPI / faixa, display | 28px / 20px | 600 |
 | Título de card (h2) | 16px / 1.3 | 500 |
 | Texto | 14px / 1.5 | 400 |
 | Rótulo, cabeçalho de tabela, meta | 12 a 13px, sentence case | 400 a 500 |
@@ -71,20 +73,32 @@ O azul cobre poucos por cento da tela: botão principal, item ativo, logo e a s�
 - Raio: 14px em cards e painéis, 8px em campos, botões e itens de menu, 6px em selos. Interno = externo menos o respiro.
 - Espaço: escala de 4px. Itens da barra com 36px, rótulo de grupo 16px acima e 8px abaixo.
 - Borda de 1px em vez de sombra. Sombra neutra só em menus suspensos e tooltip.
-- Movimento até 160ms, só cor, fundo, borda, opacidade e transform. Nada em loop (o ponto "ao vivo" é estático). Com `prefers-reduced-motion`, nenhum.
+- Movimento com 3 durações e uma curva: `--d1` 120ms (hover), `--d2` 240ms (menus, indicadores), `--d3` 400ms (troca de página, entrada de cartões); `--ease`, e `--spring` só no que "pula" (indicador de aba, avatar). Nada em loop. Com `prefers-reduced-motion`, nenhum.
+- Navegação: pré-renderização ao parar o mouse em link do menu, das abas de período ou do perfil (Speculation Rules); troca de página com View Transitions, e o conteúdo entra de baixo ou de cima conforme a direção no menu.
+- Primeira visita da página na sessão (`.intro`): cartões entram em sequência, barras crescem, linhas se desenham e os números do topo contam até o valor. Navegação lenta mostra a barra de progresso do rastro depois de 150ms.
+- Rastro (traço com ponto do logo) é o motivo da marca: item ativo do menu, fim das linhas, barra de carregamento e estado vazio.
 
 ## Estrutura da tela
 
 - **Barra lateral** fixa à esquerda, 248px, recolhível para 72px só com ícones. Sem JavaScript, fica aberta.
-- **Celular (< 900px)**: barra vira topo com botão de menu; a navegação abre por cima do conteúdo.
-- **Cabeçalho da página**: trilha `Site · Página` em cinza, título, linha de contexto; à direita, período e o botão principal.
+- **Celular (< 900px)**, pensado para abrir como web app instalado:
+  - topo translúcido com a marca, o site e o perfil; **barra de abas inferior** com Resumo, Tráfego, CRM (ou Pedidos), Conversas (ou Eventos) e Menu, que abre a gaveta com o resto;
+  - gaveta que segue o dedo para fechar (e abre pela borda esquerda no app instalado); puxar para atualizar só no app instalado (no navegador o próprio navegador já faz);
+  - áreas seguras (`env(safe-area-inset-*)`) no topo, na gaveta, na barra de abas e nas laterais; campos com 16px para o iOS não dar zoom; a barra de abas some com o teclado aberto;
+  - toque sem atraso (`touch-action: manipulation`), sem realce cinza, com retorno ao pressionar; alvos de 44px ou mais; rolagem horizontal contida em quadros e tabelas;
+  - `manifest.webmanifest` com ícone maskable, `apple-touch-icon` em PNG, metas de web app, botão "Instalar o app" no perfil (no iPhone, a instrução do Safari) e aviso de sem conexão;
+  - `public/sw.js` guarda só fontes, ícones e `offline.html`; páginas com dados nunca vão para o cache.
+- **Cabeçalho da página**: título e linha de contexto (sem texto acima do título); à direita, período e o botão principal.
+- **Menu do perfil**: círculo no canto superior direito com Sites, Equipe, Agências, Conta, tema, fonte de títulos e Sair. Camada flutuante com vidro (desfoque).
 - **KPIs**: a primeira linha (`.hero`) tem o número de destaque ocupando duas colunas; os demais indicadores (`.kpis`) ficam numa faixa única com hairlines entre as células, sem cards iguais.
 - **Conteúdo**: largura máxima 1240px, margem 32px (16px no celular).
 
 ## Componentes
 
 - **Botão principal**: azul cheio, texto branco, um por tela. **Secundário**: superfície com borda. **Fantasma**: só texto. **Perigo**: vermelho, só em ação destrutiva. Foco visível com anel de 2px `--ring`.
-- **Variação** (`.delta`): texto mono com seta, verde ou vermelho, sem pílula. O período comparado aparece na barra de filtros.
+- **Variação** (`.delta`): pílula com seta, verde ou vermelha. O período comparado aparece na barra de filtros.
+- **Minigráfico** (`spark`): linha da série diária dentro do KPI, com ponto no último valor. Acende o mesmo dia quando o mouse passa pelo gráfico principal (mira compartilhada por `data-k`).
+- **Participação** (`share()`): barras horizontais ordenadas, com rótulo, valor e porcentagem escritos. Substitui a rosca.
 - **Selo** (`.tag`, `.badge`): texto 12px numa superfície com hairline, raio 6px.
 - **Tabela**: cabeçalho em `--surface2`, números à direita, hover de linha.
 - **Estado vazio**: frase que diz o próximo passo e o botão que resolve.
@@ -95,7 +109,7 @@ Lucide (licença ISC), SVG inline em `src/views/icons.js`, 18px, traço 1,5px, n
 
 ## Gráficos
 
-Série única em `--s1`; período anterior tracejado em `--muted`. Ordem fixa das séries, nunca reciclada:
+Série única em `--s1`; período anterior tracejado em `--muted`. Marcações (ponto com linha pontilhada) mostram o dia em que uma campanha começou ou parou de gastar (`campaignMarks` em `sales/stats.js`). Ordem fixa das séries, nunca reciclada:
 
 | Slot | Claro | Escuro | Uso atual |
 |---|---|---|---|

@@ -80,7 +80,7 @@ export async function series(site, range, f, days) {
   }
   const keys = buckets(range.from, range.to, days);
   const byKey = new Map(rows.map(r => [r.k, r]));
-  return keys.map(([k, label]) => ({ label, v: byKey.get(k)?.v || 0, n: byKey.get(k)?.n || 0 }));
+  return keys.map(([k, label]) => ({ k: String(k), label, v: byKey.get(k)?.v || 0, n: byKey.get(k)?.n || 0 }));
 }
 
 export async function online(site, now = Date.now()) {

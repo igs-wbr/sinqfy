@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { boot } from './helpers.js';
+import { boot, kv } from './helpers.js';
 
 // A Graph API da Meta é simulada; todo o resto do fetch é real (servidor local).
 const graphCalls = [], capiBodies = [];
@@ -140,13 +140,13 @@ test('campanhas: gasto × vendas pela chave da UTM', async () => {
 test('páginas de vendas: números, auto-refresh de hora em hora e indicador do sync', async () => {
   const dash = await req('/sites/loja', { cookie: admin });
   assert.equal(dash.status, 200);
-  assert.match(dash.text, /id="net">R\$\s?424,50</);
+  assert.match(kv(dash.text, "net"), /^R\$\s?424,50$/);
   assert.match(dash.text, /Vendas por pagamento/);
-  assert.match(dash.text, /id="meta-purchases">3</);
-  assert.match(dash.text, /id="meta-leads">5</);
+  assert.match(kv(dash.text, "meta-purchases"), /^3$/);
+  assert.match(kv(dash.text, "meta-leads"), /^5$/);
   assert.match(dash.text, /<meta http-equiv="refresh" content="3600">/, 'recarrega a cada hora');
   assert.match(dash.text, /Meta atualizada às \d{2}:\d{2}/);
-  assert.match((await req('/sites/loja?f_platform=hotmart', { cookie: admin })).text, /id="net">R\$\s?377,50</);
+  assert.match(kv((await req('/sites/loja?f_platform=hotmart', { cookie: admin })).text, "net"), /^R\$\s?377,50$/);
   assert.match((await req('/sites/loja/campaigns', { cookie: admin })).text, /Black Friday/);
   assert.match((await req('/sites/loja/campaigns?level=adset', { cookie: admin })).text, /Lookalike/);
   const refunded = await req('/sites/loja/orders?f_status=refunded', { cookie: admin });

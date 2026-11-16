@@ -73,14 +73,14 @@ ${notice(msg)}${notice(err, true)}
 const authCard = body => html`<div class="auth"><a class="brand" href="/">${MARK}<span>Trackify</span></a><div class="card">${body}</div></div>`;
 
 export function loginPage(ctx, { next = '', email = '', err } = {}) {
-  return layout(ctx, 'Entrar', authCard(html`<div class="eyebrow">Acesso</div><h1>Entrar</h1>${notice(err, true)}
+  return layout(ctx, 'Entrar', authCard(html`<h1>Entrar</h1>${notice(err, true)}
 <form method="post" action="/login" class="stack"><input type="hidden" name="next" value="${next}">
 <label class="f">E-mail<input type="email" name="email" value="${email}" required autocomplete="username" autofocus></label>
 <label class="f">Senha<input type="password" name="password" required autocomplete="current-password"></label><div><button class="primary">Entrar</button></div></form>`), { bare: true });
 }
 
 export function invitePage(ctx, user, err) {
-  return layout(ctx, 'Definir senha', authCard(user ? html`<div class="eyebrow">Convite</div><h1>Bem-<em>vindo</em></h1><p class="sub" style="margin-bottom:16px">Defina uma senha para ${user.email}.</p>${notice(err, true)}
+  return layout(ctx, 'Definir senha', authCard(user ? html`<h1>Bem-<em>vindo</em></h1><p class="sub" style="margin-bottom:16px">Defina uma senha para ${user.email}.</p>${notice(err, true)}
 <form method="post" class="stack"><label class="f">Senha (mín. 8)<input type="password" name="password" required minlength="8" autocomplete="new-password" autofocus></label>
 <label class="f">Confirmar<input type="password" name="confirm" required minlength="8" autocomplete="new-password"></label><div><button class="primary">Salvar e entrar</button></div></form>`
     : html`<h1>Link inválido</h1><p class="sub" style="margin-bottom:16px">Este link expirou ou já foi usado. Peça um novo a um admin.</p><a class="btn" href="/login">Ir para o login</a>`), { bare: true });

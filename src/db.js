@@ -170,6 +170,9 @@ async function migrate() {
     -- Checkout com Pix próprio (src/checkout.js). O preço vem sempre daqui, nunca do formulário.
     CREATE TABLE IF NOT EXISTS products(id ${ID}, site TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, price DOUBLE PRECISION NOT NULL,
       pix_key TEXT NOT NULL, pix_name TEXT NOT NULL, pix_city TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created BIGINT NOT NULL);
+    -- Funil dos anúncios: etapas que a Meta reporta entre o clique e a compra (cliques no link, página de destino, carrinho, checkout).
+    ALTER TABLE ad_spend ADD COLUMN IF NOT EXISTS meta_link_clicks BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_lpv BIGINT NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS meta_atc BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_checkouts BIGINT NOT NULL DEFAULT 0;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

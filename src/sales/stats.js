@@ -7,6 +7,7 @@
 import { db } from '../db.js';
 import { tzOffset, buckets } from '../time.js';
 import { STATUS_PT } from '../ads/meta.js';
+import { buildFunnel } from './funnel.js';
 
 export const SALE_FILTERS = { platform: 'Plataforma', product: 'Produto', utm_source: 'Fonte', status: 'Status', method: 'Pagamento' };
 export function saleFiltersFrom(q) {
@@ -60,7 +61,48 @@ export async function salesSeries(site, range, f, days) {
     rev = r; spend = new Map(s.map(x => [x.k, x.v]));
   }
   const byKey = new Map(rev.map(r => [r.k, r]));
-  return buckets(range.from, range.to, days).map(([k, label]) => ({ label, v: byKey.get(k)?.v || 0, n: byKey.get(k)?.n || 0, s: spend.get(k) || 0 }));
+  return buckets(range.from, range.to, days).map(([k, label]) => ({ k: String(k), label, v: byKey.get(k)?.v || 0, n: byKey.get(k)?.n || 0, s: spend.get(k) || 0 }));
+}
+
+/** Marcações do gráfico: campanha que começou a gastar ou parou de gastar dentro do período (dias com gasto > 0). */
+export async function campaignMarks(site, range) {
+  const rows = await db.all(`SELECT MAX(campaign_name) name, MIN(date) a, MAX(date) b, (SELECT MAX(date) FROM ad_spend WHERE site=? AND spend>0) last
+    FROM ad_spend WHERE site=? AND spend>0 GROUP BY campaign_id`, [site.id, site.id]);
+  const out = [];
+  for (const r of rows) {
+    const name = r.name || 'campanha sem nome';
+    if (r.a >= range.from && r.a <= range.to) out.push({ k: r.a, text: `Começou: ${name}` });
+    if (r.b !== r.a && r.b >= range.from && r.b < range.to && r.b < r.last) out.push({ k: r.b, text: `Último dia com gasto: ${name}` });
+  }
+  return out;
+}
+
+// Chave da campanha numa UTM "Nome|id" (a do template); sem "|", o próprio texto. Mesma regra de adKey() dos webhooks.
+const UTM_KEY = `COALESCE(substring(utm_campaign from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(utm_campaign))`;
+
+/** Dados do funil dos anúncios da Meta (uma campanha ou todas), cruzando a Meta com os nossos eventos e vendas. Ver src/sales/funnel.js. */
+export async function adFunnel(site, range, campaign = null) {
+  const only = campaign ? ' AND campaign_id=?' : '';
+  const base = [site.id, range.from, range.to, ...(campaign ? [campaign] : [])];
+  const [meta, camps, tracking, webhooks] = await Promise.all([
+    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_lpv) lpv, SUM(meta_checkouts) ic, SUM(meta_purchases) buy, SUM(spend) spend
+      FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
+    db.all(`SELECT DISTINCT campaign_id, campaign_name FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
+    db.get('SELECT 1 FROM events WHERE site=? AND date BETWEEN ? AND ? LIMIT 1', [site.id, range.from, range.to]),
+    db.get('SELECT 1 FROM sales WHERE site=? LIMIT 1', [site.id]),
+  ]);
+  // Venda e visita casam com a campanha pelo id da UTM ou, sem id, pelo nome.
+  const keys = [...new Set(camps.flatMap(c => [c.campaign_id, c.campaign_name]).filter(Boolean))];
+  const [own, sales] = keys.length ? await Promise.all([
+    db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout
+      FROM (SELECT visitor, COUNT(*) FILTER (WHERE name='pageview') pv, COUNT(*) FILTER (WHERE name<>'pageview') ev,
+        COUNT(*) FILTER (WHERE name IN ('InitiateCheckout','AddPaymentInfo') OR lower(name) LIKE '%checkout%') co
+        FROM events WHERE site=? AND date BETWEEN ? AND ?
+          AND visitor IN (SELECT visitor FROM events WHERE site=? AND date BETWEEN ? AND ? AND name='pageview' AND ${UTM_KEY} = ANY(?))
+        GROUP BY visitor) x`, [site.id, range.from, range.to, site.id, range.from, range.to, keys]),
+    db.get("SELECT COUNT(*) n FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid' AND campaign_key = ANY(?)", [site.id, range.from, range.to, keys]),
+  ]) : [{}, {}];
+  return { stages: buildFunnel(meta || {}, own, sales, { tracking: !!tracking, webhooks: !!webhooks }), spend: Number(meta?.spend) || 0 };
 }
 
 export function byMethod(site, range, f) {
