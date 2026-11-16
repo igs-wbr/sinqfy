@@ -22,7 +22,7 @@ export const origin = req => env.PUBLIC_URL || `${req.headers['x-forwarded-proto
 export function send(r, status, body, headers = {}) {
   r.res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
-    'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${r.nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+    'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${r.nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
     // Em produção (HTTPS), o navegador não aceita mais abrir o painel por HTTP, nem por um link adulterado.
     ...(env.COOKIE_SECURE === '1' && { 'strict-transport-security': 'max-age=31536000' }),
     ...headers,

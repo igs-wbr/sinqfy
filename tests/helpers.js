@@ -33,4 +33,6 @@ export async function boot() {
   return { server, base, req, login, close };
 }
 
+/** Texto visível de um KPI (o valor tem marcação para símbolo e centavos). */
+export const kv = (html, id) => (new RegExp(`id="${id}">(.*?)</b>`).exec(html)?.[1] ?? "").replace(/<[^>]+>/g, "");
 export const sleep = ms => new Promise(ok => setTimeout(ok, ms));

@@ -28,6 +28,10 @@ try {
   add('/s.js', 's.js', 'application/javascript; charset=utf-8', 'public, max-age=3600', CORS);
   add('/favicon.svg', 'favicon.svg', 'image/svg+xml', 'public, max-age=86400');
   add('/manifest.webmanifest', 'manifest.webmanifest', 'application/manifest+json', 'public, max-age=86400');
+  add('/sw.js', 'sw.js', 'application/javascript; charset=utf-8', 'no-cache');
+  add('/offline.html', 'offline.html', 'text/html; charset=utf-8', 'no-cache');
+  add('/icons/apple-touch-icon.png', 'icons/apple-touch-icon.png', 'image/png', 'public, max-age=86400');
+  add('/icons/maskable.svg', 'icons/maskable.svg', 'image/svg+xml', 'public, max-age=86400');
   for (const f of readdirSync(new URL('fonts/', PUBLIC)).filter(f => f.endsWith('.woff2'))) add(`/fonts/${f}`, `fonts/${f}`, 'font/woff2', 'public, max-age=31536000, immutable');
 } catch {}
 
