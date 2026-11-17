@@ -184,6 +184,9 @@ async function migrate() {
     UPDATE sales SET ft_source=utm_source, ft_medium=utm_medium, ft_campaign=utm_campaign, ft_content=utm_content WHERE ft_campaign='' AND utm_campaign<>'';
     -- Último Purchase enviado à Meta por contato e quem enviou ('sale' = webhook, 'crm' = coluna do quadro): a mesma compra não sai pelos dois.
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_ts BIGINT, ADD COLUMN IF NOT EXISTS purchase_src TEXT;
+    -- Comprador do Purchase (hash do e-mail, telefone ou rid): produto, order bump e upsell viram uma conversão (ADR 0019).
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS buyer TEXT;
+    CREATE INDEX IF NOT EXISTS deliveries_buyer ON deliveries(site, buyer, created) WHERE name='Purchase';
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

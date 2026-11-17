@@ -21,7 +21,7 @@
 | [design-system.md](design-system.md) | Cores, tipografia, componentes e a marca |
 | [deploy-vercel.md](deploy-vercel.md) | Painel na Vercel com PostgreSQL gerenciado, e os limites dessa opção |
 | [fluxo-com-skills.md](fluxo-com-skills.md) | Qual skill do Claude Code usar em cada tipo de tarefa |
-| [adr/](adr/) | Decisões de arquitetura (0001 a 0018) e por que foram tomadas |
+| [adr/](adr/) | Decisões de arquitetura (0001 a 0019) e por que foram tomadas |
 
 ## Diagramas
 

@@ -68,6 +68,10 @@ test('snippet v2: id por evento, consentimento e rid nos links externos', () => 
   c.on.click({ target: pay }); c.on.click({ target: keep });
   assert.equal(new URL(pay.href).searchParams.get('rid'), 'AbC123xyz_-');
   assert.equal(new URL(keep.href).searchParams.get('rid'), 'outro', 'não sobrescreve');
+  const onp = anchor('https://pay.onprofit.com.br/7D53M87C?off=I2Tjop');
+  runSnippet({ cookie: '_rid=AbC123xyz_-' }).on.click({ target: onp });
+  const o = new URL(onp.href).searchParams;
+  assert.deepEqual([o.get('off'), o.get('rid'), o.get('sck')], ['I2Tjop', 'AbC123xyz_-', 'AbC123xyz_-'], 'OnProfit só devolve src/sck/UTMs no webhook: o rid vai também em sck');
   const blog = anchor('https://outro-site.com/artigo'), marked = anchor('https://agenda.com/x', { 'data-rastro-rid': '' });
   c.on.click({ target: blog }); c.on.click({ target: marked });
   assert.equal(blog.href, 'https://outro-site.com/artigo', 'rid só em checkout, WhatsApp ou link marcado');

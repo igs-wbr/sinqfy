@@ -33,9 +33,9 @@ const budget = e => e.daily_budget ? Number(e.daily_budget) / 100 : e.lifetime_b
 
 /**
  * Sincroniza campanhas, conjuntos, anúncios, gasto diário e as conversões que a Meta reporta (compras, valor, leads,
- * na janela de atribuição configurada na conta). 30 dias na primeira vez, depois os últimos 3.
+ * na janela de atribuição configurada na conta). 90 dias na primeira vez, depois os últimos 3.
  */
-export async function syncMeta(acc, days = acc.last_sync ? 3 : 30) {
+export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
   const site = sites.get(acc.site);
   const until = localDate(Date.now(), site.timezone), since = addDays(until, -(days - 1));
   const act = acc.account_id.replace(/^act_/, '');

@@ -7,7 +7,7 @@ import { dispatch } from './dispatch.js';
 import { runRecovery } from './recovery.js';
 import { checkHost, cfReady } from './cloudflare.js';
 
-const META_EVERY = 55 * 60e3; // < 1 h, para o cron horário sempre pegar
+const META_EVERY = 4 * 60e3; // < 5 min: o gasto da Meta atualiza a cada rodada (server.js roda a cada 5 min)
 
 export async function runJobs() {
   const out = { meta: 0, errors: [] };
@@ -21,7 +21,7 @@ export async function runJobs() {
   await db.batch([['DELETE FROM crm_log WHERE contact_id IN (SELECT id FROM contacts WHERE updated<?)', [old]], ['DELETE FROM contacts WHERE updated<?', [old]],
     ['DELETE FROM events WHERE ts<?', [old]], ['DELETE FROM messages WHERE ts<?', [Date.now() - 90 * 864e5]], ['DELETE FROM wa_clicks WHERE ts<?', [old]]]); // mensagens: 90 dias
   if (cfReady()) for (const s of [...sites.values()].filter(s => s.edge_host && (s.edge_status === 'dns' || s.edge_status === 'ssl'))) await checkHost(s); // erro só com Verificar agora
-  // Contas com erro (last_sync antigo) tentam a cada execução do cron, ou seja, no máximo uma vez por hora.
+  // Gasto a cada rodada (5 min); contas com erro também tentam de novo a cada rodada.
   for (const acc of await db.all("SELECT * FROM ad_accounts WHERE platform='meta' AND COALESCE(last_sync, 0) < ?", [Date.now() - META_EVERY])) {
     if (!sites.has(acc.site)) continue;
     try { await syncMeta(acc); out.meta++; } catch (e) { out.errors.push(`meta ${acc.account_id}: ${e.message}`); }

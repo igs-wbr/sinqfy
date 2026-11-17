@@ -23,7 +23,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
-- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0019`), fluxo com skills.
+- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0020`), fluxo com skills.
 
 ## Regras
 - Toda consulta é `await db.…`; consultas independentes vão em `Promise.all`/`awaitAll`.

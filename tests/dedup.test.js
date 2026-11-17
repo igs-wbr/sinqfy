@@ -41,7 +41,7 @@ const beacon = body => fetch(base + '/e', { method: 'POST', body: JSON.stringify
 const sale = (order, status, extra = {}) => ({ order_id: order, status, method: 'pix', gross: 197, net: 180, currency: 'BRL', product: 'Curso',
   utm: { source: 'FB', medium: '', campaign: 'BF|c1', content: '', term: '' }, email: 'comprador@dd.dev', ...extra });
 const ingest = (platform, s, now = Date.now()) => W.ingestSale(site(), platform, s, now);
-const hotmart = tx => ({ event: 'PURCHASE_APPROVED', data: { product: { name: 'Curso' }, buyer: { email: 'hot@dd.dev' },
+const hotmart = tx => ({ event: 'PURCHASE_APPROVED', data: { product: { name: 'Curso' }, buyer: { email: `${tx}@dd.dev` },
   purchase: { transaction: tx, order_date: Date.now(), price: { value: 297, currency_value: 'BRL' }, payment: { type: 'PIX' } } } });
 const hook = body => fetch(`${base}/hooks/${W.hookToken(site(), 'hotmart')}/hotmart`, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } });
 const queued = (eventId, dest = 'meta') => db.all("SELECT * FROM deliveries WHERE site='dd' AND dest=? AND event_id=?", [dest, eventId]);
@@ -121,9 +121,9 @@ test('webhook repetido, simultâneo e fora de ordem: um Purchase por pedido', as
   for (let i = 0; i < 3; i++) assert.equal((await hook(hotmart('HDD1'))).status, 200);
   await Promise.all(Array.from({ length: 5 }, () => hook(hotmart('HDD2'))));
   // pendente → pago → pago → reembolsado → pago (atrasado): a compra sai uma vez
-  for (const st of ['pending', 'paid', 'paid', 'refunded', 'paid']) await ingest('generic', sale('GDD1', st));
+  for (const st of ['pending', 'paid', 'paid', 'refunded', 'paid']) await ingest('generic', sale('GDD1', st, { email: 'g1@dd.dev' }));
   // pago chega antes do pendente
-  await ingest('generic', sale('GDD2', 'paid')); await ingest('generic', sale('GDD2', 'pending'));
+  await ingest('generic', sale('GDD2', 'paid', { email: 'g2@dd.dev' })); await ingest('generic', sale('GDD2', 'pending', { email: 'g2@dd.dev' }));
   assert.deepEqual(await purchases(), ['hotmart-HDD1', 'hotmart-HDD2', 'generic-GDD1', 'generic-GDD2']);
   assert.equal((await db.get("SELECT COUNT(*) n FROM sales WHERE site='dd' AND order_id='HDD2'")).n, 1, 'webhooks simultâneos gravam uma venda');
   assert.equal((await db.get("SELECT status FROM sales WHERE site='dd' AND order_id='GDD1'")).status, 'refunded', 'pago atrasado não desfaz o reembolso');
@@ -137,6 +137,33 @@ test('mesmo pedido por duas fontes (webhook e planilha): um Purchase; pedido igu
   assert.deepEqual(ids, ['hotmart-X100', 'kiwify-X100']);
   assert.equal((await db.all("SELECT 1 FROM deliveries WHERE site='dd' AND dest='ga4' AND event_id='sheets-X100'")).length, 0, 'nem no GA4');
   assert.ok((await db.get("SELECT message FROM webhook_log WHERE site='dd' AND platform='sheets' AND order_id='X100' ORDER BY id DESC LIMIT 1")).message.includes('já recebida por Hotmart'));
+});
+
+test('compra única: produto, order bump e upsell da mesma pessoa são um Purchase com o valor somado', async () => {
+  const buy = (id, gross, product, email = 'combo@dd.dev') => sale(id, 'paid', { gross, net: gross, product, email });
+  // produto e order bump chegam juntos (mesmo pagamento); o upsell, minutos depois
+  await Promise.all([ingest('custom', buy('OP1', 67, 'Edição com IA')), ingest('custom', buy('OP2', 47, 'Combo 3 em 1'))]);
+  await ingest('custom', buy('OP3', 197, 'Agentise Academy'), Date.now() + 5 * 60e3);
+  await ingest('custom', buy('OP2', 47, 'Combo 3 em 1')); // webhook repetido do bump: não soma de novo
+  const mine = (await db.all("SELECT event_id, next_at, created, payload FROM deliveries WHERE site='dd' AND dest='meta' AND name='Purchase' AND payload LIKE '%OP1%'"));
+  assert.equal(mine.length, 1, 'uma conversão');
+  const cd = JSON.parse(mine[0].payload).custom_data;
+  assert.deepEqual([cd.value, cd.num_items, [...cd.order_ids].sort(), mine[0].next_at - mine[0].created], [311, 3, ['OP1', 'OP2', 'OP3'], D.PURCHASE_HOLD]);
+  assert.ok(/Edição com IA/.test(cd.content_name) && /Agentise Academy/.test(cd.content_name));
+  const msgs = (await db.all("SELECT message FROM webhook_log WHERE site='dd' AND order_id IN ('OP2','OP3')")).map(r => r.message);
+  assert.ok(msgs.some(m => m.includes('Somada à compra')));
+  // outra pessoa no mesmo minuto: conversão própria
+  await ingest('custom', buy('OP9', 67, 'Edição com IA', 'outra@dd.dev'));
+  assert.equal((await queued('custom-OP9')).length, 1);
+  // depois do envio, um bump atrasado da mesma pessoa não vira outra conversão
+  const before = capi.length;
+  await D.dispatch({ now: Date.now() + D.PURCHASE_HOLD + 6 * 60e3 });
+  const sent = capi.slice(before).filter(e => e.event_name === 'Purchase' && e.custom_data.order_ids.includes('OP1'));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].custom_data.value, 311, 'a Meta recebe o valor somado');
+  await ingest('custom', buy('OP4', 27, 'Pack de assets'), Date.now() + 30 * 60e3);
+  assert.equal((await queued('custom-OP4')).length, 0);
+  assert.ok((await db.get("SELECT message FROM webhook_log WHERE site='dd' AND order_id='OP4' ORDER BY id DESC LIMIT 1")).message.includes('já enviada à Meta'));
 });
 
 // ---------- servidor: quadro do CRM ----------
@@ -163,16 +190,17 @@ test('CRM: compra do webhook não volta pela coluna Ganhou, e a marcada à mão 
   // 3) recompra de verdade, dias depois: sai normalmente
   await ingest('generic', sale('CRM3', 'paid', { email: 'mao@dd.dev', ts: Date.now() + 8 * 864e5 }), Date.now() + 8 * 864e5);
   assert.equal((await queued('generic-CRM3')).length, 1);
-  // 4) duas compras pelo webhook no mesmo dia: as duas saem (o bloqueio é só contra o quadro)
+  // 4) outro pedido da mesma pessoa logo depois (order bump): soma na compra do CRM1, não vira outra conversão
   await ingest('generic', sale('CRM4', 'paid', { email: 'web@dd.dev' }));
-  assert.equal((await queued('generic-CRM4')).length, 1);
+  assert.equal((await queued('generic-CRM4')).length, 0);
+  assert.deepEqual(JSON.parse((await queued('generic-CRM1'))[0].payload).custom_data.order_ids, ['CRM1', 'CRM4']);
 });
 
 // ---------- fila ----------
 test('erro e reenvio: mesmo event_id em todas as tentativas; depois de enviado, nunca mais', async () => {
   await D.dispatch({ now: Date.now() + 9 * 864e5 }); // esvazia a fila dos testes anteriores
   await ingest('generic', sale('RET1', 'paid', { email: 'retry@dd.dev' }));
-  const t0 = Date.now() + 1000;
+  const t0 = Date.now() + D.PURCHASE_HOLD + 1000; // o Purchase espera a janela do order bump
   metaFail = 1;
   await D.dispatch({ now: t0 });
   assert.equal((await queued('generic-RET1'))[0].status, 'pending', 'erro 500 volta para a fila');

@@ -3,7 +3,7 @@
 import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
-import { enqueue, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
+import { enqueue, enqueuePurchase, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
 import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open } from '../pii.js';
 import { trackPending } from '../recovery.js';
@@ -33,7 +33,7 @@ function time(v) {
 }
 export const method = m => {
   m = String(m || '').toLowerCase();
-  return /pix/.test(m) ? 'pix' : /card|cart|credit|cr[eé]dit|debit|d[eé]bito/.test(m) ? 'card' : /boleto|billet|bank_?slip|bankslip/.test(m) ? 'boleto' : 'other';
+  return /pix/.test(m) ? 'pix' : /^cc|card|cart|credit|cr[eé]dit|debit|d[eé]bito/.test(m) ? 'card' : /boleto|billet|bank_?slip|bankslip/.test(m) ? 'boleto' : 'other';
 };
 const utm = o => ({ source: str(o.source), medium: str(o.medium), campaign: str(o.campaign), content: str(o.content), term: str(o.term) });
 /** Id do visitante gravado pelo Worker (_rid, 16 bytes em base64url). O snippet o põe no link de checkout. */
@@ -335,7 +335,12 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
     else if (metaReady(site)) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, click: m.click }, now);
-      if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); sent = true; await log(site.id, platform, s, true, `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'})`); }
+      if (ev) {
+        const q = await enqueuePurchase(site.id, ev, now); sent = true;
+        await log(site.id, platform, s, true, q.action === 'new' ? `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'}), sai em 15 min para somar order bump e upsell`
+          : q.action === 'merged' ? `Somada à compra ${q.eventId} na Meta (mesmo comprador): uma conversão só`
+            : `Parte da compra ${q.eventId}, já enviada à Meta: não vira outra conversão`);
+      }
       else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail, telefone nem clique, não enviada');
     }
     const g = !twin && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);

@@ -369,7 +369,7 @@ html:active-view-transition-type(up)::view-transition-old(main){animation-name:f
 /* Integrações: grade de ícones; a seção da âncora (:target) toma o lugar da grade */
 .hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:12px}
 .tile{display:grid;align-content:start;justify-items:start;gap:6px;min-height:168px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-decoration:none;transition:transform var(--d2) var(--ease),border-color var(--d1),box-shadow var(--d2) var(--ease)}
-.tile-ic{display:grid;place-items:center;width:44px;height:44px;margin-bottom:6px;border-radius:12px;background:var(--info-bg);color:var(--link);flex:none}
+.tile-ic{display:grid;place-items:center;width:44px;height:44px;margin-bottom:6px;border-radius:12px;background:var(--info-bg);color:var(--link);flex:none}.tile-ic.brand{background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
 .tile-t{font:600 16px/1.25 var(--display)}.tile-d{color:var(--muted);font-size:13px;line-height:1.4}.tile .tag{margin:auto 0 0}
 @media (hover:hover){.tile:hover{transform:translateY(-3px);border-color:var(--line2);box-shadow:var(--shadow)}}.tile:active{transform:scale(.98)}
 .part{display:none;gap:16px;scroll-margin-top:80px}.part:target{display:grid;animation:fx-in var(--d3) var(--ease)}.hub-page:has(.part:target) .hub{display:none}

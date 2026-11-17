@@ -84,7 +84,7 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   await hook('hotmart', hotmart('HP2'));
   await hook('hotmart', hotmart('HP2')); // reenvio do mesmo evento
   assert.equal(capiBodies.length, 0, 'webhook só enfileira');
-  await D.dispatch();
+  await D.dispatch({ now: Date.now() + D.PURCHASE_HOLD }); // o Purchase espera a janela do order bump
   assert.equal(capiBodies.length, 1);
   const ev = capiBodies[0].data[0];
   assert.deepEqual([ev.event_name, ev.event_id, ev.custom_data.value, ev.action_source], ['Purchase', 'hotmart-HP2', 197, 'other']);
@@ -137,14 +137,14 @@ test('campanhas: gasto × vendas pela chave da UTM', async () => {
   assert.deepEqual(ads.map(r => [r.id, r.spend, r.sales]), [['a1', 100.5, 0]], 'K1 foi reembolsada');
 });
 
-test('páginas de vendas: números, auto-refresh de hora em hora e indicador do sync', async () => {
+test('páginas de vendas: números, auto-refresh a cada 5 minutos e indicador do sync', async () => {
   const dash = await req('/sites/loja', { cookie: admin });
   assert.equal(dash.status, 200);
   assert.match(kv(dash.text, "net"), /^R\$\s?424,50$/);
   assert.match(dash.text, /Vendas por pagamento/);
   assert.match(kv(dash.text, "meta-purchases"), /^3$/);
   assert.match(kv(dash.text, "meta-leads"), /^5$/);
-  assert.match(dash.text, /<meta http-equiv="refresh" content="3600">/, 'recarrega a cada hora');
+  assert.match(dash.text, /<meta http-equiv="refresh" content="300">/, 'recarrega a cada 5 minutos');
   assert.match(dash.text, /Meta atualizada às \d{2}:\d{2}/);
   assert.match(kv((await req('/sites/loja?f_platform=hotmart', { cookie: admin })).text, "net"), /^R\$\s?377,50$/);
   assert.match((await req('/sites/loja/campaigns', { cookie: admin })).text, /Black Friday/);
@@ -156,4 +156,9 @@ test('páginas de vendas: números, auto-refresh de hora em hora e indicador do 
   assert.equal((await req('/sites/loja/integrations', { cookie: admin, form: { action: 'rotate' } })).status, 303);
   assert.equal((await hook('generic', { order_id: 'G2', status: 'paid', amount: 1 }, oldToken)).status, 404, 'token antigo para de funcionar');
   assert.equal(period(new URLSearchParams('range=today'), 'America/Sao_Paulo').from, today);
+});
+
+test('forma de pagamento: códigos das plataformas', async () => {
+  const { method } = await import('../src/sales/webhooks.js');
+  assert.deepEqual(['cc', 'cc_pix', 'pix', 'billet', 'credit_card', 'x'].map(method), ['card', 'pix', 'pix', 'boleto', 'card', 'other'], 'OnProfit manda cc, cc_pix e billet');
 });

@@ -77,7 +77,7 @@ test('evento do site vai para Meta (em lote) e GA4, com dados da borda; IP sai d
   const page = await req('/sites/cap/events', { cookie: admin });
   assert.ok(page.text.includes('Meta ✓') && page.text.includes('GA4 ✓') && page.text.includes('TRACE1'), 'inspetor mostra o envio e a resposta');
   const integ2 = await req('/sites/cap/integrations', { cookie: admin });
-  assert.ok(integ2.text.includes('GA4: envio server-side') && integ2.text.includes('Código de teste ativo') && integ2.text.includes('2 enviados'));
+  assert.ok(integ2.text.includes('Google Analytics 4: envio server-side') && integ2.text.includes('Código de teste ativo') && integ2.text.includes('2 enviados'));
   assert.ok(integ2.text.includes('pattern="TEST[A-Za-z0-9_]{1,40}"'), 'padrão do código de teste chega intacto ao navegador');
 });
 

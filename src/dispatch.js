@@ -77,6 +77,42 @@ export const enqueue = (site, dest, eventId, name, payload, now = Date.now()) =>
    ON CONFLICT(site, dest, event_id) DO NOTHING`,
   [site, dest, eventId, name, now, now, JSON.stringify(payload)]);
 
+/**
+ * Compra única por checkout: produto, order bump e upsell da mesma pessoa são UMA conversão na Meta, com o valor somado.
+ * O Purchase espera PURCHASE_HOLD na fila; o que chega do mesmo comprador nesse tempo soma no mesmo evento (mesmo
+ * event_id). O que chega depois do envio, até PURCHASE_GROUP, não vira outra conversão. Comprador = e-mail, telefone
+ * ou rid em hash, o que vier no evento. O lock por comprador evita dois eventos quando os webhooks chegam juntos.
+ * Retorna { action: 'new' | 'merged' | 'skipped', eventId }.
+ */
+export const PURCHASE_HOLD = 15 * 60e3;
+export const PURCHASE_GROUP = 2 * 3600e3;
+export async function enqueuePurchase(siteId, ev, now = Date.now()) {
+  const u = ev.user_data, buyer = u.em?.[0] || u.ph?.[0] || u.external_id?.[0];
+  const oid = String(ev.custom_data.order_id ?? ev.event_id), since = now - PURCHASE_GROUP, cd = `payload::jsonb #> '{custom_data}'`;
+  ev.custom_data = { ...ev.custom_data, order_ids: [oid], num_items: 1 };
+  await db.batch([
+    ['SELECT pg_advisory_xact_lock(hashtext(?))', [`${siteId}|${buyer}`]],
+    [`UPDATE deliveries SET payload = jsonb_set(payload::jsonb, '{custom_data}', ${cd} || jsonb_build_object(
+        'value', round((${cd} ->> 'value')::numeric + ?::numeric, 2),
+        'num_items', COALESCE((${cd} ->> 'num_items')::int, 1) + 1,
+        'order_ids', COALESCE(${cd} -> 'order_ids', '[]'::jsonb) || jsonb_build_array(?::text),
+        'content_name', left(concat_ws(' + ', NULLIF(${cd} ->> 'content_name', ''), NULLIF(?::text, '')), 300)))::text
+      WHERE site=? AND dest='meta' AND name='Purchase' AND buyer=? AND status='pending' AND attempts=0 AND created>?
+        AND NOT COALESCE(${cd} -> 'order_ids', '[]'::jsonb) @> jsonb_build_array(?::text)`,
+    [ev.custom_data.value || 0, oid, ev.custom_data.content_name || '', siteId, buyer, since, oid]],
+    [`INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload, buyer)
+      SELECT ?, 'meta', ?, 'Purchase', 'pending', 0, ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE site=? AND dest='meta' AND name='Purchase' AND buyer=? AND created>?)
+      ON CONFLICT(site, dest, event_id) DO NOTHING`,
+    [siteId, ev.event_id, now + PURCHASE_HOLD, now, JSON.stringify(ev), buyer, siteId, buyer, since]],
+  ]);
+  const first = await db.get(`SELECT event_id, payload FROM deliveries WHERE site=? AND dest='meta' AND name='Purchase' AND buyer=? AND created>? ORDER BY id LIMIT 1`, [siteId, buyer, since]);
+  if (!first) return { action: 'skipped', eventId: null };
+  if (first.event_id === ev.event_id) return { action: 'new', eventId: first.event_id };
+  const ids = first.payload ? JSON.parse(first.payload).custom_data?.order_ids || [] : [];
+  return { action: ids.includes(oid) ? 'merged' : 'skipped', eventId: first.event_id };
+}
+
 /** Enfileira um evento do site para os destinos configurados. */
 export async function enqueueWeb(site, ev, ctx, now = Date.now()) {
   if (metaReady(site)) await enqueue(site.id, 'meta', ev.event_id, ev.name, metaWebEvent(site, ev, ctx), now);
