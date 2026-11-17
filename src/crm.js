@@ -105,18 +105,31 @@ export async function moveContact(site, c, stageId, { by = 'painel', silent = fa
   await db.run('UPDATE contacts SET stage_id=?, stage_since=?, updated=?, suggest_stage=NULL, suggest_reason=NULL WHERE id=? AND site=?', [st.id, now, now, c.id, site.id]);
   let sent = '';
   if (!silent && st.event_name && metaReady(site)) {
-    const ev = metaCrmEvent(site, c, st, now);
-    if (ev) { await enqueue(site.id, 'meta', ev.event_id, st.event_name, ev, now); sent = ` · ${st.event_name} na fila da Meta`; }
+    if (st.event_name === 'Purchase' && recentPurchase(c, now)) sent = ' · Purchase não reenviado: a compra deste contato já foi para a Meta';
+    else {
+      const ev = metaCrmEvent(site, c, st, now);
+      if (ev) {
+        await enqueue(site.id, 'meta', ev.event_id, st.event_name, ev, now);
+        if (st.event_name === 'Purchase') await db.run("UPDATE contacts SET purchase_ts=?, purchase_src='crm' WHERE id=?", [now, c.id]);
+        sent = ` · ${st.event_name} na fila da Meta`;
+      }
+    }
   }
   await log(site.id, c.id, `Movido para ${st.name} (${by})${sent}`, now);
   return true;
 }
 
+// ponytail: janela fixa de 7 dias para "mesma compra"; uma recompra pelo quadro dentro dela não sai (a do webhook sai sempre).
+const PURCHASE_WINDOW = 7 * 864e5;
+/** O contato já teve um Purchase enviado (pelo webhook ou pelo quadro) há menos de 7 dias. `src` restringe a origem. */
+export const recentPurchase = (c, now, src = null) => !!c?.purchase_ts && now - c.purchase_ts < PURCHASE_WINDOW && (!src || c.purchase_src === src);
+
 /** Compra aprovada: o contato (criado se preciso) vai para a coluna de ganho, sem novo evento (o Purchase já saiu). */
-export async function saleToCrm(site, sale, click, now = Date.now()) {
+export async function saleToCrm(site, sale, click, now = Date.now(), { sent = true } = {}) {
   const { contact } = await upsertContact(site, { email: sale.email, phone: sale.phone, name: sale.name, rid: click?.rid, fbc: click?.fbc, fbp: click?.fbp, source: 'venda',
     utm: sale.utm, value: sale.gross }, now);
   if (!contact) return;
+  if (sent) await db.run("UPDATE contacts SET purchase_ts=?, purchase_src='sale' WHERE id=?", [now, contact.id]);
   const won = (await stages(site.id)).find(s => s.kind === 'won');
   if (won) await moveContact(site, contact, won.id, { by: `compra ${sale.platform} ${sale.order_id}`, silent: true, now });
   if (!(contact.value > 0) && sale.gross > 0) await db.run('UPDATE contacts SET value=? WHERE id=?', [sale.gross, contact.id]);

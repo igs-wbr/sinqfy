@@ -173,6 +173,17 @@ async function migrate() {
     -- Funil dos anúncios: etapas que a Meta reporta entre o clique e a compra (cliques no link, página de destino, carrinho, checkout).
     ALTER TABLE ad_spend ADD COLUMN IF NOT EXISTS meta_link_clicks BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_lpv BIGINT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS meta_atc BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_checkouts BIGINT NOT NULL DEFAULT 0;
+    -- Primeiro toque pago da venda (ADR 0018): o anúncio que trouxe o lead pela primeira vez, mesmo que a compra saia por outro caminho.
+    ALTER TABLE sales ADD COLUMN IF NOT EXISTS ft_source ${T}, ADD COLUMN IF NOT EXISTS ft_medium ${T},
+      ADD COLUMN IF NOT EXISTS ft_campaign ${T}, ADD COLUMN IF NOT EXISTS ft_content ${T};
+    -- Vendas de antes do primeiro toque: preenche pelos eventos do mesmo rid (mesma regra do matchSale) e, sem eles, pela origem da venda.
+    UPDATE sales x SET (ft_source, ft_medium, ft_campaign, ft_content) = (SELECT e.utm_source, e.utm_medium, e.utm_campaign, e.utm_content FROM events e
+        WHERE e.site=x.site AND e.rid=x.rid AND e.ts BETWEEN x.ts - 2592000000 AND x.ts + 60000 AND e.utm_campaign<>'' ORDER BY e.ts LIMIT 1)
+      WHERE x.ft_campaign='' AND x.rid IS NOT NULL AND EXISTS (SELECT 1 FROM events e
+        WHERE e.site=x.site AND e.rid=x.rid AND e.ts BETWEEN x.ts - 2592000000 AND x.ts + 60000 AND e.utm_campaign<>'');
+    UPDATE sales SET ft_source=utm_source, ft_medium=utm_medium, ft_campaign=utm_campaign, ft_content=utm_content WHERE ft_campaign='' AND utm_campaign<>'';
+    -- Último Purchase enviado à Meta por contato e quem enviou ('sale' = webhook, 'crm' = coluna do quadro): a mesma compra não sai pelos dois.
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_ts BIGINT, ADD COLUMN IF NOT EXISTS purchase_src TEXT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

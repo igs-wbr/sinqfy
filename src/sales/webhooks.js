@@ -4,7 +4,7 @@ import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { enqueue, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
-import { findContact, saleToCrm } from '../crm.js';
+import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open } from '../pii.js';
 import { trackPending } from '../recovery.js';
 
@@ -233,8 +233,8 @@ const log = (site, platform, s, ok, message) => db.batch([
 // Ordem de status: um evento atrasado (pendente depois de pago, pago depois de reembolso) não desfaz o que já aconteceu.
 const RANK = c => `CASE ${c} WHEN 'chargeback' THEN 4 WHEN 'refunded' THEN 3 WHEN 'paid' THEN 2 ELSE 1 END`;
 const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gross, net, currency, product, ts, date, updated,
-    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key, rid, match_rule)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key, rid, match_rule, ft_source, ft_medium, ft_campaign, ft_content)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(site, platform, order_id) DO UPDATE SET status=CASE WHEN ${RANK('excluded.status')} >= ${RANK('sales.status')} THEN excluded.status ELSE sales.status END, updated=excluded.updated,
     method=CASE WHEN excluded.method<>'other' THEN excluded.method ELSE sales.method END,
     gross=CASE WHEN excluded.gross>0 THEN excluded.gross ELSE sales.gross END, net=CASE WHEN excluded.net>0 THEN excluded.net ELSE sales.net END,
@@ -243,7 +243,9 @@ const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gros
     utm_campaign=COALESCE(NULLIF(sales.utm_campaign,''), excluded.utm_campaign), utm_content=COALESCE(NULLIF(sales.utm_content,''), excluded.utm_content),
     utm_term=COALESCE(NULLIF(sales.utm_term,''), excluded.utm_term), campaign_key=COALESCE(NULLIF(sales.campaign_key,''), excluded.campaign_key),
     adset_key=COALESCE(NULLIF(sales.adset_key,''), excluded.adset_key), ad_key=COALESCE(NULLIF(sales.ad_key,''), excluded.ad_key),
-    rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule IN ('rid','email') THEN sales.match_rule ELSE excluded.match_rule END
+    rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule IN ('rid','email') THEN sales.match_rule ELSE excluded.match_rule END,
+    ft_source=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_source ELSE excluded.ft_source END, ft_medium=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_medium ELSE excluded.ft_medium END,
+    ft_content=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_content ELSE excluded.ft_content END, ft_campaign=COALESCE(NULLIF(sales.ft_campaign,''), excluded.ft_campaign)
   RETURNING status`;
 
 /** Processa um webhook. Retorna o status HTTP para a plataforma. `now` é injetável para testes. */
@@ -264,7 +266,7 @@ export const secretsOf = site => jsonOr(site.hook_secrets, {});
  * com campanha quando a venda chega sem elas, e traz fbc, fbp, user agent e a página para a compra ir à Meta como 'website'.
  */
 export async function matchSale(site, s) {
-  const out = { rule: 'none', click: null, utm: s.utm };
+  const out = { rule: 'none', click: null, utm: s.utm, first: null };
   // Sem rid no checkout: procura o lead pelo e-mail ou telefone (formulário antes do checkout) e usa o rid dele.
   let rid = s.rid, via = 'rid';
   if (!rid && (s.email || s.phone)) {
@@ -275,17 +277,20 @@ export async function matchSale(site, s) {
   if (s.rid) {
     // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
     const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
-    const [last, fb, ga, paid] = await Promise.all([
+    const [last, fb, ga, paid, first] = await Promise.all([
       db.get(`SELECT ua, host, path, fbp FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT fbc FROM events WHERE ${W} AND fbc IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT ga_cid FROM events WHERE ${W} AND ga_cid IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts DESC LIMIT 1`, a),
+      // Primeiro toque pago (ADR 0018): o anúncio que abriu a porta, mesmo que a compra venha pela bio, recuperação ou direto.
+      db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts ASC LIMIT 1`, a),
     ]);
     if (last) {
       out.rule = via;
       out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
+      if (first) out.first = utm({ source: first.utm_source, medium: first.utm_medium, campaign: first.utm_campaign, content: first.utm_content });
     }
   }
   if (out.rule === 'none' && (out.utm.campaign || out.utm.source)) out.rule = 'utm';
@@ -308,23 +313,34 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
   const ts = s.ts ?? now;
   const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
   const m = await matchSale(site, { ...s, ts }), u = m.utm;
+  // Sem visita paga registrada, o único toque conhecido é o da própria venda: ele abriu e fechou.
+  const ft = m.first || (u.campaign ? u : utm({}));
   const { rows: [saved] } = await db.run(UPSERT, [site.id, platform, s.order_id, s.status, s.method, Math.max(0, s.gross), Math.max(0, s.net), s.currency.toUpperCase() || site.currency,
-    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || m.click?.rid || null, m.rule]);
+    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || m.click?.rid || null, m.rule,
+    ft.source, ft.medium, ft.campaign, ft.content]);
   const message = `${before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[saved.status]}` : 'Nova venda'} · origem: ${MATCH_PT[m.rule]}`;
   await log(site.id, platform, s, true, message);
   await trackPending(site, platform, { ...s, status: saved.status, ts, utm: u, rid: s.rid || m.click?.rid || null }, now); // públicos e recuperação
 
   // Compra aprovada vai para a fila (src/dispatch.js), uma vez só.
   if (saved.status === 'paid' && before?.status !== 'paid' && s.gross > 0) {
-    const sale = { ...s, ts, platform };
-    if (metaReady(site)) {
+    const sale = { ...s, ts, platform }, pii = piiReady() && (s.email || s.phone);
+    // O mesmo pedido por outra fonte (ex.: webhook da Hotmart e a planilha): o event_id seria outro e a Meta contaria duas vezes.
+    const twin = await db.get(`SELECT platform FROM sales WHERE site=? AND order_id=? AND platform<>? AND status IN ('paid','refunded','chargeback')
+      AND abs(gross - ?) < 0.01 LIMIT 1`, [site.id, s.order_id, platform, s.gross]);
+    // A compra já foi marcada à mão no quadro (coluna com Purchase) nos últimos 7 dias: o Purchase dela já saiu.
+    const byCrm = !twin && pii && recentPurchase(await findContact(site.id, { emailHash: hashEmail(s.email), phoneHash: hashPhone(s.phone) }), now, 'crm');
+    let sent = false;
+    if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
+    else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
+    else if (metaReady(site)) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, click: m.click }, now);
-      if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); await log(site.id, platform, s, true, `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'})`); }
+      if (ev) { await enqueue(site.id, 'meta', ev.event_id, 'Purchase', ev, now); sent = true; await log(site.id, platform, s, true, `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'})`); }
       else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail, telefone nem clique, não enviada');
     }
-    const g = ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
+    const g = !twin && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
     if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
-    if (piiReady() && (s.email || s.phone)) await saleToCrm(site, { ...sale, utm: u }, m.click, now); // comprador no CRM, coluna de ganho
+    if (pii) await saleToCrm(site, { ...sale, utm: u }, m.click, now, { sent }); // comprador no CRM, coluna de ganho
   }
   return { ok: true, message };
 }

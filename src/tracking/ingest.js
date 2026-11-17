@@ -21,9 +21,13 @@ async function dailySalt(day) {
 
 export const screenClass = w => !(w > 0) ? '??' : w < 576 ? 'mobile' : w < 992 ? 'tablet' : w < 1440 ? 'laptop' : 'desktop';
 
+// Navegador embutido de app (in-app): o anúncio abre aqui, não no Safari ou Chrome. A ordem importa: o Threads também traz "Instagram".
+const IN_APP_UA = [[/Barcelona/, 'Threads'], [/Instagram/, 'Instagram'], [/FBAN|FBAV|FB_IAB|FBIOS/, 'Facebook'], [/musical_ly|BytedanceWebview|TikTok/i, 'TikTok'],
+  [/LinkedInApp/, 'LinkedIn'], [/Pinterest/, 'Pinterest'], [/Snapchat/, 'Snapchat'], [/Twitter/, 'X (Twitter)'], [/\bGSA\//, 'Google'], [/; wv\)|WebView/, 'WebView']];
 export function parseUA(ua) {
-  const browser = /Edg(e|A|iOS)?\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
-    : /Firefox\/|FxiOS/.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Outro';
+  const app = IN_APP_UA.find(([re]) => re.test(ua))?.[1];
+  const browser = app || (/Edg(e|A|iOS)?\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+    : /Firefox\/|FxiOS/.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Outro');
   const os = /Windows/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
     : /Android/.test(ua) ? 'Android' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Outro';
   return { browser, os };

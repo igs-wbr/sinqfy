@@ -1,5 +1,5 @@
 // Páginas de tráfego: visão geral, tempo real, eventos, funis, caminhos, atribuição.
-import { FILTERS, ATTR_DIMS, OTHER } from '../tracking/stats.js';
+import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK } from '../tracking/stats.js';
 import { html, raw, icon, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
 
 export function label(col, k) {
@@ -32,9 +32,29 @@ ${tabs('Origens', [['Referências', list(ctx, d.referrers, 'referrer', { head: '
 ${tabs('UTM', utm.map(([t, rows, col]) => [t, rows.length ? list(ctx, rows, col, { head: t, ...L }) : html`<p class="empty">Nenhuma visita com <code>${col}</code> no período.</p>`]))}
 ${tabs('Localização', [['Países', list(ctx, d.countries, 'country', { head: 'País', ...L })]])}
 ${tabs('Dispositivos', [['Tipo', list(ctx, d.screens, 'screen', { head: 'Dispositivo', ...L })], ['Navegador', list(ctx, d.browsers, 'browser', { head: 'Navegador', ...L })], ['Sistema', list(ctx, d.oss, 'os', { head: 'Sistema', ...L })]])}
+${appsCard(ctx, d.apps)}
+${visitCard(d.visitNo)}
 ${tabs('Eventos', [['Eventos', list(ctx, d.events, 'name', { head: 'Evento', cols: [['Visitantes', 'v'], ['Total', 'n'], ...(d.events.some(e => e.rev) ? [['Receita', 'rev', v => v ? m(v) : '-']] : [])], ...L })],
     ...(d.props ? [['Propriedades', list(ctx, d.props, null, { head: `Propriedades de "${f.name}"`, filter: false })]] : [])])}
 </div>`);
+}
+
+const rate = (a, b) => b ? pct(a / b) : '-';
+/** Sessões por navegador ou app (Instagram, Facebook...) com a taxa de clique no checkout. */
+function appsCard(ctx, rows) {
+  const appLabel = (c, k) => IN_APP.has(k) ? html`${k} <span class="tag">App</span>` : label(c, k);
+  return tabs('Navegador ou app', [['Ambiente', html`<p class="muted">Sessões por ambiente; ao lado, quantas clicaram no checkout.</p>
+${list(ctx, rows.map(r => ({ ...r, r: rate(r.co, r.n) })), 'browser', { head: 'Navegador ou app', cols: [['Sessões', 'n'], ['Checkout', 'r', v => v]], label: appLabel })}`]]);
+}
+const VISIT_PT = ['', '1ª visita', '2ª visita', '3ª visita', '4ª ou mais'];
+/** Em qual visita o lead clica no checkout e compra (só visitantes com o cookie _rid). */
+function visitCard(rows) {
+  const n = rows.reduce((s, r) => s + r.n, 0), first = rows.find(r => r.k === 1)?.n || 0;
+  const body = rows.length ? html`<p class="muted">Primeira visita <b>${num(first)}</b> (${rate(first, n)}) · retorno <b>${num(n - first)}</b> (${rate(n - first, n)}). Visitas contadas nos ${VISIT_LOOKBACK} dias anteriores; vendas de qualquer plataforma, pelo rid.</p>
+<div class="tw"><table class="list"><thead><tr><th scope="col">Visita</th><th scope="col">Sessões</th><th scope="col">Checkout</th><th scope="col">Vendas</th></tr></thead><tbody>${rows.map(r => html`<tr>
+<td><span class="bar-bg" style="width:${(n ? r.n / Math.max(...rows.map(x => x.n)) * 100 : 0).toFixed(1)}%"></span><span style="position:relative">${VISIT_PT[r.k]}</span></td><td>${num(r.n)}</td><td>${rate(r.co, r.n)}</td><td>${num(r.sales)}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="empty">Sem visitantes com cookie no período. A contagem usa o _rid gravado pelo Worker da borda.</p>`;
+  return tabs('Primeira visita ou retorno', [['Visitas', body]]);
 }
 
 export function realtimeBody(ctx, r) {
