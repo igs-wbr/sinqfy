@@ -1,6 +1,6 @@
 // Etapa 4: domínio do cliente na borda pelo Cloudflare for SaaS (custom hostnames).
 // O cliente cria um CNAME t.dominiodele → CF_SAAS_TARGET; o Rastro registra o hostname na zona da Cloudflare,
-// que emite o SSL, e o Worker (rota */*) passa a responder nesse domínio. Sem CF_API_TOKEN, o painel mostra o passo a passo manual.
+// que emite o SSL, e o Rastro cria a rota do Worker só nesse domínio. Sem CF_API_TOKEN, o painel mostra o passo a passo manual.
 import { db, env, loadSites } from './db.js';
 
 const API = 'https://api.cloudflare.com/client/v4';
@@ -34,17 +34,31 @@ export function statusOf(r) {
   return { status: 'dns', error: err };
 }
 
+// Rota do Worker só no domínio do cliente (t.cliente.com.br/*), nunca a coringa */*: na zona da agência ela tomaria
+// também o painel e os outros sites do domínio. O token precisa de Workers Routes · Edit além de SSL and Certificates.
+const workerName = () => env.CF_WORKER || 'trackify';
+export async function addRoute(host) {
+  const pattern = `${host}/*`;
+  const routes = await cf('GET', '/workers/routes');
+  if (!routes.some(r => r.pattern === pattern)) await cf('POST', '/workers/routes', { pattern, script: workerName() });
+}
+export async function removeRoute(host) {
+  for (const r of (await cf('GET', '/workers/routes')).filter(r => r.pattern === `${host}/*`)) await cf('DELETE', `/workers/routes/${encodeURIComponent(r.id)}`);
+}
+
 const save = (site, id, st) => db.run('UPDATE sites SET edge_host_id=?, edge_status=?, edge_error=? WHERE id=?', [id, st.status, st.error, site]);
 
 /** Cadastra o domínio do cliente. Também libera o domínio raiz na lista de domínios do site. */
 export async function addHost(site, host) {
   if (cfReady() && site.edge_host_id) await cf('DELETE', `/custom_hostnames/${encodeURIComponent(site.edge_host_id)}`).catch(() => {});
+  if (cfReady() && site.edge_host && site.edge_host !== host) await removeRoute(site.edge_host).catch(() => {});
   const root = host.slice(2), domains = new Set(String(site.domains || '').split(',').map(d => d.trim()).filter(Boolean));
   domains.add(root);
   await db.run('UPDATE sites SET edge_host=?, edge_host_id=NULL, edge_status=?, edge_error=NULL, domains=? WHERE id=?', [host, cfReady() ? 'dns' : 'manual', [...domains].join(', '), site.id]);
   if (cfReady()) {
     try {
       const r = await cf('POST', '/custom_hostnames', { hostname: host, ssl: { method: 'http', type: 'dv', settings: { min_tls_version: '1.2' } } });
+      await addRoute(host);
       await save(site.id, r.id, statusOf(r));
     } catch (e) { await save(site.id, null, { status: 'error', error: e.message.slice(0, 300) }); }
   }
@@ -59,6 +73,7 @@ export async function checkHost(site) {
     if (site.edge_host_id) r = await cf('GET', `/custom_hostnames/${encodeURIComponent(site.edge_host_id)}`);
     else [r] = await cf('GET', `/custom_hostnames?hostname=${encodeURIComponent(site.edge_host)}`);
     if (!r) r = await cf('POST', '/custom_hostnames', { hostname: site.edge_host, ssl: { method: 'http', type: 'dv' } });
+    await addRoute(site.edge_host); // recria a rota se alguém apagou no painel da Cloudflare
     await save(site.id, r.id, statusOf(r));
   } catch (e) { await save(site.id, site.edge_host_id, { status: 'error', error: e.message.slice(0, 300) }); }
   await loadSites();
@@ -66,6 +81,7 @@ export async function checkHost(site) {
 
 export async function removeHost(site) {
   if (cfReady() && site.edge_host_id) await cf('DELETE', `/custom_hostnames/${encodeURIComponent(site.edge_host_id)}`).catch(() => {});
+  if (cfReady() && site.edge_host) await removeRoute(site.edge_host).catch(() => {});
   await db.run('UPDATE sites SET edge_host=NULL, edge_host_id=NULL, edge_status=NULL, edge_error=NULL WHERE id=?', [site.id]);
   await loadSites();
 }

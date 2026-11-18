@@ -100,7 +100,7 @@ Com o R2 ativado (painel da Cloudflare → **R2**; pode pedir um cartão, até 1
 
 ## Parte 4: domínio dos clientes (Cloudflare for SaaS)
 
-Só para agência: faz cada cliente ter o próprio `t.dominiodocliente.com.br`, com o certificado emitido pela Cloudflare. Os 100 primeiros domínios são grátis.
+Para agência com vários clientes na mesma VPS: cada cliente tem o próprio `t.dominiodocliente.com.br`, mesmo com o domínio em **outra conta da Cloudflare** (ou em qualquer outro DNS). O cliente só cria um CNAME; o certificado e o Worker ficam na sua conta. Os 100 primeiros domínios são grátis. Ativar pede aceitar os termos e um cartão na conta (custo base US$ 0; acima de 100 domínios é cobrado por domínio).
 
 1. **Endereço de destino.** No DNS do **seu** domínio, crie:
 
@@ -111,7 +111,7 @@ Só para agência: faz cada cliente ter o próprio `t.dominiodocliente.com.br`, 
    É um endereço só para a Cloudflare receber o tráfego; quem responde é o Worker.
 2. **Ative o SaaS.** No seu domínio → **SSL/TLS** → **Custom Hostnames** → ative o Cloudflare for SaaS → **Add fallback origin** → `edge.seudominio.com.br`. Espere o status **Active**.
 3. **Token da API.** Ícone do perfil → **My Profile** → **API Tokens** → **Create Token** → **Create Custom Token**:
-   - Permissions: **Zone** · **SSL and Certificates** · **Edit**.
+   - Permissions: **Zone** · **SSL and Certificates** · **Edit** e **Zone** · **Workers Routes** · **Edit**.
    - Zone Resources: **Include** · **Specific zone** · o seu domínio.
    - Copie o token (aparece uma vez só).
 4. **ID da zona.** Página inicial do seu domínio, coluna da direita: **Zone ID**.
@@ -122,11 +122,11 @@ Só para agência: faz cada cliente ter o próprio `t.dominiodocliente.com.br`, 
    CF_SAAS_TARGET=edge.seudominio.com.br
    ```
    e reinicie: `docker compose up -d app`.
-6. Descomente as `routes` do `edge/wrangler.toml` (parte 3.4): a rota `*/*` faz o Worker responder em todo domínio de cliente.
+6. Não use a rota coringa `*/*`: na sua zona ela faria o Worker responder também pelo painel e pelos outros sites do domínio. Ao cadastrar o domínio de um cliente, o Trackify cria a rota só dele (`t.cliente.com.br/*`) e apaga quando o domínio sai. O Worker se chama `trackify`; se tiver outro nome, ponha `CF_WORKER=nome` no `.env`.
 
-**O que o cliente faz:** cadastra o domínio em **Primeiros passos** e cria, no DNS dele, um CNAME `t` → `edge.seudominio.com.br` com proxy **desligado** (nuvem cinza). O Trackify registra o domínio na Cloudflare e confere DNS e certificado sozinho a cada 5 minutos.
+**Cada cliente novo:** crie a agência dele em **Agências** (equipe e sites isolados), o site e, em **Primeiros passos**, o domínio. O cliente cria, no DNS dele, um CNAME `t` → `edge.seudominio.com.br` com proxy **desligado** (nuvem cinza). O Trackify registra o domínio e a rota na Cloudflare e confere DNS e certificado sozinho a cada 5 minutos. Depois, o snippet do site dele usa `https://t.dominiodele/s.js`, e o checkout e a Meta dele são configurados no site dele, como em qualquer outro.
 
-Sem o passo 5, o Trackify mostra ao cliente o mesmo CNAME e você ativa o domínio à mão em **Custom Hostnames** → **Add Custom Hostname**.
+Sem o passo 5, o Trackify mostra ao cliente o mesmo CNAME e você faz à mão: **Custom Hostnames** → **Add Custom Hostname** e, em **Workers Routes**, a rota `t.dominiodocliente/*` para o Worker `trackify`.
 
 ## Parte 5: R2 para o backup
 
