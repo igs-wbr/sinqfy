@@ -30,7 +30,8 @@ const admin = await login();
 await req('/sites', { cookie: admin, form: { id: 'cap', name: 'Cap', timezone: 'UTC', currency: 'BRL' } });
 const integ = form => req('/sites/cap/integrations', { cookie: admin, form });
 const beacon = (body, h = {}) => fetch(base + '/e', { method: 'POST', body: JSON.stringify(body), headers: { 'user-agent': CHROME, 'x-forwarded-for': '203.0.113.50', ...h } });
-const edge = { 'x-edge-secret': 'segredo-da-borda', 'x-rastro-rid': 'RidDoVisitante9', 'x-rastro-fbp': 'fb.1.1700000000000.1234567890', 'x-rastro-fbc': 'fb.1.1700000000000.IwAR-x', 'x-rastro-ip': '198.51.100.77' };
+const edge = { 'x-edge-secret': 'segredo-da-borda', 'x-rastro-rid': 'RidDoVisitante9', 'x-rastro-fbp': 'fb.1.1700000000000.1234567890', 'x-rastro-fbc': 'fb.1.1700000000000.IwAR-x', 'x-rastro-ip': '198.51.100.77',
+  'cf-ipcountry': 'BR', 'x-rastro-city': encodeURIComponent('São Paulo'), 'x-rastro-region': 'SP' };
 
 test('sem destino configurado, nada vai para a fila', async () => {
   await beacon({ s: 'cap', u: 'https://cap.dev/', i: 'evt_semdestino' });
@@ -63,6 +64,8 @@ test('evento do site vai para Meta (em lote) e GA4, com dados da borda; IP sai d
   assert.deepEqual([pv.event_name, pv.event_id, pv.action_source, pv.event_source_url], ['PageView', 'evt_pageview1', 'website', 'https://cap.dev/oferta']);
   assert.deepEqual([pv.user_data.fbc, pv.user_data.fbp, pv.user_data.client_ip_address, pv.user_data.client_user_agent], [edge['x-rastro-fbc'], edge['x-rastro-fbp'], '198.51.100.77', CHROME]);
   assert.deepEqual(pv.user_data.external_id, [createHash('sha256').update('RidDoVisitante9').digest('hex')]);
+  const h = v => createHash('sha256').update(v).digest('hex');
+  assert.deepEqual([pv.user_data.country, pv.user_data.st, pv.user_data.ct], [[h('br')], [h('sp')], [h('saopaulo')]], 'local pelo IP, normalizado');
   assert.deepEqual([lead.event_name, lead.custom_data], ['Lead', { value: 10, currency: 'BRL' }]);
 
   assert.equal(ga4.length, 1, 'GA4: só conversões');

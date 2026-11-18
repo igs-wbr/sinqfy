@@ -73,6 +73,8 @@ async function collect(req, env, ctx) {
   const forward = {
     'content-type': 'text/plain', 'user-agent': req.headers.get('user-agent') || '', 'x-edge-secret': env.EDGE_SECRET || '',
     'x-rastro-ip': req.headers.get('cf-connecting-ip') || '', 'cf-ipcountry': req.headers.get('cf-ipcountry') || '',
+    // Cidade e UF pelo IP, para a correspondência da Meta (cabeçalho só aceita ASCII: vai codificado).
+    'x-rastro-city': encodeURIComponent(req.cf?.city || ''), 'x-rastro-region': encodeURIComponent(req.cf?.regionCode || ''),
     ...(consent && { 'x-rastro-rid': id.rid, 'x-rastro-fbp': id.fbp }),
     ...(id.fbc && { 'x-rastro-fbc': id.fbc }), // vem da URL; sem consentimento vai só para a origem, sem cookie
   };

@@ -51,7 +51,7 @@ async function handle(r) {
     const body = await readBody(req, 4096);
     const country = String(req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || req.headers['x-country-code'] || '').toUpperCase();
     const edge = edgeInfo(req.headers);
-    return res.writeHead(await record({ body, ua: req.headers['user-agent'] || '', ip: edge?.ip || clientIp(req), country, edge }), CORS).end();
+    return res.writeHead(await record({ body, ua: req.headers['user-agent'] || '', ip: edge?.ip || clientIp(req), country, edge, geo: { city: edge?.city, region: edge?.region } }), CORS).end();
   }
   // CSRF: além do cookie SameSite=Lax, recusa POSTs que o navegador marca como vindos de outro site.
   // (Webhooks vêm de servidores, que não enviam Sec-Fetch-Site.)

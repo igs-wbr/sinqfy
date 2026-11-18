@@ -19,13 +19,23 @@ const GA4_NAMES = { pageview: 'page_view', Purchase: 'purchase', Lead: 'generate
 export const ga4Name = n => GA4_NAMES[n] || (n.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^[^A-Za-z]+/, '').toLowerCase().slice(0, 40) || 'evento');
 export const metaName = n => n === 'pageview' ? 'PageView' : n;
 
+// Normalização da Meta antes do hash: nome só com letras em minúsculas; cidade sem acento nem espaço; UF e país em 2 letras.
+const letters = v => String(v || '').toLowerCase().replace(/[^\p{L}]/gu, '');
+const city = v => letters(String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '')).replace(/[^a-z]/g, '');
+const code2 = v => /^[A-Za-z]{2}$/.test(v || '') && !/^xx$/i.test(v) ? v.toLowerCase() : '';
+/** Acrescenta ao user_data, em SHA-256, só os campos que vieram. */
+function addHashed(user_data, fields) { for (const [k, v] of Object.entries(fields)) if (v) user_data[k] = [sha(v)]; }
+
 /** Evento do site para a Conversions API. `ctx` traz ip, ua e a URL da página (sem query string). */
-export function metaWebEvent(site, ev, { ip, ua, url }) {
+export function metaWebEvent(site, ev, ctx) {
+  const { ip, ua, url } = ctx;
   const user_data = { client_user_agent: ua };
   if (ip) user_data.client_ip_address = ip;
   if (ev.fbc) user_data.fbc = ev.fbc;
   if (ev.fbp) user_data.fbp = ev.fbp;
   if (ev.rid) user_data.external_id = [sha(ev.rid)];
+  // Local aproximado pelo IP (Cloudflare): país, UF e cidade. Não fica no banco, só no payload pendente.
+  addHashed(user_data, { country: code2(ev.country), st: code2(ctx.region), ct: city(ctx.city) });
   const out = { event_name: metaName(ev.name), event_time: Math.floor(ev.ts / 1000), event_id: ev.event_id, action_source: 'website', event_source_url: url, user_data };
   if (ev.revenue != null) out.custom_data = { value: ev.revenue, currency: site.currency };
   return out;
@@ -36,14 +46,19 @@ export function metaWebEvent(site, ev, { ip, ua, url }) {
  * Com o clique casado (etapa 3: rid do link de checkout), vai como 'website' com fbc, fbp, user agent e a página;
  * sem ele, como 'other' (sem user agent a Meta recusa 'website').
  */
-export function metaPurchase(site, sale, { email, phone, click } = {}, now = Date.now()) {
+export function metaPurchase(site, sale, { email, phone, name, click } = {}, now = Date.now()) {
   const user_data = {};
   if (email) user_data.em = [sha(String(email).trim().toLowerCase())];
-  if (phone) { let d = String(phone).replace(/\D/g, ''); if (d.length === 10 || d.length === 11) d = '55' + d; user_data.ph = [sha(d)]; } // a Meta exige o DDI
+  let d = String(phone || '').replace(/\D/g, '');
+  if (d.length === 10 || d.length === 11) d = '55' + d; // a Meta exige o DDI
+  if (d) user_data.ph = [sha(d)];
   if (click?.fbc) user_data.fbc = click.fbc;
   if (click?.fbp) user_data.fbp = click.fbp;
   if (click?.rid) user_data.external_id = [sha(click.rid)];
-  if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador
+  if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador (nome e país sozinhos não bastam)
+  // Nome e país só reforçam a correspondência: a Meta não casa ninguém só com eles.
+  const parts = String(name || '').trim().split(/\s+/).map(letters).filter(Boolean);
+  addHashed(user_data, { fn: parts[0], ln: parts.length > 1 && parts.at(-1), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : '') });
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
   const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;
@@ -84,7 +99,7 @@ export const enqueue = (site, dest, eventId, name, payload, now = Date.now()) =>
  * ou rid em hash, o que vier no evento. O lock por comprador evita dois eventos quando os webhooks chegam juntos.
  * Retorna { action: 'new' | 'merged' | 'skipped', eventId }.
  */
-export const PURCHASE_HOLD = 15 * 60e3;
+export const PURCHASE_HOLD = 5 * 60e3; // order bump chega junto e upsell de 1 clique em poucos minutos; mais que isso atrasa a otimização
 export const PURCHASE_GROUP = 2 * 3600e3;
 export async function enqueuePurchase(siteId, ev, now = Date.now()) {
   const u = ev.user_data, buyer = u.em?.[0] || u.ph?.[0] || u.external_id?.[0];

@@ -71,7 +71,7 @@ export const fbcOf = (fbclid, now) => CLICK_RE.test(fbclid || '') ? `fb.1.${now}
  * `edge` vem do Worker da borda (ADR 0011/0012): { rid, fbp, fbc } lidos ou criados nos cookies do domínio do cliente.
  * Com `rid`, o visitante é o cookie (atribuição entre dias); sem ele, o hash diário de IP + navegador (ADR 0002).
  */
-export async function record({ body, ua, ip, country, edge }, now = Date.now()) {
+export async function record({ body, ua, ip, country, edge, geo }, now = Date.now()) {
   let e;
   try { e = JSON.parse(body); } catch { return 400; }
   const site = typeof e?.s === 'string' && sites.get(e.s);
@@ -113,7 +113,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   const clientId = typeof e.g === 'string' && /^\d{1,12}\.\d{1,12}$/.test(e.g) ? e.g : null; // cookie _ga, lido pelo snippet
   const ev = { name, ts: now, rid: consent && edge?.rid || null, visitor, event_id: eventId,
     fbc: consent && (edge?.fbc || fbcOf(q.get('fbclid'), now)) || null, fbp: consent && edge?.fbp || null,
-    revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null };
+    revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null, country };
   await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
     /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null),
@@ -121,7 +121,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
   // Retenção de vídeo fica só no painel (funis): não vira evento personalizado na Meta nem no GA4.
-  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
+  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, ...geo }, now);
   // Formulário com e-mail ou telefone (campo `l` do snippet): vira contato do CRM, cifrado. Nunca entra no evento.
   // Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
   if (consent && edge && e.l && typeof e.l === 'object' && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {

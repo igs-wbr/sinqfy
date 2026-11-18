@@ -3,7 +3,7 @@
 import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
-import { enqueue, enqueuePurchase, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
+import { enqueue, enqueuePurchase, PURCHASE_HOLD, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
 import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open } from '../pii.js';
 import { trackPending } from '../recovery.js';
@@ -278,7 +278,7 @@ export async function matchSale(site, s) {
     // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
     const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
     const [last, fb, ga, paid, first] = await Promise.all([
-      db.get(`SELECT ua, host, path, fbp FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
+      db.get(`SELECT ua, host, path, fbp, country FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT fbc FROM events WHERE ${W} AND fbc IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT ga_cid FROM events WHERE ${W} AND ga_cid IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts DESC LIMIT 1`, a),
@@ -287,7 +287,7 @@ export async function matchSale(site, s) {
     ]);
     if (last) {
       out.rule = via;
-      out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
+      out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, country: last.country, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
       if (first) out.first = utm({ source: first.utm_source, medium: first.utm_medium, campaign: first.utm_campaign, content: first.utm_content });
@@ -334,10 +334,10 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
     else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
     else if (metaReady(site)) {
-      const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, click: m.click }, now);
+      const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, name: s.name, click: m.click }, now);
       if (ev) {
         const q = await enqueuePurchase(site.id, ev, now); sent = true;
-        await log(site.id, platform, s, true, q.action === 'new' ? `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'}), sai em 15 min para somar order bump e upsell`
+        await log(site.id, platform, s, true, q.action === 'new' ? `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'}), sai em ${PURCHASE_HOLD / 60e3} min para somar order bump e upsell`
           : q.action === 'merged' ? `Somada à compra ${q.eventId} na Meta (mesmo comprador): uma conversão só`
             : `Parte da compra ${q.eventId}, já enviada à Meta: não vira outra conversão`);
       }

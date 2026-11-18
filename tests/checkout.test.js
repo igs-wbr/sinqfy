@@ -51,13 +51,14 @@ test('venda anterior ao clique não herda o clique', async () => {
 });
 
 test('sem clique: compra vai como other e não vai ao GA4; UTM vira a regra', async () => {
-  const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'c@d.com', checkout_phone: '(11) 98888-7777' },
+  const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'c@d.com', checkout_phone: '(11) 98888-7777', name: 'Ana Maria Conceição' },
     purchase: { transaction: 'HPX2', price: { value: 100 }, order_date: Date.now(), origin: { src: 'FB', sck: 'Outra|999' } } } };
   assert.equal((await post('hotmart', body)).status, 200);
   assert.equal((await db.get("SELECT match_rule FROM sales WHERE order_id='HPX2'")).match_rule, 'utm');
   const ev = await queued('hotmart-HPX2');
   assert.equal(ev.action_source, 'other');
   assert.equal(ev.user_data.ph[0], sha('5511988887777'), 'telefone com DDI 55');
+  assert.deepEqual([ev.user_data.fn, ev.user_data.ln, ev.user_data.country], [[sha('ana')], [sha('conceição')], [sha('br')]], 'nome e país em hash');
   assert.equal(await queued('hotmart-HPX2', 'ga4'), null);
 });
 
