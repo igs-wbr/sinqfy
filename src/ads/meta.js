@@ -46,14 +46,16 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
     const [campaigns, adsets, ads, insights] = await Promise.all([
       getAll(url('/campaigns', { fields: 'id,name,effective_status,daily_budget,lifetime_budget' })),
       getAll(url('/adsets', { fields: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget' })),
-      getAll(url('/ads', { fields: 'id,name,adset_id,effective_status' })),
+      getAll(url('/ads', { fields: 'id,name,adset_id,effective_status,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url}' })),
       getAll(url('/insights', {
         level: 'ad', time_increment: '1', time_range: JSON.stringify({ since, until }),
         fields: 'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
       })),
     ]);
-    const ENT = `INSERT INTO ad_entities(site, platform, level, id, name, parent, status, budget) VALUES (?,?,?,?,?,?,?,?)
-      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget`;
+    const ENT = `INSERT INTO ad_entities(site, platform, level, id, name, parent, status, budget, thumb) VALUES (?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget, thumb=excluded.thumb`;
+    // Só imagem da CDN da Meta (é o que a CSP do painel libera).
+    const thumb = a => [a.creative?.thumbnail_url, a.creative?.image_url].find(u => /^https:\/\/[\w.-]+\.fbcdn\.net\//.test(u || '')) || null;
     const SPEND = `INSERT INTO ad_spend(site, platform, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks,
       meta_purchases, meta_purchase_value, meta_leads, meta_link_clicks, meta_lpv, meta_atc, meta_checkouts, source) VALUES (?,'meta',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'api')
       ON CONFLICT(site, platform, date, campaign_id, adset_id, ad_id) DO UPDATE SET campaign_name=excluded.campaign_name, adset_name=excluded.adset_name,
@@ -61,9 +63,9 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
       meta_purchase_value=excluded.meta_purchase_value, meta_leads=excluded.meta_leads, meta_link_clicks=excluded.meta_link_clicks, meta_lpv=excluded.meta_lpv,
       meta_atc=excluded.meta_atc, meta_checkouts=excluded.meta_checkouts, source=excluded.source`;
     await db.batch([ // uma transação: ou grava tudo ou nada
-      ...campaigns.map(c => [ENT, [site.id, 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c)]]),
-      ...adsets.map(a => [ENT, [site.id, 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a)]]),
-      ...ads.map(a => [ENT, [site.id, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null]]),
+      ...campaigns.map(c => [ENT, [site.id, 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c), null]]),
+      ...adsets.map(a => [ENT, [site.id, 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a), null]]),
+      ...ads.map(a => [ENT, [site.id, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null, thumb(a)]]),
       ...insights.map(i => [SPEND, [site.id, i.date_start, i.campaign_id || '', i.campaign_name || '', i.adset_id || '', i.adset_name || '', i.ad_id || '', i.ad_name || '',
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),

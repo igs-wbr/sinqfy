@@ -188,6 +188,15 @@ async function migrate() {
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_ts BIGINT, ADD COLUMN IF NOT EXISTS purchase_src TEXT;
     -- Comprador do Purchase (hash do e-mail, telefone ou rid): produto, order bump e upsell viram uma conversão (ADR 0019).
     ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS buyer TEXT;
+    -- Imagem do criativo (URL assinada da Meta, expira em dias: renovada a cada sincronização).
+    ALTER TABLE ad_entities ADD COLUMN IF NOT EXISTS thumb TEXT;
+    -- Chave de anúncio gravada com o '::<código do clique>' que o checkout cola na UTM: recalcula como o adKey() de hoje.
+    UPDATE sales SET ad_key = COALESCE(substring(split_part(utm_content, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_content, '::', 1)))
+      WHERE ad_key LIKE '%::%';
+    UPDATE sales SET adset_key = COALESCE(substring(split_part(utm_medium, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_medium, '::', 1)))
+      WHERE adset_key LIKE '%::%';
+    UPDATE sales SET campaign_key = COALESCE(substring(split_part(utm_campaign, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_campaign, '::', 1)))
+      WHERE campaign_key LIKE '%::%';
     CREATE INDEX IF NOT EXISTS deliveries_buyer ON deliveries(site, buyer, created) WHERE name='Purchase';
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);

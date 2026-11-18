@@ -384,6 +384,7 @@ html:active-view-transition-type(up)::view-transition-old(main){animation-name:f
 .fcol-t{color:var(--muted);font-size:12px;line-height:1.3;min-height:2.6em}.fcol-p{font:600 22px/1.1 var(--display);letter-spacing:-.01em;margin:2px 0 8px}
 .fcol-v{grid-row:4;margin-top:10px;font-weight:600}.fcol-v em{font-style:normal;margin-left:4px;padding:1px 6px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px}.fcol-s{grid-row:5;color:var(--muted);font-size:11px}
 .fcol.bad .fcol-p{color:var(--bad)}
+.ad-name{display:flex;align-items:center;gap:12px}.ad-thumb{flex:none;width:48px;height:48px;border-radius:8px;object-fit:cover;background:var(--surface2);border:1px solid var(--line)}.ad-thumb.none{display:grid;place-items:center;color:var(--muted)}.ad-thumb.none svg{width:18px;height:18px}
 .vf{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:3px}
 .vf-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,260px);gap:24px;align-items:center}
 .vf-seg{min-height:88px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px calc((var(--t0) + var(--t1)) / 2);text-align:center;color:#fff;background:color-mix(in srgb,var(--s1) var(--c),var(--surface));clip-path:polygon(var(--t0) 0,calc(100% - var(--t0)) 0,calc(100% - var(--t1)) 100%,var(--t1) 100%)}

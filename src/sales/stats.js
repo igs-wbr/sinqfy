@@ -79,8 +79,7 @@ export async function campaignMarks(site, range) {
 }
 
 // Chave da campanha numa UTM "Nome|id" (a do template); sem "|", o próprio texto. Mesma regra de adKey() dos webhooks.
-const keyOf = col => `COALESCE(substring(${col} from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(${col}))`;
-const UTM_KEY = keyOf('utm_campaign');
+const keyOf = col => `COALESCE(substring(split_part(${col}, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(${col}, '::', 1)))`;const UTM_KEY = keyOf('utm_campaign');
 
 /** Dados do funil dos anúncios da Meta (uma campanha ou todas), cruzando a Meta com os nossos eventos e vendas. Ver src/sales/funnel.js. */
 export async function adFunnel(site, range, campaign = null) {
@@ -179,7 +178,7 @@ export async function campaigns(site, range, level = 'campaign') {
   };
   for (const e of entities) {
     if (/DELETED|ARCHIVED/.test(e.status)) continue;
-    Object.assign(row(e.platform, e.id), { name: e.name || e.id, status: e.status, budget: e.budget });
+    Object.assign(row(e.platform, e.id), { name: e.name || e.id, status: e.status, budget: e.budget, thumb: e.thumb || null });
   }
   for (const s of spends) {
     const r = row(s.platform, s.id);
@@ -208,7 +207,8 @@ export async function campaigns(site, range, level = 'campaign') {
     r.profit = r.net - r.spend - r.gross * rate;
     Object.assign(r, { cpa: r.spend ? div(r.spend, r.sales) : null, roas: div(r.net, r.spend), roi: div(r.profit, r.spend), ctr: div(r.clicks, r.impressions), metaRoas: div(r.metaValue, r.spend), statusPt: STATUS_PT(r.status) });
   }
-  return out.sort((x, y) => y.spend - x.spend || y.net - x.net);
+  // Anúncios: os que mais venderam primeiro. Campanhas e conjuntos: os que mais gastaram.
+  return out.sort(L === 'ad' ? (x, y) => y.sales - x.sales || y.net - x.net || y.spend - x.spend : (x, y) => y.spend - x.spend || y.net - x.net);
 }
 
 export const lastWebhooks = (site, limit = 8) => db.all('SELECT * FROM webhook_log WHERE site=? ORDER BY id DESC LIMIT ?', [site, limit]);

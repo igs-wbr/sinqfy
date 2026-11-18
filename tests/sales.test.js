@@ -19,7 +19,8 @@ globalThis.fetch = async (url, opts) => {
   if (p === '/campaigns' && !u.searchParams.has('after')) return json({ data: [{ id: 'c1', name: 'Black Friday', effective_status: 'ACTIVE', daily_budget: '10000' }], paging: { next: u.href + '&after=2' } });
   if (p === '/campaigns') return json({ data: [{ id: 'c2', name: 'Antiga', effective_status: 'PAUSED' }] });
   if (p === '/adsets') return json({ data: [{ id: 's1', name: 'Lookalike', campaign_id: 'c1', effective_status: 'ACTIVE', daily_budget: '5000' }] });
-  if (p === '/ads') return json({ data: [{ id: 'a1', name: 'Video 1', adset_id: 's1', effective_status: 'ACTIVE' }] });
+  if (p === '/ads') return json({ data: [{ id: 'a1', name: 'Video 1', adset_id: 's1', effective_status: 'ACTIVE', creative: { thumbnail_url: 'https://scontent.xx.fbcdn.net/v/t45/thumb1.jpg?oh=1' } },
+    { id: 'a2', name: 'Ruim', adset_id: 's1', effective_status: 'ACTIVE', creative: { thumbnail_url: 'javascript:alert(1)' } }] });
   if (p === '/insights') {
     const day = JSON.parse(u.searchParams.get('time_range')).until;
     return json({ data: [{ date_start: day, campaign_id: 'c1', campaign_name: 'Black Friday', adset_id: 's1', adset_name: 'Lookalike', ad_id: 'a1', ad_name: 'Video 1', spend: '100.50', impressions: '1000', clicks: '50',
@@ -75,6 +76,7 @@ test('webhooks: Hotmart, Kiwify, Eduzz (legado) e genérico', async () => {
   assert.equal((await db.get("SELECT COUNT(*) n FROM sales WHERE site='loja'")).n, 4);
   assert.ok(!JSON.stringify(await db.all('SELECT * FROM sales')).includes('@'), 'nenhum e-mail gravado');
   assert.equal(W.adKey('Nome da campanha|120200'), '120200');
+  assert.equal(W.adKey('EI-027 | VID|120251927159870053::PAZXh0bgNhZW0'), '120251927159870053', 'código do clique colado pelo checkout não entra na chave');
   assert.deepEqual(['1.234,56', '1,234.56', '10.000', 'R$ 97,90', '1.5', 10].map(W.num), [1234.56, 1234.56, 10000, 97.9, 1.5, 10]);
 });
 
@@ -134,7 +136,13 @@ test('campanhas: gasto × vendas pela chave da UTM', async () => {
   assert.deepEqual([none.sales, none.net], [1, 47], 'venda sem UTM aparece separada');
   assert.ok(!rows.some(r => r.id === 'c2'), 'pausada e sem gasto não aparece');
   const ads = (await S.campaigns(DB.sites.get('loja'), p, 'ad')).filter(r => !r.unmatched);
-  assert.deepEqual(ads.map(r => [r.id, r.spend, r.sales]), [['a1', 100.5, 0]], 'K1 foi reembolsada');
+  assert.deepEqual(ads.map(r => [r.id, r.spend, r.sales]), [['a1', 100.5, 0], ['a2', 0, 0]], 'K1 foi reembolsada; ativo sem gasto aparece');
+  // Venda cuja UTM veio com '::<código>' casa com o anúncio e o anúncio que mais vendeu sobe para o topo.
+  await db.run(`INSERT INTO sales(site, platform, order_id, status, gross, net, ts, date, updated, utm_content, ad_key) VALUES ('loja','generic','ADX','paid',90,90,?,?,?,'Ruim|a2::PAZXh0','a2')`,
+    [Date.now(), p.to, Date.now()]);
+  const sorted = (await S.campaigns(DB.sites.get('loja'), p, 'ad')).filter(r => !r.unmatched);
+  assert.deepEqual(sorted.map(r => [r.id, r.sales]), [['a2', 1], ['a1', 0]], 'anúncios em ordem de vendas');
+  await db.run("DELETE FROM sales WHERE order_id='ADX'");
 });
 
 test('páginas de vendas: números, auto-refresh a cada 5 minutos e indicador do sync', async () => {
@@ -149,6 +157,8 @@ test('páginas de vendas: números, auto-refresh a cada 5 minutos e indicador do
   assert.match(kv((await req('/sites/loja?f_platform=hotmart', { cookie: admin })).text, "net"), /^R\$\s?377,50$/);
   assert.match((await req('/sites/loja/campaigns', { cookie: admin })).text, /Black Friday/);
   assert.match((await req('/sites/loja/campaigns?level=adset', { cookie: admin })).text, /Lookalike/);
+  const ads = (await req('/sites/loja/campaigns?level=ad', { cookie: admin })).text;
+  assert.ok(ads.includes('src="https://scontent.xx.fbcdn.net/v/t45/thumb1.jpg?oh=1"') && !ads.includes('javascript:alert'), 'imagem do criativo só da CDN da Meta');
   const refunded = await req('/sites/loja/orders?f_status=refunded', { cookie: admin });
   assert.ok(refunded.text.includes('K1') && !refunded.text.includes('HP1'));
   assert.match((await req('/sites/loja/integrations', { cookie: admin })).text, new RegExp(`/hooks/${W.hookToken(DB.sites.get('loja'), 'kiwify')}/kiwify`));

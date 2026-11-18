@@ -223,7 +223,8 @@ export function parseSheetRow(values) {
 }
 
 /** "Nome da campanha|123456" (template de UTM da Meta) → "123456"; senão o próprio valor. */
-export const adKey = v => { const m = /\|\s*([\w-]+)\s*$/.exec(v || ''); return m ? m[1] : (v || '').trim(); };
+// Checkouts colam '::<código do clique>' depois do id da UTM ("Nome|id::PAZX..."): o que vem depois de '::' não é parte da chave.
+export const adKey = v => { const t = String(v || '').split('::')[0]; const m = /\|\s*([\w-]+)\s*$/.exec(t); return m ? m[1] : t.trim(); };
 
 const log = (site, platform, s, ok, message) => db.batch([
   ['INSERT INTO webhook_log(site, ts, platform, order_id, status, ok, message) VALUES (?,?,?,?,?,?,?)', [site, Date.now(), platform, s?.order_id || '', s?.status || '', ok ? 1 : 0, message]],
