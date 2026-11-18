@@ -12,6 +12,8 @@ const url = env.DATABASE_URL || 'postgres://rastro:rastro@127.0.0.1:55432/rastro
 const schema = env.DATABASE_SCHEMA; // só os testes usam: um schema por arquivo de teste
 if (schema && !/^\w+$/.test(schema)) throw new Error('DATABASE_SCHEMA inválido');
 const pool = new pg.Pool({ connectionString: url, max: Number(env.DATABASE_POOL) || 10, ...(schema && { options: `-c search_path=${schema}` }) });
+// Conexão ociosa que o Postgres derruba (reinício, atualização) não pode derrubar o app: o pool abre outra na próxima consulta.
+pool.on('error', e => console.warn('Postgres fechou uma conexão ociosa:', e.code || e.message));
 const pgSql = sql => { let i = 0; return sql.replace(/\?(\d+)?/g, (_, n) => '$' + (n || ++i)); };
 export const db = {
   all: async (sql, args = []) => (await pool.query(pgSql(sql), args)).rows,
