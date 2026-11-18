@@ -191,5 +191,8 @@ test('painel de tráfego: números, filtros e escape de XSS', async () => {
   assert.match((await req('/sites/blog/traffic?range=today&f_name=signup', { cookie: admin })).text, /plan = pro/);
   assert.match(kv((await req('/sites/blog/realtime?partial=1', { cookie: admin })).text, "online"), /^2$/);
   assert.equal((await req('/sites/blog/funnels', { cookie: admin, form: { name: 'Compra', steps: '/a\n/pricing\nevento:signup' } })).status, 303);
-  assert.match((await req('/sites/blog/funnels?range=today', { cookie: admin })).text, /Conversão <b class="pos">50%<\/b>/);
+  const fun = (await req('/sites/blog/funnels?range=today', { cookie: admin })).text;
+  assert.match(fun, /Conversão <b class="pos">50%<\/b>/);
+  assert.ok(fun.includes('Funil completo') && fun.includes('Visitaram o site') && fun.includes('Compraram'), 'funil completo do site no topo');
+  assert.ok((await req('/sites/blog/funnels?range=30d', { cookie: admin })).text.includes('quando o script começou a registrar'), 'período maior que o script: corta no primeiro evento');
 });

@@ -1,7 +1,7 @@
 // Páginas de tráfego: visão geral, tempo real, eventos, funis, caminhos, atribuição.
 import { PLATFORMS, STATUSES } from '../sales/webhooks.js';
 import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK } from '../tracking/stats.js';
-import { html, raw, icon, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
+import { html, raw, icon, brDate, delta, ratio, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
 
 export function label(col, k) {
   if (col === 'referrer') return k || 'Direto';
@@ -107,10 +107,29 @@ export function eventsPage(ctx, rows) {
 <script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('ev'),h)})},5000)</script>`);
 }
 
-export function funnelsPage(ctx, p, f, funnels, err) {
+const RATE_T = { click: 'clicaram (CTR)', visit: 'dos cliques chegaram ao site', engage: 'interagiram', checkout: 'foram ao checkout', buy: 'compraram' };
+/** Funil completo, em pé: largura decrescente fixa (forma, não escala) e os números de cada etapa ao lado. */
+function siteFunnel(ctx, p, fn) {
+  const st = fn.stages, m = v => money(v, ctx.site.currency), n = st.length, last = st.at(-1), visit = st.find(s => s.k === 'visit');
+  if (!st.some(s => s.v)) return html`<section class="card"><h2>Funil completo</h2><p class="empty">Nada neste período. Com o snippet no site e a Meta conectada em Integrações, o funil aparece aqui.</p></section>`;
+  const w = i => 100 - i * (48 / Math.max(1, n - 1)), inset = i => ((100 - w(Math.min(i, n - 1))) / 2).toFixed(2) + '%';
+  const when = fn.since ? `desde ${brDate(fn.since)}, quando o script começou a registrar` : p.prev ? `comparado com ${brDate(p.prev.from)} a ${brDate(p.prev.to)}` : '';
+  return html`<section class="card" id="funil"><div class="row between"><h2>Funil completo</h2><span class="muted">Todas as origens${when ? ` · ${when}` : ''}</span></div>
+<p class="flow-sum">${fn.spend ? html`<span><b>${m(fn.spend)}</b> investidos</span>` : ''}<span><b>${m(last.revenue)}</b> faturados</span>${fn.spend ? html`<span><b>${ratio(last.revenue / fn.spend)}x</b> ROAS</span>` : ''}${visit.v ? html`<span><b>${pct(last.v / visit.v)}</b> dos visitantes compraram</span>` : ''}${fn.metaBuys ? html`<span>a Meta contou <b>${num(fn.metaBuys)}</b> compras</span>` : ''}</p>
+<ol class="vf">${st.map((s, i) => html`<li class="vf-row${i === n - 1 ? ' last' : ''}" style="--t0:${inset(i)};--t1:${inset(i + 1)};--c:${(100 - i * (28 / Math.max(1, n - 1))).toFixed(0)}%">
+<div class="vf-seg" title="${s.d}"><span class="vf-t">${s.t}</span><b class="vf-v">${num(s.v)}</b>${delta(s.v, s.before, num)}</div>
+<div class="vf-side">${s.rate != null ? html`<span><b class="vf-r">${pct(s.rate)}</b> ${RATE_T[s.k]}</span>` : ''}
+${s.k === 'visit' && s.ads != null && s.v ? html`<span>${num(s.ads)} dos anúncios, ${num(s.v - s.ads)} de outras origens</span>` : ''}
+${s.k === 'buy' ? html`<span>${num(s.orders)} ${s.orders === 1 ? 'pedido' : 'pedidos'} · ${m(s.revenue)}</span>` : ''}
+${s.cost ? html`<span>${s.costT}: ${m(s.cost)}</span>` : ''}<small>${s.d} · ${s.src}</small></div></li>`)}</ol>
+</section>`;
+}
+
+export function funnelsPage(ctx, p, f, funnels, err, full = null) {
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/funnels`;
-  return layout(ctx, `Funis · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Funis`, raw('Onde as visitas <em>desistem</em>'), 'Quantas visitas passam por cada etapa, em ordem, dentro da mesma visita.')}
+  return layout(ctx, `Funis · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Funis`, raw('Onde as visitas <em>desistem</em>'), 'Do anúncio visto até a compra, e os funis que você montar por página ou evento.')}
 ${tl(ctx, p, f, false)}${notice(err, true)}
+${full ? siteFunnel(ctx, p, full) : ''}<h2 class="sec">Seus funis</h2>
 ${funnels.length ? '' : notice(`Nenhum funil ainda.${ctx.canEdit ? ' Crie o primeiro abaixo.' : ''}`)}
 ${funnels.map(fn => {
     const first = fn.counts[0] || 0;

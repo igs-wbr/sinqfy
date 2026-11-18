@@ -384,6 +384,15 @@ html:active-view-transition-type(up)::view-transition-old(main){animation-name:f
 .fcol-t{color:var(--muted);font-size:12px;line-height:1.3;min-height:2.6em}.fcol-p{font:600 22px/1.1 var(--display);letter-spacing:-.01em;margin:2px 0 8px}
 .fcol-v{grid-row:4;margin-top:10px;font-weight:600}.fcol-v em{font-style:normal;margin-left:4px;padding:1px 6px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px}.fcol-s{grid-row:5;color:var(--muted);font-size:11px}
 .fcol.bad .fcol-p{color:var(--bad)}
+.vf{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:3px}
+.vf-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,260px);gap:24px;align-items:center}
+.vf-seg{min-height:88px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px calc((var(--t0) + var(--t1)) / 2);text-align:center;color:#fff;background:color-mix(in srgb,var(--s1) var(--c),var(--surface));clip-path:polygon(var(--t0) 0,calc(100% - var(--t0)) 0,calc(100% - var(--t1)) 100%,var(--t1) 100%)}
+.vf-t{font:500 13px/1.3 var(--sans);opacity:.9}.vf-v{font:600 28px/1.1 var(--display);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.vf-row:not(.last) .vf-seg .delta{margin-top:4px;color:#fff;background:rgba(255,255,255,.18)}
+.vf-row.last .vf-seg{clip-path:none;margin:6px var(--t0) 0;padding:12px;border-radius:14px;color:var(--ink);background:var(--surface2);border:1px solid var(--s1);box-shadow:var(--shadow)}.vf-row.last .vf-t{color:var(--muted);opacity:1}.vf-row.last .delta{margin-top:4px}
+.vf-side{display:grid;gap:2px;color:var(--muted);font-size:13px}.vf-side b{color:var(--ink);font-weight:600}.vf-r{font:600 18px var(--display)}.vf-side small{font-size:12px;opacity:.85}
+h2.sec{margin:28px 0 12px;font-size:18px}
+@media (max-width:719px){.vf-row{grid-template-columns:1fr;gap:6px}.vf-side{text-align:center;padding-bottom:10px}.vf-v{font-size:22px}.vf-seg{min-height:76px}}
 .flow-note{margin:14px 0 0;color:var(--muted);font-size:13px}.flow-note.bad{color:var(--ink)}.flow-note.bad b{color:var(--bad)}
 .intro .flow-band path{animation:fx-reveal .9s var(--ease) both .1s}@keyframes fx-reveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 .js .auto-btn{display:none}
@@ -577,7 +586,7 @@ ${compare ? html`<nav class="seg" aria-label="Comparação">${Object.entries(cmp
 ${Object.keys(f).length ? html`<div class="chips" aria-label="Filtros ativos">${Object.entries(f).map(([k, v]) => html`<a class="chip" href="${link(q, { ['f_' + k]: null })}" aria-label="Remover filtro ${filters[k]}">${filters[k]}: <b>${label(k, v)}</b> ${icon('x', 14)}</a>`)}<a class="chip" href="${link(new URLSearchParams([...q].filter(([k]) => !k.startsWith('f_'))), {})}">Limpar</a></div>` : ''}`;
 }
 
-function delta(cur, prev, fmt, invert) {
+export function delta(cur, prev, fmt, invert) {
   if (prev == null || cur == null || !prev) return '';
   const ch = (cur - prev) / Math.abs(prev);
   if (Math.abs(ch) < 0.005) return html`<span class="delta" title="Antes: ${fmt(prev)}">= 0%</span>`;

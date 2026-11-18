@@ -4,6 +4,7 @@ import { period } from '../time.js';
 import { route, send, redirect, form, sitePath, HttpError } from '../http.js';
 import { ctx, siteCtx } from '../auth.js';
 import * as S from '../tracking/stats.js';
+import { siteFunnel } from '../sales/stats.js';
 import * as V from '../views/traffic.js';
 import { deliveriesFor, retry, dispatch } from '../dispatch.js';
 
@@ -42,11 +43,16 @@ route('GET', '/sites/:id/realtime', { site: 'view' }, async r => {
 
 async function funnelsView(r, err) {
   const [p, f] = range(r);
-  const list = await Promise.all((await db.all('SELECT * FROM funnels WHERE site_id=? ORDER BY id', [r.site.id])).map(async fn => {
-    const steps = JSON.parse(fn.steps);
-    return { ...fn, steps, counts: await S.funnel(r.site.id, p, f, steps) };
-  }));
-  send(r, err ? 400 : 200, V.funnelsPage(await siteCtx(r, '/funnels'), p, f, list, err));
+  const [list, full, before] = await Promise.all([
+    Promise.all((await db.all('SELECT * FROM funnels WHERE site_id=? ORDER BY id', [r.site.id])).map(async fn => {
+      const steps = JSON.parse(fn.steps);
+      return { ...fn, steps, counts: await S.funnel(r.site.id, p, f, steps) };
+    })),
+    siteFunnel(r.site, p), p.prev && siteFunnel(r.site, p.prev)]);
+  // Funil cortado no início do script: o período anterior teria outro tamanho, então não compara.
+  const old = new Map((full.since ? [] : before?.stages || []).map(s => [s.k, s.v]));
+  for (const s of full.stages) s.before = old.get(s.k);
+  send(r, err ? 400 : 200, V.funnelsPage(await siteCtx(r, '/funnels'), p, f, list, err, full));
 }
 route('GET', '/sites/:id/funnels', { site: 'view' }, r => funnelsView(r));
 route('POST', '/sites/:id/funnels', { site: 'edit' }, async r => {

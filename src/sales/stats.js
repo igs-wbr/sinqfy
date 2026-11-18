@@ -7,7 +7,7 @@
 import { db } from '../db.js';
 import { tzOffset, buckets } from '../time.js';
 import { STATUS_PT } from '../ads/meta.js';
-import { buildFunnel } from './funnel.js';
+import { buildFunnel, siteStages } from './funnel.js';
 import { CHECKOUT_SQL } from '../tracking/stats.js';
 
 export const SALE_FILTERS = { platform: 'Plataforma', product: 'Produto', utm_source: 'Fonte', status: 'Status', method: 'Pagamento' };
@@ -105,6 +105,25 @@ export async function adFunnel(site, range, campaign = null) {
     db.get("SELECT COUNT(*) n FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid' AND campaign_key = ANY(?)", [site.id, range.from, range.to, keys]),
   ]) : [{}, {}];
   return { stages: buildFunnel(meta || {}, own, sales, { tracking: !!tracking, webhooks: !!webhooks }), spend: Number(meta?.spend) || 0 };
+}
+
+/** Funil completo do site no período (tela Funis). Ver siteStages em src/sales/funnel.js. */
+export async function siteFunnel(site, range) {
+  // Script instalado no meio do período: todas as etapas começam no primeiro dia com evento, senão a taxa mistura períodos.
+  const first = (await db.get('SELECT min(date) d FROM events WHERE site=?', [site.id]))?.d;
+  const since = first && first > range.from && first <= range.to ? first : null;
+  const a = [site.id, since || range.from, range.to];
+  const [meta, own, sales] = await Promise.all([
+    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_purchases) buy, SUM(spend) spend
+      FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?`, a),
+    db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE ad > 0) ads, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout
+      FROM (SELECT visitor, COUNT(*) FILTER (WHERE name='pageview') pv, COUNT(*) FILTER (WHERE name<>'pageview') ev,
+        COUNT(*) FILTER (WHERE ${CHECKOUT_SQL}) co, COUNT(*) FILTER (WHERE utm_campaign<>'') ad
+        FROM events WHERE site=? AND date BETWEEN ? AND ? GROUP BY visitor) x`, a),
+    db.get(`SELECT COUNT(DISTINCT COALESCE(rid, platform || '-' || order_id)) buyers, COUNT(*) orders, SUM(gross) revenue
+      FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid'`, a),
+  ]);
+  return { ...siteStages(meta || {}, own || {}, sales || {}), since };
 }
 
 export function byMethod(site, range, f) {
