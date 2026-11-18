@@ -181,11 +181,35 @@ ${tl(ctx, p, f, false)}<section class="card">${sankey(j)}</section>
 <div class="grid">${tabs('Caminhos mais comuns', [['Caminhos', list(ctx, j.paths, null, { head: 'Caminho', cols: [['Visitas', 'n']], filter: false })]])}</div>`);
 }
 
-export function attributionPage(ctx, p, f, names, event, dim, a) {
+const gap = ms => { const d = Math.round(ms / 864e5); return d <= 0 ? 'mesmo dia' : d === 1 ? '1 dia' : `${d} dias`; };
+/** Selo do anúncio: miniatura e o começo do nome ("EI-027"), nome inteiro no title. */
+function adChip(sq, k, cls = '') {
+  const it = sq.info[k] || { name: k }, short = String(it.name).split('|')[0].trim() || k;
+  return html`<span class="seqc ${cls}" title="${it.name}">${it.thumb ? html`<img src="${it.thumb}" alt="" width="22" height="22" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<b>${short}</b></span>`;
+}
+function adSequence(ctx, sq) {
+  const m = v => money(v, ctx.site.currency), day = ts => new Date(ts).toLocaleDateString('pt-BR', { timeZone: ctx.site.timezone, day: '2-digit', month: '2-digit' });
+  const head = html`<div class="row between"><h2>Sequência de anúncios até a compra</h2><span class="muted">${num(sq.withSeq)} de ${num(sq.purchases)} compras com anúncio no caminho</span></div>
+<p class="muted" style="margin:6px 0 0">Os anúncios em que a mesma pessoa clicou (pelo cookie do visitante) nos 30 dias antes de comprar, na ordem. O último é o da compra. Impressão sem clique a Meta só informa no total, por anúncio.${sq.since ? ` O script registra desde ${brDate(sq.since)}: compras antes disso não têm sequência.` : ''}</p>`;
+  if (!sq.withSeq) return html`<section class="card" id="sequencia">${head}<p class="empty">Nenhuma compra no período com clique em anúncio registrado antes. A sequência aparece quando as vendas chegam com o rid do link de checkout.</p></section>`;
+  const chain = (keys, last = true) => keys.map((k, i) => html`${i ? html`<span class="seqa" aria-hidden="true">›</span>` : ''}${adChip(sq, k, last && i === keys.length - 1 ? 'close' : '')}`);
+  return html`<section class="card" id="sequencia">${head}
+<div class="kpis" style="margin-top:14px">${kpi('sq-n', 'Compras com anúncio no caminho', sq.withSeq, null, num)}${kpi('sq-ads', 'Anúncios até comprar (média)', sq.avgAds, null, v => ratio(v))}${kpi('sq-days', 'Dias do 1º clique à compra', sq.avgDays, null, v => ratio(v))}${kpi('sq-one', 'Compraram no 1º anúncio', sq.single, null, pct)}</div>
+<div class="grid" style="margin-top:16px"><div><h3>Sequências mais comuns</h3><ol class="seq-list">${sq.paths.map(pa => html`<li><div class="seq">${chain(pa.keys)}</div><span class="muted">${num(pa.n)} ${pa.n === 1 ? 'compra' : 'compras'} · ${m(pa.revenue)}</span></li>`)}</ol></div>
+<div><h3>Últimas compras</h3><ol class="seq-list">${sq.recent.map(b => html`<li><div class="seq">${b.seq.map((s, i) => html`${i ? html`<span class="seqg">${gap(s.at - b.seq[i - 1].at)} ›</span>` : ''}${adChip(sq, s.k, i === b.seq.length - 1 ? 'close' : '')}`)}</div>
+<span class="muted">${day(b.ts)} · ${m(b.gross)}${b.orders > 1 ? ` · ${b.orders} pedidos` : ''}${b.via ? ` · comprou por ${b.via}` : ''}</span></li>`)}</ol></div></div>
+<h3 style="margin-top:18px">Por anúncio</h3>
+<div class="tw"><table class="data"><thead><tr><th style="text-align:left">Anúncio</th><th title="Impressões no período, pela Meta">Impressões</th><th title="Pessoas que entraram no site por este anúncio no período">Clicaram</th><th title="Compras em que este anúncio aparece na sequência">Em compras</th><th title="Primeiro anúncio da sequência">Abriu</th><th title="Apareceu no meio da sequência">Meio</th><th title="Último anúncio antes da compra">Fechou</th><th>Faturamento (fechou)</th><th title="Compras fechadas por este anúncio ÷ pessoas que clicaram nele">Fechou ÷ clicaram</th></tr></thead>
+<tbody>${sq.ads.map(x => html`<tr><td style="text-align:left;white-space:normal;min-width:200px">${adChip(sq, x.k)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td>${x.imp ? num(x.imp) : '-'}</td><td>${num(x.seen)}</td><td>${num(x.journeys)}</td><td>${num(x.first)}</td><td>${num(x.middle)}</td><td><b>${num(x.last)}</b></td><td>${m(x.revenue)}</td><td>${x.seen ? pct(x.last / x.seen) : '-'}</td></tr>`)}</tbody></table></div>
+</section>`;
+}
+
+export function attributionPage(ctx, p, f, names, event, dim, a, seq = null) {
   const m = v => money(v, ctx.site.currency);
   const cols = [['Conversões', 'n'], ['Receita', 'rev', m]];
   return layout(ctx, `Atribuição · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Atribuição`, raw('Quem leva o <em>crédito</em>'), raw('<b>Primeiro clique</b> credita a primeira visita do visitante no dia; <b>último clique</b>, a última visita não-direta antes da conversão. Para vendas de plataformas, veja Vendas → Campanhas.'))}
 ${tl(ctx, p, f, false)}
+${seq ? adSequence(ctx, seq) : ''}<h2 class="sec">Eventos do site</h2>
 ${names.length ? html`<form method="get" class="row" style="margin-bottom:14px">${hiddenInputs(ctx.q, ['event', 'dim'])}
 <label class="f">Conversão <select name="event">${names.map(n => html`<option${n === event ? raw(' selected') : ''}>${n}</option>`)}</select></label>
 <label class="f">Agrupar por <select name="dim">${Object.entries(ATTR_DIMS).map(([k, t]) => html`<option value="${k}"${k === dim ? raw(' selected') : ''}>${t}</option>`)}</select></label><button style="align-self:end">Aplicar</button></form>` : ''}

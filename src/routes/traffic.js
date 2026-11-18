@@ -4,7 +4,7 @@ import { period } from '../time.js';
 import { route, send, redirect, form, sitePath, HttpError } from '../http.js';
 import { ctx, siteCtx } from '../auth.js';
 import * as S from '../tracking/stats.js';
-import { siteFunnel } from '../sales/stats.js';
+import { siteFunnel, adSequences } from '../sales/stats.js';
 import * as V from '../views/traffic.js';
 import { deliveriesFor, retry, dispatch } from '../dispatch.js';
 
@@ -75,5 +75,6 @@ route('GET', '/sites/:id/attribution', { site: 'view' }, async r => {
   const [p, f] = range(r), names = await S.eventNames(r.site.id, p);
   const event = names.includes(r.q.get('event')) ? r.q.get('event') : names[0];
   const dim = Object.hasOwn(S.ATTR_DIMS, r.q.get('dim') || '') ? r.q.get('dim') : 'channel';
-  send(r, 200, V.attributionPage(await siteCtx(r, '/attribution'), p, f, names, event, dim, event ? await S.attribution(r.site.id, p, f, event, dim) : null));
+  const [c, a, seq] = await Promise.all([siteCtx(r, '/attribution'), event ? S.attribution(r.site.id, p, f, event, dim) : null, adSequences(r.site, p)]);
+  send(r, 200, V.attributionPage(c, p, f, names, event, dim, a, seq));
 });

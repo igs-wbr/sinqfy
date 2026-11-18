@@ -92,19 +92,31 @@ ${g ? html`<p class="flow-note bad">${raw('<b>Gargalo:</b>')} ${g.t.toLowerCase(
 </section>`;
 }
 
-export function campaignsPage(ctx, p, level, rows, lastSync, funnel = null) {
+/** Seletores de campanha e conjunto (navegação da Meta): escolher a campanha mostra os conjuntos dela; o conjunto, os anúncios. */
+function drill(ctx, level, nav) {
+  const camps = nav.campaigns.filter(r => r.platform === 'meta' && !r.unmatched), sets = nav.adsets.filter(r => r.platform === 'meta' && !r.unmatched);
+  if (!camps.length) return '';
+  const opt = (r, cur) => html`<option value="${r.id}"${cur === r.id ? raw(' selected') : ''}>${r.name}</option>`;
+  return html`<form method="get" class="row drill">${hiddenInputs(ctx.q, ['campaign', 'adset', 'level', 'fc'])}<input type="hidden" name="level" value="${level === 'campaign' ? 'adset' : level}">
+<label class="sr" for="d-camp">Campanha</label><select id="d-camp" name="campaign" data-submit><option value="">Todas as campanhas</option>${camps.map(r => opt(r, nav.campaign))}</select>
+${nav.campaign ? html`<span class="muted" aria-hidden="true">›</span><label class="sr" for="d-set">Conjunto</label><select id="d-set" name="adset" data-submit><option value="">Todos os conjuntos</option>${sets.map(r => opt(r, nav.adset))}</select>` : ''}
+<button class="auto-btn">Ver</button></form>`;
+}
+
+export function campaignsPage(ctx, p, level, rows, lastSync, funnel = null, nav = { campaigns: [], adsets: [] }) {
   const site = ctx.site, m = v => money(v, site.currency);
   const sum = k => rows.reduce((s, r) => s + (r[k] || 0), 0);
   const spend = sum('spend'), net = sum('net'), sales = sum('sales'), profit = sum('profit'), metaP = sum('metaPurchases'), metaV = sum('metaValue'), leads = sum('metaLeads');
   return layout(ctx, `Campanhas · ${site.name}`, html`
 ${pageHead(`${site.name} · Campanhas`, raw('Cada real <em>investido</em>'), raw('<b>Vendas</b> e <b>ROAS</b> vêm dos webhooks (dinheiro confirmado, ligado pela UTM). <b>Compras</b> e <b>ROAS (Meta)</b> são o que a própria Meta atribui ao anúncio, na janela de atribuição da conta. <b>Abriu</b> conta o primeiro anúncio do lead; <b>Participou</b>, todo anúncio que ele viu antes de comprar.'), synced(ctx, lastSync))}
 ${toolbar(ctx, p, {}, { compare: false })}
-<div class="toolbar"><nav class="seg" aria-label="Nível">${Object.entries(LEVEL_PT).map(([k, t]) => html`<a href="${link(ctx.q, { level: k === 'campaign' ? null : k })}"${on(level === k)}>${t}</a>`)}</nav></div>
+<div class="toolbar"><nav class="seg" aria-label="Nível">${Object.entries(LEVEL_PT).map(([k, t]) => html`<a href="${link(ctx.q, { level: k === 'campaign' ? null : k, ...(k === 'campaign' && { campaign: null, adset: null, fc: null }), ...(k === 'adset' && { adset: null }) })}"${on(level === k)}>${t}</a>`)}</nav>${drill(ctx, level, nav)}</div>
 <div class="hero">${kpi('c-net', 'Faturamento', net, null, m, { feature: true })}${kpi('c-spend', 'Gastos', spend, null, m)}${kpi('c-roas', 'ROAS', spend ? net / spend : null, null, sx, { tone: tone(spend ? net / spend : null, 1) })}${kpi('c-profit', 'Lucro', profit, null, m, { tone: tone(profit) })}</div>
 ${funnel ? adFunnel(ctx, funnel, m) : ''}
 ${rows.length ? html`<section class="card"><div class="tw"><table class="data"><thead><tr><th>Status</th><th style="text-align:left">${LEVEL_PT[level].slice(0, -1)}</th><th>Orçamento</th><th>Gastos</th><th>Vendas</th><th title="Vendas em que este foi o primeiro anúncio clicado pelo lead (primeiro toque pago)">Abriu</th><th title="Vendas em que este anúncio aparece em alguma visita do lead nos 30 dias antes da compra">Participou</th><th>CPA</th><th>Faturamento</th><th>ROAS</th><th>Compras (Meta)</th><th>ROAS (Meta)</th>${leads ? html`<th>Leads (Meta)</th>` : ''}<th>Lucro</th><th>ROI</th><th>CTR</th></tr></thead>
 <tbody>${rows.map(r => html`<tr><td style="text-align:left">${r.unmatched ? html`<span class="badge st-paused">sem gasto</span>` : html`<span class="badge st-${/PAUSED/.test(r.status) ? 'paused' : r.status || 'paused'}">${r.statusPt}</span>`}</td>
-<td style="text-align:left;white-space:normal;min-width:220px">${level === 'ad' && !r.unmatched ? html`<span class="ad-name">${r.thumb ? html`<img class="ad-thumb" src="${r.thumb}" alt="" width="48" height="48" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<span>${r.name}</span></span>` : level === 'campaign' && r.platform === 'meta' ? html`<a href="${link(ctx.q, { fc: r.id })}#funil" title="Ver o funil desta campanha">${r.name}</a>` : r.name}${r.platform && r.platform !== 'meta' ? html` <small class="muted">· ${r.platform}</small>` : ''}</td>
+<td style="text-align:left;white-space:normal;min-width:220px">${level === 'ad' && !r.unmatched ? html`<span class="ad-name">${r.thumb ? html`<img class="ad-thumb" src="${r.thumb}" alt="" width="48" height="48" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<span>${r.name}</span></span>` : level === 'campaign' && r.platform === 'meta' ? html`<a href="${link(ctx.q, { level: 'adset', campaign: r.id, adset: null, fc: null })}" title="Ver os conjuntos desta campanha">${r.name}</a>`
+  : level === 'adset' && r.platform === 'meta' && (nav.campaign || r.parent) ? html`<a href="${link(ctx.q, { level: 'ad', campaign: nav.campaign || r.parent, adset: r.id, fc: null })}" title="Ver os anúncios deste conjunto">${r.name}</a>` : r.name}${r.platform && r.platform !== 'meta' ? html` <small class="muted">· ${r.platform}</small>` : ''}</td>
 <td>${r.budget != null ? m(r.budget) : '-'}</td><td>${m(r.spend)}</td><td>${num(r.sales)}</td><td>${num(r.first)}</td><td>${num(r.touched)}</td><td>${r.cpa != null ? m(r.cpa) : '-'}</td><td>${m(r.net)}</td>
 <td>${sx(r.roas)}</td><td>${num(r.metaPurchases)}</td><td>${sx(r.metaRoas)}</td>${leads ? html`<td>${num(r.metaLeads)}</td>` : ''}<td class="${r.profit < 0 ? 'neg' : r.profit > 0 ? 'pos' : ''}">${m(r.profit)}</td><td>${pct(r.roi)}</td><td>${pct(r.ctr)}</td></tr>`)}</tbody>
 <tfoot><tr><th style="text-align:left">Total</th><th></th><th></th><th>${m(spend)}</th><th>${num(sales)}</th><th>${num(sum('first'))}</th><th></th><th>${sales ? m(spend / sales) : '-'}</th><th>${m(net)}</th><th>${sx(spend ? net / spend : null)}</th><th>${num(metaP)}</th><th>${sx(spend ? metaV / spend : null)}</th>${leads ? html`<th>${num(leads)}</th>` : ''}<th>${m(profit)}</th><th>${pct(spend ? profit / spend : null)}</th><th></th></tr></tfoot></table></div></section>`

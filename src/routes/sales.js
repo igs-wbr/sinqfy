@@ -31,12 +31,22 @@ route('GET', '/sites/:id', { site: 'view' }, async r => {
 
 route('GET', '/sites/:id/campaigns', { site: 'view' }, async r => {
   const p = period(r.q, r.site.timezone);
-  const level = Object.hasOwn(S.LEVEL_PT, r.q.get('level') || '') ? r.q.get('level') : 'campaign';
-  const fc = /^[\w-]{1,40}$/.test(r.q.get('fc') || '') ? r.q.get('fc') : null; // campanha do funil (vazio = todas)
-  const [c, rows, ls, funnel, before] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level), lastSync(r.site.id),
-    S.adFunnel(r.site, p, fc), p.prev && S.adFunnel(r.site, p.prev, fc)]);
+  let level = Object.hasOwn(S.LEVEL_PT, r.q.get('level') || '') ? r.q.get('level') : 'campaign';
+  const id = k => /^[\w-]{1,40}$/.test(r.q.get(k) || '') ? r.q.get(k) : null;
+  const campaign = id('campaign');
+  // Conjunto só vale dentro da campanha escolhida (trocar a campanha no seletor não pode deixar o conjunto da outra).
+  const adset = campaign && id('adset') && await db.get(`SELECT 1 FROM ad_spend WHERE site=? AND campaign_id=? AND adset_id=?
+    UNION ALL SELECT 1 FROM ad_entities WHERE site=? AND level='adset' AND parent=? AND id=? LIMIT 1`, [r.site.id, campaign, id('adset'), r.site.id, campaign, id('adset')]) ? id('adset') : null;
+  // Como na Meta: escolher a campanha abre os conjuntos dela; escolher o conjunto, os anúncios dele.
+  if (adset) level = 'ad';
+  else if (campaign && level === 'campaign') level = 'adset';
+  const fc = id('fc') || campaign; // campanha do funil: a escolhida em cima, ou a do seletor do funil (vazio = todas)
+  const [c, rows, ls, funnel, before, camps, sets] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level, { campaign, adset }), lastSync(r.site.id),
+    S.adFunnel(r.site, p, fc), p.prev && S.adFunnel(r.site, p.prev, fc),
+    level === 'campaign' ? null : S.campaigns(r.site, p), campaign && (level === 'adset' ? null : S.campaigns(r.site, p, 'adset', { campaign }))]);
   compareFunnel(funnel.stages, before?.stages); // gargalo contra a própria campanha no período anterior, nunca contra média de mercado
-  send(r, 200, V.campaignsPage(c, p, level, rows, ls, { ...funnel, fc, prev: p.prev, options: level === 'campaign' ? rows : await S.campaigns(r.site, p) }));
+  const campaigns = camps || rows, adsets = sets || (level === 'adset' ? rows : []);
+  send(r, 200, V.campaignsPage(c, p, level, rows, ls, { ...funnel, fc, prev: p.prev, options: campaigns }, { campaign, adset, campaigns, adsets }));
 });
 
 route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
