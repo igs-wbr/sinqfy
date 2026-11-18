@@ -69,6 +69,7 @@ test('sequência de anúncios: a ordem dos cliques até a compra, por compra e p
   assert.deepEqual(sq.recent[0].seq.map(s => s.k), ['a1', 'a2'], 'a1 no dia 1, a2 no dia 3');
   assert.equal(sq.recent[0].via, 'link_in_bio', 'comprou pela bio depois dos anúncios');
   assert.deepEqual(sq.paths.map(p => [p.keys.join('>'), p.n]), [['a1>a2', 1]]);
+  assert.deepEqual([sq.multi, sq.singles.length], [1, 0], 'dois anúncios: vai para as sequências, não para quem comprou no primeiro');
   const by = Object.fromEntries(sq.ads.map(x => [x.k, x]));
   assert.deepEqual([by.a1.first, by.a1.last, by.a2.first, by.a2.last, by.a2.revenue, by.a1.seen], [1, 0, 0, 1, 100, 1]);
 
@@ -80,6 +81,7 @@ test('sequência de anúncios: a ordem dos cliques até a compra, por compra e p
   const admin = await login();
   const page = (await req('/sites/jor/attribution?range=custom&from=2026-11-01&to=2026-11-05', { cookie: admin })).text;
   assert.ok(page.includes('Sequência de anúncios até a compra') && page.includes('title="V1"') && page.includes('title="V2"'));
+  assert.ok(page.includes('1º clique') && page.includes('Comprou pelo') && page.includes('Compraram no primeiro anúncio'), 'etapas com rótulo e quem comprou no primeiro anúncio separado');
 });
 
 test('campanhas: escolher a campanha mostra os conjuntos dela, e o conjunto, os anúncios dele', async () => {

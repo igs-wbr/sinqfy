@@ -181,26 +181,56 @@ ${tl(ctx, p, f, false)}<section class="card">${sankey(j)}</section>
 <div class="grid">${tabs('Caminhos mais comuns', [['Caminhos', list(ctx, j.paths, null, { head: 'Caminho', cols: [['Visitas', 'n']], filter: false })]])}</div>`);
 }
 
-const gap = ms => { const d = Math.round(ms / 864e5); return d <= 0 ? 'mesmo dia' : d === 1 ? '1 dia' : `${d} dias`; };
-/** Selo do anúncio: miniatura e o começo do nome ("EI-027"), nome inteiro no title. */
-function adChip(sq, k, cls = '') {
-  const it = sq.info[k] || { name: k }, short = String(it.name).split('|')[0].trim() || k;
-  return html`<span class="seqc ${cls}" title="${it.name}">${it.thumb ? html`<img src="${it.thumb}" alt="" width="22" height="22" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<b>${short}</b></span>`;
+const gap = ms => { const h = ms / 36e5; if (h < 1) return 'na mesma hora'; if (h < 24) return `${Math.round(h)} h depois`; const d = Math.round(h / 24); return d === 1 ? '1 dia depois' : `${d} dias depois`; };
+const ORD = ['1º', '2º', '3º', '4º', '5º', '6º'];
+/** Rótulo curto do anúncio ("EI-027"); dois anúncios com o mesmo começo de nome ganham o fim do id. */
+function adLabels(sq) {
+  const keys = new Set([...sq.ads.map(x => x.k), ...sq.singles.map(x => x.k), ...sq.paths.flatMap(p => p.keys), ...sq.recent.flatMap(b => b.seq.map(s => s.k))]);
+  const short = k => String(sq.info[k]?.name || k).split('|')[0].trim() || k, groups = new Map();
+  for (const k of keys) (groups.get(short(k)) || groups.set(short(k), []).get(short(k))).push(String(k));
+  // Ids da mesma conta da Meta terminam igual ("...0053"): mostra os 4 dígitos antes do fim em comum.
+  const tag = new Map();
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    let c = 0;
+    while (c < ids[0].length - 4 && ids.every(id => id.at(-1 - c) === ids[0].at(-1 - c))) c++;
+    for (const id of ids) tag.set(id, id.slice(Math.max(0, id.length - c - 4), id.length - c));
+  }
+  return k => tag.has(String(k)) ? `${short(k)} ·${tag.get(String(k))}` : short(k);
+}
+/** Selo do anúncio: miniatura e o rótulo curto, nome inteiro no title. */
+function adChip(sq, k, cls = '', label = null) {
+  const it = sq.info[k] || { name: k };
+  return html`<span class="seqc ${cls}" title="${it.name}">${it.thumb ? html`<img src="${it.thumb}" alt="" width="22" height="22" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<b>${label ? label(k) : String(it.name).split('|')[0].trim()}</b></span>`;
+}
+/** Caminho em etapas: 1º clique, 2º clique, ..., comprou, com o tempo entre os cliques em cima da seta. */
+function journey(sq, label, steps) {
+  const n = steps.length;
+  return html`<div class="jr">${steps.map((st, i) => html`${i ? html`<span class="jarrow"><small>${st.gap || ''}</small>${icon('arrow', 16)}</span>` : ''}<span class="jstep${i === n - 1 ? ' buy' : ''}"><span class="jl">${i === n - 1 ? html`${icon('cart', 13)} Comprou pelo` : i === 0 ? html`${icon('click', 13)} 1º clique` : `${ORD[i] || `${i + 1}º`} clique`}</span>${adChip(sq, st.k, i === n - 1 ? 'close' : '', label)}</span>`)}</div>`;
 }
 function adSequence(ctx, sq) {
   const m = v => money(v, ctx.site.currency), day = ts => new Date(ts).toLocaleDateString('pt-BR', { timeZone: ctx.site.timezone, day: '2-digit', month: '2-digit' });
   const head = html`<div class="row between"><h2>Sequência de anúncios até a compra</h2><span class="muted">${num(sq.withSeq)} de ${num(sq.purchases)} compras com anúncio no caminho</span></div>
-<p class="muted" style="margin:6px 0 0">Os anúncios em que a mesma pessoa clicou (pelo cookie do visitante) nos 30 dias antes de comprar, na ordem. O último é o da compra. Impressão sem clique a Meta só informa no total, por anúncio.${sq.since ? ` O script registra desde ${brDate(sq.since)}: compras antes disso não têm sequência.` : ''}</p>`;
+<p class="muted" style="margin:6px 0 0">Os anúncios em que a mesma pessoa clicou (pelo cookie do visitante) nos 30 dias antes de comprar, na ordem do clique. Impressão sem clique a Meta só informa no total, por anúncio.${sq.since ? ` O script registra desde ${brDate(sq.since)}: compras antes disso não têm sequência.` : ''}</p>`;
   if (!sq.withSeq) return html`<section class="card" id="sequencia">${head}<p class="empty">Nenhuma compra no período com clique em anúncio registrado antes. A sequência aparece quando as vendas chegam com o rid do link de checkout.</p></section>`;
-  const chain = (keys, last = true) => keys.map((k, i) => html`${i ? html`<span class="seqa" aria-hidden="true">›</span>` : ''}${adChip(sq, k, last && i === keys.length - 1 ? 'close' : '')}`);
+  const label = adLabels(sq), singleN = sq.singles.reduce((t, x) => t + x.n, 0);
   return html`<section class="card" id="sequencia">${head}
-<div class="kpis" style="margin-top:14px">${kpi('sq-n', 'Compras com anúncio no caminho', sq.withSeq, null, num)}${kpi('sq-ads', 'Anúncios até comprar (média)', sq.avgAds, null, v => ratio(v))}${kpi('sq-days', 'Dias do 1º clique à compra', sq.avgDays, null, v => ratio(v))}${kpi('sq-one', 'Compraram no 1º anúncio', sq.single, null, pct)}</div>
-<div class="grid" style="margin-top:16px"><div><h3>Sequências mais comuns</h3><ol class="seq-list">${sq.paths.map(pa => html`<li><div class="seq">${chain(pa.keys)}</div><span class="muted">${num(pa.n)} ${pa.n === 1 ? 'compra' : 'compras'} · ${m(pa.revenue)}</span></li>`)}</ol></div>
-<div><h3>Últimas compras</h3><ol class="seq-list">${sq.recent.map(b => html`<li><div class="seq">${b.seq.map((s, i) => html`${i ? html`<span class="seqg">${gap(s.at - b.seq[i - 1].at)} ›</span>` : ''}${adChip(sq, s.k, i === b.seq.length - 1 ? 'close' : '')}`)}</div>
-<span class="muted">${day(b.ts)} · ${m(b.gross)}${b.orders > 1 ? ` · ${b.orders} pedidos` : ''}${b.via ? ` · comprou por ${b.via}` : ''}</span></li>`)}</ol></div></div>
-<h3 style="margin-top:18px">Por anúncio</h3>
-<div class="tw"><table class="data"><thead><tr><th style="text-align:left">Anúncio</th><th title="Impressões no período, pela Meta">Impressões</th><th title="Pessoas que entraram no site por este anúncio no período">Clicaram</th><th title="Compras em que este anúncio aparece na sequência">Em compras</th><th title="Primeiro anúncio da sequência">Abriu</th><th title="Apareceu no meio da sequência">Meio</th><th title="Último anúncio antes da compra">Fechou</th><th>Faturamento (fechou)</th><th title="Compras fechadas por este anúncio ÷ pessoas que clicaram nele">Fechou ÷ clicaram</th></tr></thead>
-<tbody>${sq.ads.map(x => html`<tr><td style="text-align:left;white-space:normal;min-width:200px">${adChip(sq, x.k)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td>${x.imp ? num(x.imp) : '-'}</td><td>${num(x.seen)}</td><td>${num(x.journeys)}</td><td>${num(x.first)}</td><td>${num(x.middle)}</td><td><b>${num(x.last)}</b></td><td>${m(x.revenue)}</td><td>${x.seen ? pct(x.last / x.seen) : '-'}</td></tr>`)}</tbody></table></div>
+<div class="kpis" style="margin-top:14px">${kpi('sq-n', 'Compras com anúncio no caminho', sq.withSeq, null, num)}${kpi('sq-multi', 'Passaram por 2 anúncios ou mais', sq.multi, null, num)}${kpi('sq-ads', 'Anúncios até comprar (média)', sq.avgAds, null, v => ratio(v))}${kpi('sq-days', 'Dias do 1º clique à compra (média)', sq.avgDays, null, v => ratio(v))}</div>
+
+<h3 class="seq-h">${icon('click', 16)} Passaram por mais de um anúncio <small class="muted">${num(sq.multi)} ${sq.multi === 1 ? 'compra' : 'compras'}</small></h3>
+${sq.multi ? html`<div class="grid seq-grid"><div><h4>Sequências mais comuns</h4><ol class="seq-list">${sq.paths.map(pa => html`<li>${journey(sq, label, pa.keys.map(k => ({ k })))}<span class="muted">${num(pa.n)} ${pa.n === 1 ? 'compra' : 'compras'} · ${m(pa.revenue)}</span></li>`)}</ol></div>
+<div><h4>Últimas compras com mais de um anúncio</h4><ol class="seq-list">${sq.recent.map(b => html`<li>${journey(sq, label, b.seq.map((st, i) => ({ k: st.k, gap: i ? gap(st.at - b.seq[i - 1].at) : '' })))}
+<span class="muted">${day(b.ts)} · ${m(b.gross)}${b.orders > 1 ? ` · ${b.orders} pedidos` : ''}${b.via ? ` · pagou pelo link ${b.via}` : ''}</span></li>`)}</ol></div></div>`
+  : html`<p class="empty">Ainda nenhuma compra em que a pessoa clicou em dois anúncios ou mais antes de comprar.${sq.since ? ' Com mais dias de script, as sequências aparecem aqui.' : ''}</p>`}
+
+<h3 class="seq-h">${icon('cart', 16)} Compraram no primeiro anúncio <small class="muted">${num(singleN)} ${singleN === 1 ? 'compra' : 'compras'} · clicaram em um anúncio só e compraram</small></h3>
+${sq.singles.length ? html`<div class="tw"><table class="data"><thead><tr><th style="text-align:left">Anúncio</th><th>Compras</th><th>Faturamento</th><th title="Média do clique à compra">Do clique à compra</th></tr></thead>
+<tbody>${sq.singles.map(x => html`<tr><td style="text-align:left;white-space:normal">${adChip(sq, x.k, 'close', label)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td><b>${num(x.n)}</b></td><td>${m(x.revenue)}</td><td>${gap(x.days / x.n * 864e5).replace(' depois', '')}</td></tr>`)}</tbody></table></div>`
+  : html`<p class="empty">Nenhuma compra de quem clicou num anúncio só.</p>`}
+
+<h3 class="seq-h">Por anúncio <small class="muted">o papel de cada um nas compras</small></h3>
+<div class="tw"><table class="data"><thead><tr><th style="text-align:left">Anúncio</th><th title="Impressões no período, pela Meta">Impressões</th><th title="Pessoas que entraram no site por este anúncio no período">Clicaram</th><th title="Compras em que este anúncio aparece na sequência">Em compras</th><th title="Foi o 1º clique da sequência">1º clique</th><th title="Apareceu entre o 1º clique e o da compra">No meio</th><th title="Último anúncio antes da compra">Comprou pelo</th><th>Faturamento (comprou pelo)</th><th title="Compras pelo anúncio ÷ pessoas que clicaram nele">Compras ÷ cliques</th></tr></thead>
+<tbody>${sq.ads.map(x => html`<tr><td style="text-align:left;white-space:normal;min-width:200px">${adChip(sq, x.k, '', label)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td>${x.imp ? num(x.imp) : '-'}</td><td>${num(x.seen)}</td><td>${num(x.journeys)}</td><td>${num(x.first)}</td><td>${num(x.middle)}</td><td><b>${num(x.last)}</b></td><td>${m(x.revenue)}</td><td>${x.seen ? pct(x.last / x.seen) : '-'}</td></tr>`)}</tbody></table></div>
 </section>`;
 }
 

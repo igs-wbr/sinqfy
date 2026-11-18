@@ -167,7 +167,7 @@ export async function adSequences(site, range) {
     if (x.rid) lastBy.set(x.rid, b);
   }
 
-  const ads = new Map(), paths = new Map();
+  const ads = new Map(), paths = new Map(), singles = new Map(); // singles: clicou num anúncio só e comprou
   const ad = k => ads.get(k) || ads.set(k, { k, imp: info.get(k)?.imp || 0, seen: 0, journeys: 0, first: 0, middle: 0, last: 0, revenue: 0 }).get(k);
   for (const s of seen) if (isAd(s.k)) ad(s.k).seen = Number(s.n);
   const withSeq = buys.filter(b => b.seq.length);
@@ -177,6 +177,7 @@ export async function adSequences(site, range) {
     ad(keys[0]).first++;
     const end = ad(keys.at(-1)); end.last++; end.revenue += b.gross;
     for (const k of new Set(keys.slice(1, -1))) if (k !== keys[0] && k !== keys.at(-1)) ad(k).middle++;
+    if (keys.length === 1) { const one = singles.get(keys[0]) || singles.set(keys[0], { k: keys[0], n: 0, revenue: 0, days: 0 }).get(keys[0]); one.n++; one.revenue += b.gross; one.days += (b.ts - b.seq[0].at) / DAY; continue; }
     const path = keys.slice(-6).join('>'), pa = paths.get(path) || paths.set(path, { keys: keys.slice(-6), n: 0, revenue: 0 }).get(path);
     pa.n++; pa.revenue += b.gross;
   }
@@ -187,7 +188,9 @@ export async function adSequences(site, range) {
     single: withSeq.length ? withSeq.filter(b => b.seq.length === 1).length / withSeq.length : null,
     ads: [...ads.values()].filter(x => x.journeys || x.seen).sort((x, y) => y.last - x.last || y.journeys - x.journeys || y.seen - x.seen).slice(0, 40),
     paths: [...paths.values()].sort((x, y) => y.n - x.n || y.keys.length - x.keys.length || y.revenue - x.revenue).slice(0, 8),
-    recent: withSeq.slice(-25).reverse(),
+    singles: [...singles.values()].sort((x, y) => y.n - x.n || y.revenue - x.revenue),
+    multi: withSeq.filter(b => b.seq.length > 1).length,
+    recent: withSeq.filter(b => b.seq.length > 1).slice(-25).reverse(),
     info: Object.fromEntries([...info].map(([k, v]) => [k, { name: v.name, thumb: v.thumb }])),
   };
 }
