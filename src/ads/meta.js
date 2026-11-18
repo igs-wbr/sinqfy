@@ -10,7 +10,13 @@ async function getAll(url) {
   for (let next = url, page = 0; next && page < 50; page++) {
     const res = await fetch(next);
     const j = await res.json().catch(() => ({}));
-    if (!res.ok || j.error) throw new Error(j.error?.message || `HTTP ${res.status}`);
+    if (!res.ok || j.error) {
+      // Código 1 ("An unknown error occurred" / "reduce the amount of data") é a Meta recusando página grande demais:
+      // conta com muitos anúncios ou 90 dias por anúncio. Repete a mesma página com limit menor (500 → 125 → 31).
+      const u = new URL(next), lim = Number(u.searchParams.get('limit')) || 0;
+      if (j.error?.code === 1 && lim > 40) { u.searchParams.set('limit', String(lim >> 2)); next = u.href; page--; continue; }
+      throw new Error(`${u.pathname.split('/').pop()}: ${j.error?.message || `HTTP ${res.status}`}${j.error?.code ? ` (código ${j.error.code})` : ''}`);
+    }
     out.push(...(j.data || []));
     next = j.paging?.next;
   }

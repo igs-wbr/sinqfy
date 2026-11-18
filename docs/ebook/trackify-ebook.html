@@ -467,12 +467,13 @@ svg text { font-family: Figtree, sans-serif; }
   </table>
 
   <h3>Webhook personalizado (exemplo: OnProfit)</h3>
-  <p>Para qualquer checkout que mande JSON, diga onde está cada campo. Caminhos com ponto, como <code>customer.email</code> ou <code>transactions.0.amount</code>. Teste com um exemplo antes de salvar.</p>
+  <p>Para qualquer checkout que mande JSON, diga onde está cada campo. Caminhos com ponto, como <code>customer.email</code> ou <code>product.name</code>. Teste com um exemplo antes de salvar.</p>
   <table>
     <tr><th>Campo da Trackify</th><th>Na OnProfit (payload V2)</th></tr>
     <tr><td>Id do pedido</td><td><code>id</code></td></tr>
     <tr><td>Status</td><td class="wrap"><code>status</code> (Aprovada: <code>paid,authorized</code>; Pendente: <code>waiting</code>; Reembolsada: <code>refunded</code>)</td></tr>
-    <tr><td>Valor pago e líquido</td><td class="wrap"><code>transactions.0.amount</code>, em centavos</td></tr>
+    <tr><td>Valor pago</td><td class="wrap"><code>price</code>, em centavos. Não use <code>transactions.0.amount</code>: no Pix com order bump ele traz o total do pagamento em cada pedido</td></tr>
+    <tr><td>Valor líquido</td><td class="wrap"><code>comission</code>, em centavos (assim mesmo, com um "m")</td></tr>
     <tr><td>Forma de pagamento</td><td><code>payment_type</code></td></tr>
     <tr><td>Produto</td><td><code>product.name</code></td></tr>
     <tr><td>E-mail e telefone</td><td><code>customer.email</code>, <code>customer.cell</code></td></tr>

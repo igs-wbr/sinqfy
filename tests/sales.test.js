@@ -19,6 +19,7 @@ globalThis.fetch = async (url, opts) => {
   if (p === '/campaigns' && !u.searchParams.has('after')) return json({ data: [{ id: 'c1', name: 'Black Friday', effective_status: 'ACTIVE', daily_budget: '10000' }], paging: { next: u.href + '&after=2' } });
   if (p === '/campaigns') return json({ data: [{ id: 'c2', name: 'Antiga', effective_status: 'PAUSED' }] });
   if (p === '/adsets') return json({ data: [{ id: 's1', name: 'Lookalike', campaign_id: 'c1', effective_status: 'ACTIVE', daily_budget: '5000' }] });
+  if (p === '/ads' && Number(u.searchParams.get('limit')) > 200) return json({ error: { message: 'An unknown error occurred', code: 1 } }, 500);
   if (p === '/ads') return json({ data: [{ id: 'a1', name: 'Video 1', adset_id: 's1', effective_status: 'ACTIVE', creative: { thumbnail_url: 'https://scontent.xx.fbcdn.net/v/t45/thumb1.jpg?oh=1' } },
     { id: 'a2', name: 'Ruim', adset_id: 's1', effective_status: 'ACTIVE', creative: { thumbnail_url: 'javascript:alert(1)' } }] });
   if (p === '/insights') {
