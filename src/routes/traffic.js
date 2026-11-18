@@ -23,7 +23,8 @@ route('GET', '/share/:token', { auth: false }, async r => {
 });
 
 route('GET', '/sites/:id/events', { site: 'view' }, async r => {
-  const [c, d] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id)]);
+  const [c, ev, buys] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id), S.recentPurchases(r.site.id)]);
+  const d = [...ev, ...buys.map(b => ({ ...b, purchase: true }))].sort((a, b) => b.ts - a.ts).slice(0, 100);
   const dl = await deliveriesFor(r.site.id, d.map(e => e.event_id).filter(Boolean));
   for (const e of d) e.deliveries = dl.get(e.event_id) || [];
   send(r, 200, r.q.has('partial') ? V.eventsBody(c, d) : V.eventsPage(c, d));

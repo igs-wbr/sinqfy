@@ -157,6 +157,15 @@ export async function realtime(site, now = Date.now()) {
 /** Últimos eventos com os identificadores que vão para as plataformas de anúncio. */
 export const recentEvents = (site, limit = 100) => all(`SELECT ts, name, path, channel, referrer, utm_source, utm_campaign, utm_content,
   visitor, rid, event_id, fbc, fbp, gclid, gbraid, wbraid, ttclid, revenue FROM events WHERE site=? ORDER BY ts DESC LIMIT ${limit}`, [site]);
+/**
+ * Compras aprovadas no mesmo formato dos eventos: vêm do webhook, não do navegador. event_id é o mesmo da fila da Meta
+ * (plataforma-pedido); fbc e fbp são os do clique casado pelo rid, os que seguiram com a compra.
+ */
+export const recentPurchases = (site, limit = 100) => all(`SELECT s.ts, 'Purchase' AS name, s.platform, s.status, s.product, s.utm_source,
+  s.utm_campaign, s.utm_content, s.rid, s.platform || '-' || s.order_id AS event_id, s.gross AS revenue,
+  (SELECT e.fbc FROM events e WHERE e.site=s.site AND e.rid=s.rid AND e.fbc IS NOT NULL ORDER BY e.ts DESC LIMIT 1) AS fbc,
+  (SELECT e.fbp FROM events e WHERE e.site=s.site AND e.rid=s.rid AND e.fbp IS NOT NULL ORDER BY e.ts DESC LIMIT 1) AS fbp
+  FROM sales s WHERE s.site=? AND s.status IN ('paid','refunded','chargeback') ORDER BY s.ts DESC LIMIT ${limit}`, [site]);
 
 // ---------- funis ----------
 const globRe = g => new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');

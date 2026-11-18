@@ -1,4 +1,5 @@
 // Páginas de tráfego: visão geral, tempo real, eventos, funis, caminhos, atribuição.
+import { PLATFORMS, STATUSES } from '../sales/webhooks.js';
 import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK } from '../tracking/stats.js';
 import { html, raw, icon, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
 
@@ -74,10 +75,11 @@ export function realtimePage(ctx, r) {
 }
 
 const short = (v, n = 10) => v && v.length > n ? v.slice(0, n) + '…' : v;
-const campaignName = v => (v || '').replace(/\|[\w-]+$/, '').trim();
+const campaignName = v => (v || '').split('::')[0].replace(/\|[\w-]+$/, '').trim(); // checkouts juntam '::<fbclid>' ao utm_content
 const DL = { sent: ['ok', 'enviado'], failed: ['bad', 'falhou'], pending: ['warn', 'na fila'], sending: ['warn', 'enviando'] };
 /** Selo por destino; clicar abre o inspetor (resposta da plataforma, tentativas e Reenviar). */
 function sends(ctx, e) {
+  if (!e.deliveries?.length && e.purchase) return html`<small title="Somada a outra compra do mesmo comprador (order bump ou upsell), enviada no lugar dela, ou sem e-mail, telefone nem clique para a Meta. O motivo fica em Vendas, no registro do webhook.">sem envio próprio</small>`;
   if (!e.deliveries?.length) return html`<small title="Configure Meta ou GA4 em Integrações">não enviado</small>`;
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/deliveries`;
   return e.deliveries.map(d => {
@@ -95,12 +97,12 @@ export function eventsBody(ctx, rows) {
   return html`<div class="tw"><table class="list events left"><thead><tr><th scope="col">Quando</th><th scope="col">Evento</th><th scope="col">Envio</th><th scope="col">Página</th>
 <th scope="col">Origem</th><th scope="col">Visitante</th><th scope="col">IDs para anúncios</th></tr></thead><tbody>${rows.map(e => html`<tr>
 <td><time>${time(e.ts)}</time></td><td>${e.name === 'pageview' ? 'PageView' : e.name}${e.revenue ? html` <small>${num(e.revenue)}</small>` : ''}<br><small title="ID do evento (deduplicação com o Pixel)">${short(e.event_id, 12) || '-'}</small></td><td>${sends(ctx, e)}</td>
-<td>${e.path}</td><td>${e.channel}${e.utm_campaign ? html`<br><small>${campaignName(e.utm_campaign)}${e.utm_content ? ` · ${campaignName(e.utm_content)}` : ''}</small>` : ''}</td>
-<td>${e.rid ? html`<span title="Cookie primário _rid: ${e.rid}">${short(e.rid)}</span>` : html`<small title="Sem cookie: hash diário de IP e navegador">sem cookie</small>`}</td>
+<td>${e.purchase ? html`${e.product || 'Compra'}${e.status !== 'paid' ? html`<br><small>${STATUSES[e.status] ?? e.status}</small>` : ''}` : e.path}</td><td>${e.purchase ? PLATFORMS[e.platform] || e.platform : e.channel}${e.utm_campaign ? html`<br><small>${campaignName(e.utm_campaign)}${e.utm_content ? ` · ${campaignName(e.utm_content)}` : ''}</small>` : ''}</td>
+<td>${e.rid ? html`<span title="Cookie primário _rid: ${e.rid}">${short(e.rid)}</span>` : e.purchase ? html`<small title="A venda não veio com o rid do link de checkout">sem clique</small>` : html`<small title="Sem cookie: hash diário de IP e navegador">sem cookie</small>`}</td>
 <td>${ids(e).length ? ids(e) : html`<small>nenhum</small>`}</td></tr>`)}</tbody></table></div>`;
 }
 export function eventsPage(ctx, rows) {
-  return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Eventos`, raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos, do mais novo para o mais antigo. Clique no selo de envio para ver a resposta da Meta ou do GA4.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
+  return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Eventos`, raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos, do mais novo para o mais antigo, com as compras aprovadas que chegaram pelos webhooks. Clique no selo de envio para ver a resposta da Meta ou do GA4.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
 <section class="card" id="ev">${eventsBody(ctx, rows)}</section>
 <script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('ev'),h)})},5000)</script>`);
 }
