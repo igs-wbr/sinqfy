@@ -294,17 +294,19 @@ export async function matchSale(site, s) {
   if (s.rid) {
     // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
     const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
-    const [last, fb, ga, paid, first] = await Promise.all([
+    const [last, fb, ga, paid, first, geo] = await Promise.all([
       db.get(`SELECT ua, host, path, fbp, country FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT fbc FROM events WHERE ${W} AND fbc IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT ga_cid FROM events WHERE ${W} AND ga_cid IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts DESC LIMIT 1`, a),
       // Primeiro toque pago (ADR 0018): o anúncio que abriu a porta, mesmo que a compra venha pela bio, recuperação ou direto.
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts ASC LIMIT 1`, a),
+      db.get('SELECT ip_enc, city, region FROM checkout_clicks WHERE site=? AND rid=? AND ts BETWEEN ? AND ?', [site.id, s.rid, s.ts - 7 * 864e5, s.ts + 60e3]),
     ]);
     if (last) {
       out.rule = via;
-      out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, country: last.country, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
+      out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, country: last.country, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null,
+        ip: open(geo?.ip_enc), city: geo?.city || null, region: geo?.region || null };
       // Sem campanha na venda (link da bio): completa com a última campanha da visita.
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
@@ -358,6 +360,8 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, name: s.name, click: m.click }, now);
       if (ev) {
         const q = await enqueuePurchase(site.id, ev, now); sent = true;
+        // O IP do clique já está no payload da fila (apagado no envio): a cópia cifrada sai agora.
+        if (m.click?.rid) await db.run('DELETE FROM checkout_clicks WHERE site=? AND rid=?', [site.id, m.click.rid]);
         await log(site.id, platform, s, true, q.action === 'new' ? `Na fila da Conversions API da Meta (${ev.action_source === 'website' ? 'com o clique' : 'sem o clique'}), sai em ${PURCHASE_HOLD / 60e3} min para somar order bump e upsell`
           : q.action === 'merged' ? `Somada à compra ${q.eventId} na Meta (mesmo comprador): uma conversão só`
             : `Parte da compra ${q.eventId}, já enviada à Meta: não vira outra conversão`);

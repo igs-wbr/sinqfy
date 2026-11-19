@@ -204,6 +204,9 @@ async function migrate() {
     ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS last_full BIGINT;
     -- Contato pelo rid: eventos do site de quem já é contato vão à Meta com e-mail e telefone em hash.
     CREATE INDEX IF NOT EXISTS contacts_rid ON contacts(site, rid) WHERE rid IS NOT NULL;
+    -- Último clique no checkout por rid (ADR 0020): IP cifrado com a DATA_KEY, cidade e UF, para o Purchase do webhook.
+    -- Apagado quando a compra entra na fila da Meta ou depois de 7 dias (jobs.js).
+    CREATE TABLE IF NOT EXISTS checkout_clicks(site TEXT NOT NULL, rid TEXT NOT NULL, ts BIGINT NOT NULL, ip_enc TEXT, city TEXT, region TEXT, PRIMARY KEY(site, rid));
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

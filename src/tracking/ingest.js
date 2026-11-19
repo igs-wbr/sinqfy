@@ -4,7 +4,7 @@ import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
 import { enqueueWeb, metaReady } from '../dispatch.js';
 import { upsertContact, reveal } from '../crm.js';
-import { piiReady } from '../pii.js';
+import { piiReady, seal } from '../pii.js';
 import { adKey, cleanUtm } from '../sales/webhooks.js';
 import { enabled } from '../modules.js';
 
@@ -129,6 +129,11 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
     const person = l || (ev.rid && metaReady(site) && piiReady()
       ? reveal(await db.get('SELECT name_enc, email_enc, phone_enc FROM contacts WHERE site=? AND rid=? ORDER BY id LIMIT 1', [site.id, ev.rid])) : null);
     await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, person, ...geo }, now);
+    // Clique no checkout: IP (cifrado), cidade e UF esperam o webhook da compra para o Purchase (ADR 0020).
+    if (name === 'InitiateCheckout' && ev.rid && metaReady(site) && piiReady()) await db.run(
+      `INSERT INTO checkout_clicks(site, rid, ts, ip_enc, city, region) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(site, rid) DO UPDATE SET ts=EXCLUDED.ts, ip_enc=EXCLUDED.ip_enc, city=EXCLUDED.city, region=EXCLUDED.region`,
+      [site.id, ev.rid, now, seal(ip), geo?.city || null, geo?.region || null]);
   }
   // Contato do CRM, cifrado. Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
   if (edge && l && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {

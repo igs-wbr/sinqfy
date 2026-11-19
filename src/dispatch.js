@@ -68,7 +68,9 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   if (click?.rid) user_data.external_id = [sha(click.rid)];
   if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador (nome e país sozinhos não bastam)
   // Nome e país só reforçam a correspondência: a Meta não casa ninguém só com eles.
-  addHashed(user_data, { ...names(name), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : '') });
+  addHashed(user_data, { ...names(name), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : ''),
+    st: code2(click?.region), ct: city(click?.city) });
+  if (click?.ip) user_data.client_ip_address = click.ip; // do clique no checkout (ADR 0020)
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
   const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;

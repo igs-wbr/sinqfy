@@ -9,7 +9,7 @@ Como o sistema se protege, o resultado da última auditoria e o que conferir de 
 | **Segredos** | Nenhuma chave no código. Tudo vem do `.env` (fora do Git) ou dos segredos da Cloudflare e do GitHub. Os arquivos `.env`, `deploy/.env`, `deploy/.env.local` e `.wrangler/` estão no `.gitignore` |
 | **Login** | Senha com scrypt, cookie de sessão HttpOnly, SameSite=Lax e Secure, bloqueio por 15 minutos depois de 10 erros (por IP e por e-mail, guardado no banco). O primeiro admin não nasce com senha curta nem com a de exemplo |
 | **Páginas** | HTML sempre escapado, CSP estrita com nonce (nenhum script de terceiro), `frame-ancestors 'none'`, HSTS em produção, POST de outro site recusado |
-| **Dados pessoais** | Nome, e-mail e telefone cifrados com AES-256-GCM (`DATA_KEY`), com índice cego ao lado. Para a Meta, só SHA-256. IP e e-mail de visitante nunca são gravados |
+| **Dados pessoais** | Nome, e-mail e telefone cifrados com AES-256-GCM (`DATA_KEY`), com índice cego ao lado. Para a Meta, só SHA-256. E-mail de visitante nunca é gravado; IP só do clique no checkout, cifrado, até o Purchase ou por 7 dias (ADR 0020) |
 | **Webhooks** | URL com token por site e plataforma; assinatura conferida quando a plataforma oferece (Hotmart, Shopify, WooCommerce, Stripe, WhatsApp, Lead Ads) |
 | **Borda (Worker)** | Repassa ao painel com `EDGE_SECRET`; cabeçalhos da borda vindos de fora são descartados; limite de 120 eventos por minuto por IP; o painel só aparece no `PANEL_HOST` |
 | **Servidor** | Nenhuma porta aberta além do SSH: tudo entra pelo túnel. O app roda como usuário sem privilégio no contêiner. O banco não é publicado na rede |

@@ -24,7 +24,8 @@ const sha = v => createHash('sha256').update(v).digest('hex');
 const queued = async (eventId, dest = 'meta') => JSON.parse((await db.get('SELECT payload FROM deliveries WHERE event_id=? AND dest=?', [eventId, dest]))?.payload || 'null');
 
 // O visitante clicou no anúncio (com UTM e fbclid), navegou e foi ao checkout.
-const edge = { 'x-edge-secret': 'segredo-da-borda', 'x-rastro-rid': RID, 'x-rastro-fbp': 'fb.1.1763080000000.4829104837', 'x-rastro-fbc': 'fb.1.1763080000000.IwAR-clique', 'x-rastro-ip': '198.51.100.9' };
+const edge = { 'x-edge-secret': 'segredo-da-borda', 'x-rastro-rid': RID, 'x-rastro-fbp': 'fb.1.1763080000000.4829104837', 'x-rastro-fbc': 'fb.1.1763080000000.IwAR-clique', 'x-rastro-ip': '198.51.100.9',
+  'x-rastro-city': encodeURIComponent('São Paulo'), 'x-rastro-region': 'SP' };
 const beacon = body => fetch(base + '/e', { method: 'POST', body: JSON.stringify({ s: 'chk', ...body }), headers: { 'user-agent': CHROME, ...edge } });
 await beacon({ u: 'https://loja.dev/oferta?utm_source=FB&utm_medium=LAL%7C222&utm_campaign=BF%7C111&utm_content=AD12%7C333&fbclid=IwAR-clique', i: 'evt_chk00001', g: '123.456' });
 await beacon({ n: 'InitiateCheckout', u: 'https://loja.dev/checkout', i: 'evt_chk00002' });
@@ -39,6 +40,9 @@ test('Hotmart: rid em xcod casa com o clique, herda UTMs e a compra vai como web
   assert.equal(ev.action_source, 'website');
   assert.equal(ev.event_source_url, 'https://loja.dev/checkout');
   assert.deepEqual([ev.user_data.fbc, ev.user_data.fbp, ev.user_data.client_user_agent, ev.user_data.external_id[0]], [edge['x-rastro-fbc'], edge['x-rastro-fbp'], CHROME, sha(RID)]);
+  // ADR 0020: IP, cidade e UF do clique no checkout; a cópia cifrada sai do banco quando a compra entra na fila.
+  assert.deepEqual([ev.user_data.client_ip_address, ev.user_data.st[0], ev.user_data.ct[0]], ['198.51.100.9', sha('sp'), sha('saopaulo')]);
+  assert.equal((await db.all("SELECT 1 FROM checkout_clicks WHERE site='chk'")).length, 0);
   const g = await queued('hotmart-HPX1', 'ga4');
   assert.deepEqual([g.client_id, g.events[0].name, g.events[0].params.transaction_id, g.events[0].params.value], ['123.456', 'purchase', 'hotmart-HPX1', 297]);
 });
