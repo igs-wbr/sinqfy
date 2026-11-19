@@ -289,8 +289,12 @@ export async function matchSale(site, s) {
     if (last) {
       out.rule = via;
       out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, country: last.country, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null };
+      // Sem campanha na venda (link da bio): completa com a última campanha da visita.
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
+      // Com campanha na venda, o clique vale mais: o `sck` da Hotmart costuma ser um rótulo fixo do produtor ("lp-ahsd-47"),
+      // e a página sempre repassa ao checkout as UTMs da própria visita.
+      else if (paid) out.utm = utm({ source: paid.utm_source, medium: paid.utm_medium, campaign: paid.utm_campaign, content: paid.utm_content, term: paid.utm_term });
       if (first) out.first = utm({ source: first.utm_source, medium: first.utm_medium, campaign: first.utm_campaign, content: first.utm_content });
     }
   }

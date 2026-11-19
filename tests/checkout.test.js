@@ -54,6 +54,13 @@ test('a compra aparece na tela de eventos, com o envio da Meta e os IDs do cliqu
   assert.ok(row2.includes('BF · AD12') && !row2.includes('PAZXh0'), 'anúncio sem o código colado depois de ::');
 });
 
+test('Hotmart: sck fixo do produtor não toma o lugar da campanha do clique', async () => {
+  const body = { event: 'PURCHASE_APPROVED', data: { purchase: { transaction: 'HPSCK', price: { value: 47 }, order_date: Date.now(), origin: { xcod: RID, sck: 'lp-ahsd-47' } } } };
+  assert.equal((await post('hotmart', body)).status, 200);
+  const s = await db.get("SELECT utm_campaign, campaign_key, ad_key FROM sales WHERE order_id='HPSCK'");
+  assert.deepEqual([s.utm_campaign, s.campaign_key, s.ad_key], ['BF|111', '111', '333']);
+});
+
 test('venda anterior ao clique não herda o clique', async () => {
   const old = Date.now() - 40 * 864e5;
   const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'o@l.d' }, purchase: { transaction: 'HPOLD', price: { value: 50 }, order_date: old, origin: { xcod: RID } } } };
