@@ -136,6 +136,8 @@ test('webhook personalizado: mapa de campos, prévia e recebimento', async () =>
   assert.equal((await post('custom', { data: { order: { code: 'C-2', state: 'WAITING', total_cents: 1 } } })).status, 200, 'status fora do mapa é ignorado');
   const c = await db.get("SELECT * FROM sales WHERE platform='custom'");
   assert.deepEqual([c.order_id, c.status, c.gross, c.product, c.match_rule, (await db.all("SELECT 1 FROM sales WHERE platform='custom'")).length], ['C-1', 'paid', 197, 'Mentoria', 'rid', 1]);
+  // Nome do comprador vai para o Purchase (fn, ln em hash), como nas plataformas nativas.
+  assert.equal(W.parseCustom({ id: 'X', p: 1, c: { name: 'Ana Souza' } }, { fields: { order_id: 'id', amount: 'p', name: 'c.name' } }).name, 'Ana Souza');
 });
 
 test('Google Sheets: linhas com cabeçalho em português, status e data brasileiros, resultado por linha', async () => {
