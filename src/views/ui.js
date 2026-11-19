@@ -36,6 +36,8 @@ export function link(q, changes) {
   const str = s.toString();
   return str ? '?' + str : '?';
 }
+/** Tag do snippet para o site. Com pixel salvo, `data-pixel` faz o próprio s.js carregar o Pixel da Meta no navegador. */
+export const snippetTag = (site, edgeUrl) => `<script defer data-site="${site.id}"${site.meta_pixel ? ` data-pixel="${site.meta_pixel}"` : ''} src="${edgeUrl}/s.js"></script>`;
 export const on = cond => cond ? raw(' class="on" aria-current="page"') : '';
 export const hiddenInputs = (q, skip = []) => [...q].filter(([k]) => !skip.includes(k)).map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}">`);
 

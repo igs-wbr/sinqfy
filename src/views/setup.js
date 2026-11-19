@@ -1,5 +1,5 @@
 // Assistente de primeiro uso: 6 passos, cada um conferido pelos dados do site (src/routes/setup.js).
-import { html, raw, layout, pageHead, notice, icon } from './ui.js';
+import { html, raw, layout, pageHead, notice, icon, snippetTag } from './ui.js';
 
 const STATUS = { dns: 'Aguardando o CNAME no seu DNS', ssl: 'DNS ok, emitindo o certificado SSL', active: 'Ativo', error: 'Erro', manual: 'Cadastrado (configuração manual)' };
 const when = (ctx, ts) => ts ? new Date(ts).toLocaleString('pt-BR', { timeZone: ctx.site.timezone, dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -14,7 +14,7 @@ export function setupPage(ctx, d) {
   const pct = Math.round(d.done / 6 * 100);
   // Exemplo com o domínio do próprio site (Configurações), para a pessoa ver o formato certo já com o domínio dela.
   const hostExample = `t.${String(s.domains || '').split(',')[0].trim().replace(/^www\./, '') || 'seudominio.com.br'}`;
-  const snippet = `<script defer data-site="${s.id}" src="${d.edgeUrl}/s.js"></script>`;
+  const snippet = snippetTag(s, d.edgeUrl);
   const back = html`<input type="hidden" name="back" value="setup">`;
 
   return layout(ctx, `Primeiros passos · ${s.name}`, html`

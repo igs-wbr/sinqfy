@@ -22,7 +22,7 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/recovery.js` (venda pendente → `pending_orders` e sequência no WhatsApp, rodada em `runJobs`), `src/checkout.js` (BR Code do Pix e QR em SVG com `src/vendor/qrcode.cjs`, MIT), `src/routes/audiences.js` (CSV em SHA-256). Envio e robô em `src/whatsapp.js` (`sendWhatsapp`, `matchRule`).
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
-- `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
+- `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,75 KB; com `data-pixel="<ID>"` ele mesmo carrega o Pixel da Meta) é minificado à mão e servido aos sites pelo Worker.
 - `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0020`), fluxo com skills.
 
 ## Regras
