@@ -154,7 +154,7 @@ O que acontece depois:
 
 A partir daí:
 
-- **Todo evento do site** (PageView, Lead, InitiateCheckout, eventos próprios) entra na fila e vai para os destinos configurados, com `fbc`, `fbp`, IP, user agent e o id do visitante em hash (`external_id`).
+- **Todo evento do site** (PageView, Lead, InitiateCheckout, eventos próprios) entra na fila e vai para os destinos configurados, com `fbc`, `fbp`, IP, user agent e o id do visitante em hash (`external_id`). O Lead de formulário leva também e-mail, telefone e nome em SHA-256; depois dele, os eventos do mesmo visitante levam os dados do contato do CRM (achado pelo `rid`), também só em hash.
 - **Cada venda aprovada** via webhook vira um `Purchase` com `event_id` = `plataforma-pedido`, e-mail e telefone **apenas em SHA-256**. Pedidos sem e-mail e sem telefone não vão, porque a Meta exige ao menos um identificador.
 - A fila tenta de novo em 1 min, 5 min, 30 min e 6 h. Depois disso, a entrega aparece como falha na aba Eventos, com o motivo e um botão **Reenviar**.
 - IP e user agent saem do banco assim que o envio termina ([ADR 0014](adr/0014-fila-de-envio-server-side.md)).

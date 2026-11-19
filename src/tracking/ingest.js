@@ -2,8 +2,9 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
-import { enqueueWeb } from '../dispatch.js';
-import { upsertContact } from '../crm.js';
+import { enqueueWeb, metaReady } from '../dispatch.js';
+import { upsertContact, reveal } from '../crm.js';
+import { piiReady } from '../pii.js';
 import { adKey, cleanUtm } from '../sales/webhooks.js';
 import { enabled } from '../modules.js';
 
@@ -118,14 +119,19 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
     /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null),
     consent ? ua.slice(0, 300) : null, url.host.slice(0, 253), consent ? clientId : null]);
+  // Formulário com e-mail ou telefone (campo `l` do snippet). Nunca entra no evento gravado.
+  const l = consent && e.l && typeof e.l === 'object' ? { email: String(e.l.e || '').slice(0, 254), phone: String(e.l.p || '').slice(0, 40), name: String(e.l.n || '').slice(0, 120) } : null;
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
   // Retenção de vídeo fica só no painel (funis): não vira evento personalizado na Meta nem no GA4.
-  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, ...geo }, now);
-  // Formulário com e-mail ou telefone (campo `l` do snippet): vira contato do CRM, cifrado. Nunca entra no evento.
-  // Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
-  if (consent && edge && e.l && typeof e.l === 'object' && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {
-    const l = { email: String(e.l.e || '').slice(0, 254), phone: String(e.l.p || '').slice(0, 40), name: String(e.l.n || '').slice(0, 120) };
+  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) {
+    // Quem já é contato pelo rid (formulário, pedido pendente, compra, WhatsApp) leva e-mail, telefone e nome em hash à Meta.
+    const person = l || (ev.rid && metaReady(site) && piiReady()
+      ? reveal(await db.get('SELECT name_enc, email_enc, phone_enc FROM contacts WHERE site=? AND rid=? ORDER BY id LIMIT 1', [site.id, ev.rid])) : null);
+    await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, person, ...geo }, now);
+  }
+  // Contato do CRM, cifrado. Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
+  if (edge && l && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {
     await upsertContact(site, { ...l, rid: ev.rid, fbc: ev.fbc, fbp: ev.fbp, source: 'site', utm: { source: s.utm_source, campaign: s.utm_campaign },
       campaign_key: adKey(s.utm_campaign), adset_key: adKey(s.utm_medium), ad_key: adKey(s.utm_content), note: 'Formulário do site' }, now);
   }
