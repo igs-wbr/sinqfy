@@ -15,7 +15,7 @@ async function getAll(url) {
       // conta com muitos anúncios ou 90 dias por anúncio. Repete a mesma página com limit menor (500 → 125 → 31).
       const u = new URL(next), lim = Number(u.searchParams.get('limit')) || 0;
       if (j.error?.code === 1 && lim > 40) { u.searchParams.set('limit', String(lim >> 2)); next = u.href; page--; continue; }
-      throw new Error(`${u.pathname.split('/').pop()}: ${j.error?.message || `HTTP ${res.status}`}${j.error?.code ? ` (código ${j.error.code})` : ''}`);
+      throw Object.assign(new Error(`${u.pathname.split('/').pop()}: ${j.error?.message || `HTTP ${res.status}`}${j.error?.code ? ` (código ${j.error.code})` : ''}`), { code: j.error?.code });
     }
     out.push(...(j.data || []));
     next = j.paging?.next;
@@ -35,6 +35,10 @@ export function action(list, types) {
   return 0;
 }
 
+// Limite de chamadas da Meta (app, usuário ou conta de anúncio). Tentar de novo a cada 5 min só gasta o limite e prolonga o bloqueio.
+const LIMITED = e => [4, 17, 32, 613].includes(e.code) || (e.code >= 80000 && e.code <= 80014) || /too many calls|request limit/i.test(e.message);
+export const PAUSE = 3600e3;
+
 const budget = e => e.daily_budget ? Number(e.daily_budget) / 100 : e.lifetime_budget ? Number(e.lifetime_budget) / 100 : null; // centavos
 
 /**
@@ -42,13 +46,15 @@ const budget = e => e.daily_budget ? Number(e.daily_budget) / 100 : e.lifetime_b
  * na janela de atribuição configurada na conta). 90 dias na primeira vez, depois os últimos 3.
  */
 export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
+  const wait = Number(acc.sync_after) - Date.now();
+  if (wait > 0) throw new Error(`A Meta limitou as chamadas desta conta. Nova tentativa em ${Math.ceil(wait / 60e3)} min.`);
   const site = sites.get(acc.site);
   const until = localDate(Date.now(), site.timezone), since = addDays(until, -(days - 1));
   const act = acc.account_id.replace(/^act_/, '');
   const url = (path, params = {}) => `${graph()}/act_${act}${path}?` + new URLSearchParams({ limit: '500', ...params, access_token: acc.token });
   try {
     const info = await fetch(url('', { fields: 'name,currency' })).then(r => r.json());
-    if (info.error) throw new Error(info.error.message);
+    if (info.error) throw Object.assign(new Error(info.error.message), { code: info.error.code });
     const [campaigns, adsets, ads, insights] = await Promise.all([
       getAll(url('/campaigns', { fields: 'id,name,effective_status,daily_budget,lifetime_budget' })),
       getAll(url('/adsets', { fields: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget' })),
@@ -76,11 +82,13 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),
         Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT)]]),
-      ['UPDATE ad_accounts SET last_sync=?, last_error=NULL, name=?, currency=? WHERE id=?', [Date.now(), info.name || '', info.currency || '', acc.id]],
+      ['UPDATE ad_accounts SET last_sync=?, last_error=NULL, sync_after=NULL, name=?, currency=? WHERE id=?', [Date.now(), info.name || '', info.currency || '', acc.id]],
     ]);
     return { campaigns: campaigns.length, rows: insights.length };
   } catch (e) {
-    await db.run('UPDATE ad_accounts SET last_error=? WHERE id=?', [e.message.slice(0, 300), acc.id]);
+    const limited = LIMITED(e);
+    if (limited) e.message += ' Nova tentativa em 1 hora.';
+    await db.run('UPDATE ad_accounts SET last_error=?, sync_after=? WHERE id=?', [e.message.slice(0, 300), limited ? Date.now() + PAUSE : null, acc.id]);
     throw e;
   }
 }

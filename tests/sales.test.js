@@ -13,6 +13,7 @@ globalThis.fetch = async (url, opts) => {
   graphCalls.push(u);
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
   if (u.pathname.endsWith('/events')) { capiBodies.push(JSON.parse(opts.body)); return json({ events_received: 1 }); }
+  if (u.searchParams.get('access_token') === 'LIMIT') return json({ error: { message: 'There have been too many calls to this ad-account. Wait a bit and try again.', code: 80004 } }, 400);
   if (u.searchParams.get('access_token') === 'BAD') return json({ error: { message: 'Invalid OAuth access token' } }, 400);
   const p = u.pathname.replace(/^\/v[\d.]+\/act_12345/, '');
   if (p === '') return json({ name: 'Conta X', currency: 'BRL' });
@@ -121,6 +122,20 @@ test('Meta: sincroniza contas, entidades e gasto (com paginação) e registra er
   assert.equal(action([{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' }], ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase']), 2, 'cai para o tipo do pixel');
   assert.equal(action(undefined, ['lead']), 0);
   assert.ok(!(await req('/sites/loja/integrations', { cookie: admin })).text.includes('TOKEN'), 'token nunca é exibido');
+});
+
+test('Meta: no limite de chamadas, a conta para por 1 hora sem gastar mais chamadas', async () => {
+  const { syncMeta } = await import('../src/ads/meta.js'), { runJobs } = await import('../src/jobs.js');
+  await db.run("INSERT INTO ad_accounts(site, platform, account_id, token) VALUES ('loja', 'meta', '777', 'LIMIT')");
+  const acc = () => db.get("SELECT * FROM ad_accounts WHERE account_id='777'");
+  await assert.rejects(syncMeta(await acc()), /too many calls/);
+  const a = await acc();
+  assert.ok(Number(a.sync_after) > Date.now() + 59 * 60e3 && /Nova tentativa em 1 hora/.test(a.last_error));
+  const calls = graphCalls.length;
+  await assert.rejects(syncMeta(a), /Nova tentativa em 60 min/, 'Sincronizar agora não chama a Meta');
+  await runJobs();
+  assert.ok(!graphCalls.slice(calls).some(u => u.searchParams.get('access_token') === 'LIMIT'), 'o job pula a conta pausada');
+  await db.run("DELETE FROM ad_accounts WHERE account_id='777'");
 });
 
 test('métricas: faturamento líquido, imposto, lucro, ROAS, reembolso', async () => {

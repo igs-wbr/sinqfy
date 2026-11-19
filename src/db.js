@@ -198,6 +198,8 @@ async function migrate() {
     UPDATE sales SET campaign_key = COALESCE(substring(split_part(utm_campaign, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_campaign, '::', 1)))
       WHERE campaign_key LIKE '%::%';
     CREATE INDEX IF NOT EXISTS deliveries_buyer ON deliveries(site, buyer, created) WHERE name='Purchase';
+    -- Conta de anúncio que bateu no limite de chamadas da Meta: não sincroniza antes disso (ms).
+    ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS sync_after BIGINT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

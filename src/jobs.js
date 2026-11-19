@@ -22,7 +22,8 @@ export async function runJobs() {
     ['DELETE FROM events WHERE ts<?', [old]], ['DELETE FROM messages WHERE ts<?', [Date.now() - 90 * 864e5]], ['DELETE FROM wa_clicks WHERE ts<?', [old]]]); // mensagens: 90 dias
   if (cfReady()) for (const s of [...sites.values()].filter(s => s.edge_host && (s.edge_status === 'dns' || s.edge_status === 'ssl'))) await checkHost(s); // erro só com Verificar agora
   // Gasto a cada rodada (5 min); contas com erro também tentam de novo a cada rodada.
-  for (const acc of await db.all("SELECT * FROM ad_accounts WHERE platform='meta' AND COALESCE(last_sync, 0) < ?", [Date.now() - META_EVERY])) {
+  // Conta que bateu no limite da Meta fica parada até sync_after.
+  for (const acc of await db.all("SELECT * FROM ad_accounts WHERE platform='meta' AND COALESCE(last_sync, 0) < ? AND COALESCE(sync_after, 0) < ?", [Date.now() - META_EVERY, Date.now()])) {
     if (!sites.has(acc.site)) continue;
     try { await syncMeta(acc); out.meta++; } catch (e) { out.errors.push(`meta ${acc.account_id}: ${e.message}`); }
   }
