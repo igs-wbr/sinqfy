@@ -15,8 +15,7 @@ Use o subdomínio `t.` servido pelo Worker da borda (veja o [guia da Cloudflare]
 - **Links de checkout e de WhatsApp** (Hotmart, Kiwify, Eduzz, Monetizze, Ticto, Perfect Pay, Braip, Greenn, Yampi, Cartpanda, `pay.*`, `checkout`, `wa.me`) recebem `rid=<id do visitante>`, que liga a venda ao clique na etapa 3. Outro link qualquer só recebe com o atributo `data-rastro-rid`.
 - **Domínios do site** (Configurações): com a lista preenchida, beacons de outros domínios são recusados.
 - **Limite do Safari:** se o subdomínio `t.` e o site principal ficarem em IPs diferentes, o Safari limita o cookie gravado pelo servidor a 7 dias. Para ter os 400 dias no Safari, o site principal também precisa passar pela Cloudflare.
-- **Pixel junto do servidor:** com `data-pixel="<ID do pixel>"`, o próprio snippet carrega o Pixel da Meta (`fbevents.js`), faz o `init` e repete cada evento no `fbq` com o mesmo `eventID` do envio pelo servidor; a Meta conta uma vez só. Não cole o código base do Pixel junto. Com o pixel salvo em Meta Pixel, o snippet do painel já sai com o atributo. A compra vai só pelo servidor (webhook), nunca pelo navegador. Com `data-consent="required"`, o Pixel só carrega depois de `rastro('consent')`.
-- **Site que já tem o código base do Pixel:** use `data-pixel="mirror"`. O snippet só repete os eventos no `fbq` existente; apague a linha `fbq('track','PageView')` do código base.
+- **Pixel junto do servidor:** com `data-pixel="mirror"`, o snippet repete cada evento no Pixel (`fbq`) com o mesmo `eventID` do envio pelo servidor, e a Meta conta uma vez só. Nesse caso, apague a linha `fbq('track','PageView')` do código base do Pixel.
 - **GA4:** o snippet lê o cookie `_ga` e manda o `client_id`. Só conversões vão pelo servidor (page_view continua com o gtag do site, porque o GA4 não deduplica).
 - A aba **Tráfego → Eventos** mostra cada evento com o visitante e os IDs de clique (fbc, fbp, gclid, gbraid, wbraid, ttclid).
 

@@ -50,48 +50,20 @@ const stage = name => db.get("SELECT id FROM stages WHERE site='dd' AND name=?",
 const move = (contact, st) => req('/sites/dd/crm/move', { cookie: admin, form: { contact: contact.id, stage: st.id, js: '1' } });
 
 // ---------- navegador ----------
-function snippet({ mirror = false, cookie = '', pixelId = '', consent = '' } = {}) {
+function snippet({ mirror = false, cookie = '' } = {}) {
   const src = readFileSync(new URL('../public/s.js', import.meta.url), 'utf8');
-  const beacons = [], pixel = [], on = {}, head = [];
+  const beacons = [], pixel = [], on = {};
   let clock = 1_800_000_000_000;
   const win = { addEventListener() {}, ...(mirror && { fbq: (...a) => pixel.push(a) }) };
-  const dataset = { site: 'dd', ...(mirror && { pixel: 'mirror' }), ...(pixelId && { pixel: pixelId }), ...(consent && { consent }) };
   const ctx = {
-    document: { currentScript: { src: 'https://t.dd.dev/s.js', dataset }, referrer: '', cookie, addEventListener: (t, fn) => (on[t] = fn),
-      createElement: () => ({}), head: { appendChild: el => head.push(el) } },
+    document: { currentScript: { src: 'https://t.dd.dev/s.js', dataset: { site: 'dd', ...(mirror && { pixel: 'mirror' }) } }, referrer: '', cookie, addEventListener: (t, fn) => (on[t] = fn) },
     window: win, location: { href: 'https://dd.dev/', pathname: '/', search: '', host: 'dd.dev', hostname: 'dd.dev' }, history: { pushState() {} },
     screen: { width: 390 }, localStorage: {}, URL, URLSearchParams, JSON, Math, Date: { now: () => clock },
-    navigator: { sendBeacon: (u, b) => beacons.push(JSON.parse(b)) },
+    navigator: { sendBeacon: (u, b) => beacons.push(JSON.parse(b)) }, fbq: win.fbq,
   };
   vm.runInNewContext(src, ctx);
-  return { beacons, pixel, on, win, head, loc: ctx.location, hist: ctx.history, tick: ms => { clock += ms; } };
+  return { beacons, pixel, on, win, loc: ctx.location, hist: ctx.history, tick: ms => { clock += ms; } };
 }
-const fbqQueue = s => Array.from(s.win.fbq?.queue || [], a => [...a]); // arrays da VM viram arrays daqui
-
-test('navegador: data-pixel com o ID carrega o Pixel sozinho e espelha com o mesmo id; Purchase fica no servidor', () => {
-  const s = snippet({ pixelId: '2233568217052096' });
-  assert.equal(s.head.length, 1, 'um script do Pixel');
-  assert.equal(s.head[0].src, 'https://connect.facebook.net/en_US/fbevents.js');
-  s.win.rastro('Lead');
-  s.tick(5000);
-  s.win.rastro('Purchase', {}, 47);
-  const q = fbqQueue(s);
-  assert.deepEqual(q[0], ['init', '2233568217052096'], 'init antes de qualquer evento');
-  assert.deepEqual(q.slice(1).map(a => [a[0], a[1], a[3].eventID]), [['track', 'PageView', s.beacons[0].i], ['track', 'Lead', s.beacons[1].i]]);
-  assert.ok(!q.some(a => a[1] === 'Purchase'), 'compra só pelo webhook');
-  s.win.rastro('consent');
-  assert.equal(fbqQueue(s).filter(a => a[0] === 'init').length, 1, 'init uma vez só');
-});
-
-test('navegador: com consentimento obrigatório, o Pixel só carrega depois do rastro("consent")', () => {
-  const s = snippet({ pixelId: '2233568217052096', consent: 'required' });
-  assert.ok(!s.win.fbq && !s.head.length, 'sem consentimento, nada da Meta');
-  s.win.rastro('consent');
-  assert.equal(s.head.length, 1);
-  assert.deepEqual(fbqQueue(s)[0], ['init', '2233568217052096']);
-  s.win.rastro('Lead');
-  assert.deepEqual(fbqQueue(s).at(-1).slice(0, 2), ['track', 'Lead']);
-});
 const link = (href, attrs = {}) => ({ tagName: 'A', href, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })), dataset: { rastro: attrs['data-rastro'] },
   hasAttribute: n => Object.hasOwn(attrs, n), closest(sel) { return sel === 'a[href]' || (sel === '[data-rastro]' && attrs['data-rastro']) ? this : null; } });
 const named = (b, n) => b.filter(x => x.n === n);

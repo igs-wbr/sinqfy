@@ -70,7 +70,7 @@ test('snippet: formulário com e-mail ou telefone vira Lead com os dados; sem co
   assert.deepEqual([b[1].n, b[1].l], ['Lead', { n: 'Joana', e: 'joana@x.com', p: '11999990000' }]);
   const c = run('required');
   assert.equal(c[1].l, undefined, 'sem consentimento os dados não saem do navegador');
-  assert.ok(Buffer.byteLength(readFileSync(new URL('../public/s.js', import.meta.url))) < 3840, "snippet abaixo de 3,75 KB");
+  assert.ok(Buffer.byteLength(readFileSync(new URL('../public/s.js', import.meta.url))) < 3328);
 });
 
 test('formulário do site: contato cifrado no CRM com clique e campanha; o evento não guarda dado pessoal', async () => {

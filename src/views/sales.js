@@ -1,7 +1,7 @@
 // Páginas de vendas: resumo (dashboard principal), campanhas, pedidos e integrações.
 import { PLATFORMS, STATUSES, METHODS, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, MATCH_PT, hookToken } from '../sales/webhooks.js';
 import { SALE_FILTERS, LEVEL_PT } from '../sales/stats.js';
-import { html, raw, icon, brDate, layout, pageHead, toolbar, kpi, list, tabs, chart, share, tone, notice, num, pct, ratio, money, link, on, hiddenInputs, snippetTag } from './ui.js';
+import { html, raw, icon, brDate, layout, pageHead, toolbar, kpi, list, tabs, chart, share, tone, notice, num, pct, ratio, money, link, on, hiddenInputs } from './ui.js';
 import { BRANDS, brandSvg } from './icons.js';
 
 const saleLabel = (col, k) => col === 'platform' ? PLATFORMS[k] ?? k : col === 'status' ? STATUSES[k] ?? k : col === 'method' ? METHODS[k] ?? k : k === '' ? '(sem UTM)' : k;
@@ -194,9 +194,8 @@ export function integrationsPage(ctx, originUrl, d, msg, err) {
   const parts = [
     ['site', 'Rastreamento no site', 'globe', 'Snippet, UTMs e eventos de conversão.', st(null, 'Copiar e colar'), html`
 <section class="card"><h2>Snippet</h2><p class="muted">Cole no <code>&lt;head&gt;</code> de todas as páginas. Pelo subdomínio <code>t.</code> (Worker da borda), os cookies <code>_rid</code>, <code>_fbp</code> e <code>_fbc</code> ficam no seu domínio por 400 dias.</p>
-<pre><code>${snippetTag(s, d.edgeUrl)}</code></pre>
-<p class="muted">${s.meta_pixel ? raw('Com o pixel salvo em Meta Pixel, o snippet já traz <code>data-pixel</code>: carrega o Pixel da Meta no navegador e manda cada evento com o mesmo <code>eventID</code> do servidor (a Meta conta uma vez). Não cole o código base do Pixel junto. A compra vai só pelo servidor.') : raw('Salve o pixel em Meta Pixel e o snippet passa a carregar o Pixel no navegador também, sem código extra.')}
-Opções: <code>data-consent="required"</code> (nada de cookie, Pixel ou envio a terceiros até o banner chamar <code>rastro('consent')</code>) e <code>data-pixel="mirror"</code> no lugar do ID, se o site já tem o código base do Pixel (tire o <code>fbq('track','PageView')</code> dele).</p></section>
+<pre><code>${`<script defer data-site="${s.id}" src="${d.edgeUrl}/s.js"></script>`}</code></pre>
+<p class="muted">Opções no <code>&lt;script&gt;</code>: <code>data-consent="required"</code> (nada de cookie nem envio a terceiros até o banner chamar <code>rastro('consent')</code>) e <code>data-pixel="mirror"</code> (repete cada evento no Pixel com o mesmo <code>eventID</code>; tire o <code>fbq('track','PageView')</code> do código base).</p></section>
 <section class="card"><h2>Template de UTM para a Meta</h2><p class="muted">No Ads Manager, em Parâmetros de URL.</p><pre><code>${UTM_TEMPLATE}</code></pre>
 <p class="muted">O id depois do <code>|</code> liga cada venda à campanha, ao conjunto e ao anúncio certos. O snippet repassa as UTMs da página para os links de checkout (para a Hotmart: <code>src</code> e <code>sck</code>).</p></section>
 <section class="card"><h2>Eventos de conversão</h2><pre><code>${`<button data-rastro="cadastro" data-rastro-plano="pro">Assinar</button>
