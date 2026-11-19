@@ -4,7 +4,7 @@ import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
 import { enqueueWeb } from '../dispatch.js';
 import { upsertContact } from '../crm.js';
-import { adKey } from '../sales/webhooks.js';
+import { adKey, cleanUtm } from '../sales/webhooks.js';
 import { enabled } from '../modules.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
@@ -93,7 +93,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
     let referrer = '';
     try { if (e.r) referrer = new URL(e.r).hostname.replace(/^www\./, '').slice(0, 253); } catch {}
     s = { session: randomBytes(8).toString('hex'), referrer };
-    for (const k of UTM) s[k] = (url.searchParams.get(k) || '').trim().slice(0, 100);
+    for (const k of UTM) s[k] = cleanUtm(url.searchParams.get(k)).slice(0, 100);
     s.channel = channel(s);
   }
 

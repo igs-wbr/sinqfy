@@ -79,7 +79,7 @@ export async function campaignMarks(site, range) {
 }
 
 // Chave da campanha numa UTM "Nome|id" (a do template); sem "|", o próprio texto. Mesma regra de adKey() dos webhooks.
-const keyOf = col => `COALESCE(substring(split_part(${col}, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(${col}, '::', 1)))`;const UTM_KEY = keyOf('utm_campaign');
+const keyOf = col => `COALESCE(substring(split_part(${col}, '::', 1) from '\\S\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(${col}, '::', 1)))`;const UTM_KEY = keyOf('utm_campaign');
 
 /** Dados do funil dos anúncios da Meta (uma campanha ou todas), cruzando a Meta com os nossos eventos e vendas. Ver src/sales/funnel.js. */
 export async function adFunnel(site, range, campaign = null) {

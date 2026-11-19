@@ -78,6 +78,14 @@ test('webhooks: Hotmart, Kiwify, Eduzz (legado) e genérico', async () => {
   assert.ok(!JSON.stringify(await db.all('SELECT * FROM sales')).includes('@'), 'nenhum e-mail gravado');
   assert.equal(W.adKey('Nome da campanha|120200'), '120200');
   assert.equal(W.adKey('EI-027 | VID|120251927159870053::PAZXh0bgNhZW0'), '120251927159870053', 'código do clique colado pelo checkout não entra na chave');
+  assert.equal(W.adKey('Rastreio R$97 | C1 | 08-11-2026'), 'Rastreio R$97 | C1 | 08-11-2026', 'nome com " | " não vira chave pela data');
+  assert.deepEqual(['SPEC+%7C+VENDAS+%7C+CBO%7C123', 'AG+|+VENDAS', 'C1 + campeões', 'Brasil18+ aberto', 'x%ZZ'].map(W.cleanUtm),
+    ['SPEC | VENDAS | CBO|123', 'AG | VENDAS', 'C1 + campeões', 'Brasil18+ aberto', 'x%ZZ'], 'UTM codificada duas vezes');
+  assert.equal((await hook('hotmart', hotmart('HPK', { purchase: { transaction: 'HPK', order_date: Date.now(), price: { value: 47 },
+    origin: { sck: 'ig|paid|120249043042700473|120249043068330473|120249043064750473' } } }))).status, 200);
+  const hk = await sale('HPK');
+  assert.deepEqual([hk.utm_source, hk.campaign_key, hk.adset_key, hk.ad_key], ['ig', '120249043042700473', '120249043064750473', '120249043068330473'], 'sck "origem|meio|campanha|anúncio|conjunto"');
+  await db.run("DELETE FROM sales WHERE order_id='HPK'");
   assert.deepEqual(['1.234,56', '1,234.56', '10.000', 'R$ 97,90', '1.5', 10].map(W.num), [1234.56, 1234.56, 10000, 97.9, 1.5, 10]);
 });
 

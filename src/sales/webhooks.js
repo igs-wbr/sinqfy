@@ -35,7 +35,22 @@ export const method = m => {
   m = String(m || '').toLowerCase();
   return /pix/.test(m) ? 'pix' : /^cc|card|cart|credit|cr[eé]dit|debit|d[eé]bito/.test(m) ? 'card' : /boleto|billet|bank_?slip|bankslip/.test(m) ? 'boleto' : 'other';
 };
-const utm = o => ({ source: str(o.source), medium: str(o.medium), campaign: str(o.campaign), content: str(o.content), term: str(o.term) });
+/** UTM codificada duas vezes no anúncio ("SPEC+%7C+VENDAS") volta ao texto. Só sem espaços: "C1 + campeões" é um "+" de verdade. */
+export const cleanUtm = v => {
+  const t = String(v ?? '').trim();
+  if (/\s/.test(t) || !/\+|%[0-9a-f]{2}/i.test(t)) return t;
+  try { return decodeURIComponent(t.replace(/\+/g, ' ')).trim(); } catch { return t; }
+};
+const utm = o => ({ source: str(cleanUtm(o.source)), medium: str(cleanUtm(o.medium)), campaign: str(cleanUtm(o.campaign)), content: str(cleanUtm(o.content)), term: str(cleanUtm(o.term)) });
+/**
+ * `sck` de rastreadores anteriores com tudo junto: "origem|meio|campanha|anúncio|conjunto" (nomes ou ids da Meta).
+ * Separador é o "|" sem espaço em volta; o " | " de dentro dos nomes fica. Vira o padrão da Trackify: conjunto em
+ * utm_medium e anúncio em utm_content.
+ */
+const packed = v => {
+  const p = String(v || '').split(/(?<=\S)\|(?=\S)/);
+  return p.length === 5 ? utm({ source: p[0], medium: p[4], campaign: p[2], content: p[3] }) : null;
+};
 /** Id do visitante gravado pelo Worker (_rid, 16 bytes em base64url). O snippet o põe no link de checkout. */
 export const RID_RE = /^[\w-]{22}$/;
 const ridOf = v => RID_RE.test(String(v || '')) ? String(v) : null;
@@ -60,7 +75,7 @@ export const PARSERS = {
     return {
       order_id: str(p.transaction), status, method: method(p.payment?.type), gross, net: producer ? num(producer.value) : gross,
       currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date),
-      utm: utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, rid: ridOf(o.xcod),
+      utm: packed(o.sck) || packed(o.src) || utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, rid: ridOf(o.xcod),
     };
   },
   // Kiwify: valores em centavos; UTMs completas em TrackingParameters.
@@ -224,7 +239,8 @@ export function parseSheetRow(values) {
 
 /** "Nome da campanha|123456" (template de UTM da Meta) → "123456"; senão o próprio valor. */
 // Checkouts colam '::<código do clique>' depois do id da UTM ("Nome|id::PAZX..."): o que vem depois de '::' não é parte da chave.
-export const adKey = v => { const t = String(v || '').split('::')[0]; const m = /\|\s*([\w-]+)\s*$/.exec(t); return m ? m[1] : t.trim(); };
+// O template gruda o "|" no nome; "Rastreio | 08-11-2026" é só um nome com " | ", e a data não pode virar a chave.
+export const adKey = v => { const t = String(v || '').split('::')[0]; const m = /\S\|\s*([\w-]+)\s*$/.exec(t); return m ? m[1] : t.trim(); };
 
 const log = (site, platform, s, ok, message) => db.batch([
   ['INSERT INTO webhook_log(site, ts, platform, order_id, status, ok, message) VALUES (?,?,?,?,?,?,?)', [site, Date.now(), platform, s?.order_id || '', s?.status || '', ok ? 1 : 0, message]],
