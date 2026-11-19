@@ -26,6 +26,10 @@ function scope(site, { from, to }, f) {
 }
 const all = db.all;
 const PV = "name='pageview'";
+/** Nomes que o parseUA dá aos navegadores embutidos de app (o painel marca com "App"). */
+export const IN_APP = new Set(['Threads', 'Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Pinterest', 'Snapchat', 'X (Twitter)', 'Google', 'WebView']);
+/** Evento de checkout: o clique no link (s.js), o evento manual ou o do checkout próprio. */
+export const CHECKOUT_SQL = "(name IN ('InitiateCheckout','AddPaymentInfo') OR lower(name) LIKE '%checkout%')";
 
 // ---------- visão geral ----------
 export async function totals(site, range, f = {}) {
@@ -88,6 +92,32 @@ export async function online(site, now = Date.now()) {
     [site.id, addDays(localDate(now, site.timezone), -1), now - 5 * 60e3]))[0].n;
 }
 
+/** Sessões por navegador ou app e quantas delas clicaram no checkout. */
+export function browserCheckout(site, range, f) {
+  const [w, a] = scope(site, range, f);
+  return all(`SELECT k, COUNT(*) n, COUNT(*) FILTER (WHERE co) co FROM (SELECT MAX(browser) k, BOOL_OR(${CHECKOUT_SQL}) co
+    FROM events WHERE ${w} GROUP BY session) x GROUP BY k ORDER BY n DESC LIMIT 12`, a);
+}
+
+export const VISIT_LOOKBACK = 90;
+/**
+ * Em qual visita o lead clica no checkout e compra: 1ª, 2ª, 3ª, 4ª ou mais (k = 4).
+ * Só visitantes com o cookie _rid (o hash diário não liga dias diferentes). Visitas contadas nos 90 dias antes do período.
+ * Venda entra na última visita do mesmo rid antes dela, venha de qualquer plataforma.
+ */
+export function visitNumber(site, range, f = {}) {
+  const [w, a] = scope(site, range, f);
+  const only = Object.keys(f).length ? ` AND session IN (SELECT session FROM events WHERE ${w})` : '';
+  return all(`WITH s AS (SELECT rid, session, MIN(ts) t0, MIN(date) d0, BOOL_OR(${CHECKOUT_SQL}) co FROM events
+      WHERE site=? AND rid IS NOT NULL AND date BETWEEN ? AND ? GROUP BY rid, session),
+    n AS (SELECT *, LEAST(ROW_NUMBER() OVER (PARTITION BY rid ORDER BY t0), 4) k FROM s),
+    v AS (SELECT k, COUNT(*) n, COUNT(*) FILTER (WHERE co) co FROM n WHERE d0 BETWEEN ? AND ?${only} GROUP BY k),
+    b AS (SELECT k, COUNT(*) sales FROM (SELECT x.id, MAX(n.k) k FROM sales x JOIN n ON n.rid=x.rid AND n.t0<=x.ts
+      WHERE x.site=? AND x.status='paid' AND x.date BETWEEN ? AND ? GROUP BY x.id) y GROUP BY k)
+    SELECT k, COALESCE(v.n, 0) n, COALESCE(v.co, 0) co, COALESCE(b.sales, 0) sales FROM v FULL JOIN b USING (k) ORDER BY k`,
+  [site, addDays(range.from, -VISIT_LOOKBACK), range.to, range.from, range.to, ...(only ? a : []), site, range.from, range.to]);
+}
+
 export function overview(site, p, f) {
   const t = (col, o) => top(site.id, p, f, col, o);
   return awaitAll({
@@ -98,6 +128,7 @@ export function overview(site, p, f) {
     utm_source: t('utm_source', { nonEmpty: true }), utm_medium: t('utm_medium', { nonEmpty: true }),
     utm_campaign: t('utm_campaign', { nonEmpty: true }), utm_content: t('utm_content', { nonEmpty: true }),
     countries: t('country'), screens: t('screen'), browsers: t('browser'), oss: t('os'),
+    apps: browserCheckout(site.id, p, f), visitNo: visitNumber(site.id, p, f),
     events: events(site.id, p, f), props: f.name ? props(site.id, p, f) : null,
     online: online(site),
   });
@@ -126,6 +157,15 @@ export async function realtime(site, now = Date.now()) {
 /** Últimos eventos com os identificadores que vão para as plataformas de anúncio. */
 export const recentEvents = (site, limit = 100) => all(`SELECT ts, name, path, channel, referrer, utm_source, utm_campaign, utm_content,
   visitor, rid, event_id, fbc, fbp, gclid, gbraid, wbraid, ttclid, revenue FROM events WHERE site=? ORDER BY ts DESC LIMIT ${limit}`, [site]);
+/**
+ * Compras aprovadas no mesmo formato dos eventos: vêm do webhook, não do navegador. event_id é o mesmo da fila da Meta
+ * (plataforma-pedido); fbc e fbp são os do clique casado pelo rid, os que seguiram com a compra.
+ */
+export const recentPurchases = (site, limit = 100) => all(`SELECT s.ts, 'Purchase' AS name, s.platform, s.status, s.product, s.utm_source,
+  s.utm_campaign, s.utm_content, s.rid, s.platform || '-' || s.order_id AS event_id, s.gross AS revenue,
+  (SELECT e.fbc FROM events e WHERE e.site=s.site AND e.rid=s.rid AND e.fbc IS NOT NULL ORDER BY e.ts DESC LIMIT 1) AS fbc,
+  (SELECT e.fbp FROM events e WHERE e.site=s.site AND e.rid=s.rid AND e.fbp IS NOT NULL ORDER BY e.ts DESC LIMIT 1) AS fbp
+  FROM sales s WHERE s.site=? AND s.status IN ('paid','refunded','chargeback') ORDER BY s.ts DESC LIMIT ${limit}`, [site]);
 
 // ---------- funis ----------
 const globRe = g => new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');

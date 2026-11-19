@@ -22,7 +22,7 @@ export const origin = req => env.PUBLIC_URL || `${req.headers['x-forwarded-proto
 export function send(r, status, body, headers = {}) {
   r.res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
-    'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${r.nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+    'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${r.nonce}'; img-src 'self' data: https://*.fbcdn.net; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
     // Em produção (HTTPS), o navegador não aceita mais abrir o painel por HTTP, nem por um link adulterado.
     ...(env.COOKIE_SECURE === '1' && { 'strict-transport-security': 'max-age=31536000' }),
     ...headers,
@@ -42,6 +42,7 @@ export const sitePath = (site, p = '') => `/sites/${encodeURIComponent(site.id)}
  * Retorna { rid, fbp, fbc, ip } ou null.
  */
 const ID_RE = /^[\w-]{8,64}$/, FB_RE = /^fb\.\d\.\d{10,13}\.[\w.-]{1,255}$/;
+const dec = v => { try { return decodeURIComponent(String(v || '')); } catch { return ''; } };
 export function edgeInfo(h) {
   const want = Buffer.from(env.EDGE_SECRET || ''), got = Buffer.from(String(h['x-edge-secret'] || ''));
   if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) {
@@ -49,6 +50,7 @@ export function edgeInfo(h) {
     return null;
   }
   const ok = (v, re) => re.test(v || '') ? v : null;
-  return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null };
+  return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null,
+    city: dec(h['x-rastro-city']).slice(0, 80), region: dec(h['x-rastro-region']).slice(0, 8) };
 }
 

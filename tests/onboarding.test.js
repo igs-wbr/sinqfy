@@ -6,12 +6,18 @@ import { boot, CHROME } from './helpers.js';
 // Cloudflare e Meta simuladas; o resto do fetch é real (servidor local).
 const cfCalls = [];
 let cfHost = null, metaOk = true;
+const routes = []; // rotas do Worker na zona
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, opts = {}) => {
   const u = new URL(String(url));
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
   if (u.host === 'api.cloudflare.com') {
     cfCalls.push({ method: opts.method, path: u.pathname, auth: opts.headers?.authorization, body: opts.body && JSON.parse(opts.body) });
+    if (u.pathname.includes('/workers/routes')) {
+      if (opts.method === 'POST') routes.push({ id: 'r' + routes.length, ...JSON.parse(opts.body) });
+      if (opts.method === 'DELETE') routes.splice(routes.findIndex(r => u.pathname.endsWith(r.id)), 1);
+      return json({ success: true, result: opts.method === 'GET' ? routes : {} });
+    }
     if (opts.method === 'POST') { cfHost = { id: 'ch_1', hostname: JSON.parse(opts.body).hostname, status: 'pending', ssl: { status: 'pending_validation' } }; return json({ success: true, result: cfHost }); }
     if (opts.method === 'GET') return json({ success: true, result: cfHost });
     if (opts.method === 'DELETE') { cfHost = null; return json({ success: true, result: { id: 'ch_1' } }); }
@@ -69,7 +75,7 @@ test('domínio: cadastra na Cloudflare, mostra o CNAME, confere e vira o endere�
   const { normalizeHost } = await import('../src/cloudflare.js');
   assert.deepEqual(['loja.com.br', 'https://www.loja.com.br/x', 'T.Loja.com.br'].map(normalizeHost), ['t.loja.com.br', 't.loja.com.br', 't.loja.com.br'], 'só o domínio: o t. entra sozinho');
   assert.equal((await req('/sites/loja/setup', { cookie: owner, form: { action: 'domain_add', host: 'https://t.loja.com.br/' } })).status, 303);
-  const post = cfCalls.find(c => c.method === 'POST');
+  const post = cfCalls.find(c => c.method === 'POST' && c.path.endsWith('/custom_hostnames'));
   assert.deepEqual([post.path, post.auth, post.body.hostname, post.body.ssl.method], ['/client/v4/zones/zona1/custom_hostnames', 'Bearer cf-token', 't.loja.com.br', 'http']);
   let s = await db.get("SELECT edge_host, edge_status, domains FROM sites WHERE id='loja'");
   assert.deepEqual([s.edge_host, s.edge_status, s.domains], ['t.loja.com.br', 'dns', 'loja.com.br'], 'domínio raiz liberado nos domínios do site');
@@ -86,9 +92,11 @@ test('domínio: cadastra na Cloudflare, mostra o CNAME, confere e vira o endere�
   cfCalls.length = 0;
   assert.equal((await req('/sites/outra/setup', { cookie: owner, form: { action: 'domain_add', host: 't.outra.com' } })).status, 303);
   assert.equal((await req('/sites/outra/setup', { cookie: owner, form: { action: 'domain_add', host: 't.outra2.com' } })).status, 303);
-  assert.ok(cfCalls.some(c => c.method === 'DELETE'), 'trocar de domínio apaga o anterior na Cloudflare');
+  assert.ok(cfCalls.some(c => c.method === 'DELETE' && c.path.includes('/custom_hostnames/')), 'trocar de domínio apaga o anterior na Cloudflare');
+  assert.deepEqual(routes.map(r => [r.pattern, r.script]).sort(), [['t.loja.com.br/*', 'trackify'], ['t.outra2.com/*', 'trackify']], 'uma rota por domínio de cliente, nunca */*; a do domínio trocado sai');
   // site excluído: fila e domínio somem, e o id não volta a ser usado
   assert.equal((await req('/sites/outra/delete', { cookie: owner, form: { confirm: 'outra' } })).status, 303);
+  assert.deepEqual(routes.map(r => r.pattern), ['t.loja.com.br/*'], 'site excluído leva a rota junto');
   assert.equal((await req('/sites', { cookie: owner, form: { id: 'outra', name: 'De novo', timezone: 'UTC', currency: 'BRL' } })).status, 400);
 });
 

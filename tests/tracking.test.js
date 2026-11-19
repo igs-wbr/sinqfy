@@ -16,7 +16,7 @@ const admin = await login();
 await req('/sites', { cookie: admin, form: { id: 'blog', name: 'Blog', timezone: 'America/Sao_Paulo', currency: 'BRL' } });
 await req('/sites', { cookie: admin, form: { id: 'sess', name: 'Sess', timezone: 'UTC', currency: 'USD' } });
 
-function runSnippet({ search = '', referrer = 'https://google.com/', cookie, consent } = {}) {
+function runSnippet({ search = '', referrer = 'https://google.com/', cookie = '', consent } = {}) {
   const src = readFileSync(new URL('../public/s.js', import.meta.url), 'utf8');
   const beacons = [], ids = [], on = {}, store = {};
   const loc = { href: `https://blog.dev/a${search}`, pathname: '/a', search, host: 'blog.dev', hostname: 'blog.dev' };
@@ -68,10 +68,19 @@ test('snippet v2: id por evento, consentimento e rid nos links externos', () => 
   c.on.click({ target: pay }); c.on.click({ target: keep });
   assert.equal(new URL(pay.href).searchParams.get('rid'), 'AbC123xyz_-');
   assert.equal(new URL(keep.href).searchParams.get('rid'), 'outro', 'não sobrescreve');
+  const onp = anchor('https://pay.onprofit.com.br/7D53M87C?off=I2Tjop');
+  runSnippet({ cookie: '_rid=AbC123xyz_-' }).on.click({ target: onp });
+  const o = new URL(onp.href).searchParams;
+  assert.deepEqual([o.get('off'), o.get('rid'), o.get('sck')], ['I2Tjop', 'AbC123xyz_-', 'AbC123xyz_-'], 'OnProfit só devolve src/sck/UTMs no webhook: o rid vai também em sck');
   const blog = anchor('https://outro-site.com/artigo'), marked = anchor('https://agenda.com/x', { 'data-rastro-rid': '' });
   c.on.click({ target: blog }); c.on.click({ target: marked });
   assert.equal(blog.href, 'https://outro-site.com/artigo', 'rid só em checkout, WhatsApp ou link marcado');
   assert.equal(new URL(marked.href).searchParams.get('rid'), 'AbC123xyz_-');
+  assert.equal(c.beacons.filter(b => b[1].n === 'InitiateCheckout').length, 1, 'cliques seguidos no checkout viram um InitiateCheckout (dedup de 2 s)');
+  const wa = anchor('https://wa.me/5511999990000'), n0 = c.beacons.length;
+  c.on.click({ target: wa });
+  assert.equal(c.beacons.length, n0, 'WhatsApp leva o rid, mas não é checkout');
+  assert.equal(new URL(wa.href).searchParams.get('rid'), 'AbC123xyz_-');
   const none = anchor('https://pay.kiwify.com.br/K');
   runSnippet().on.click({ target: none });
   assert.equal(none.href, 'https://pay.kiwify.com.br/K', 'sem cookie e sem UTM, link intacto');
@@ -182,5 +191,8 @@ test('painel de tráfego: números, filtros e escape de XSS', async () => {
   assert.match((await req('/sites/blog/traffic?range=today&f_name=signup', { cookie: admin })).text, /plan = pro/);
   assert.match(kv((await req('/sites/blog/realtime?partial=1', { cookie: admin })).text, "online"), /^2$/);
   assert.equal((await req('/sites/blog/funnels', { cookie: admin, form: { name: 'Compra', steps: '/a\n/pricing\nevento:signup' } })).status, 303);
-  assert.match((await req('/sites/blog/funnels?range=today', { cookie: admin })).text, /Conversão <b class="pos">50%<\/b>/);
+  const fun = (await req('/sites/blog/funnels?range=today', { cookie: admin })).text;
+  assert.match(fun, /Conversão <b class="pos">50%<\/b>/);
+  assert.ok(fun.includes('Funil completo') && fun.includes('Visitaram o site') && fun.includes('Compraram'), 'funil completo do site no topo');
+  assert.ok((await req('/sites/blog/funnels?range=30d', { cookie: admin })).text.includes('quando o script começou a registrar'), 'período maior que o script: corta no primeiro evento');
 });

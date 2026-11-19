@@ -10,7 +10,13 @@ async function getAll(url) {
   for (let next = url, page = 0; next && page < 50; page++) {
     const res = await fetch(next);
     const j = await res.json().catch(() => ({}));
-    if (!res.ok || j.error) throw new Error(j.error?.message || `HTTP ${res.status}`);
+    if (!res.ok || j.error) {
+      // Código 1 ("An unknown error occurred" / "reduce the amount of data") é a Meta recusando página grande demais:
+      // conta com muitos anúncios ou 90 dias por anúncio. Repete a mesma página com limit menor (500 → 125 → 31).
+      const u = new URL(next), lim = Number(u.searchParams.get('limit')) || 0;
+      if (j.error?.code === 1 && lim > 40) { u.searchParams.set('limit', String(lim >> 2)); next = u.href; page--; continue; }
+      throw Object.assign(new Error(`${u.pathname.split('/').pop()}: ${j.error?.message || `HTTP ${res.status}`}${j.error?.code ? ` (código ${j.error.code})` : ''}`), { code: j.error?.code });
+    }
     out.push(...(j.data || []));
     next = j.paging?.next;
   }
@@ -29,31 +35,39 @@ export function action(list, types) {
   return 0;
 }
 
+// Limite de chamadas da Meta (app, usuário ou conta de anúncio). Tentar de novo a cada 5 min só gasta o limite e prolonga o bloqueio.
+const LIMITED = e => [4, 17, 32, 613].includes(e.code) || (e.code >= 80000 && e.code <= 80014) || /too many calls|request limit/i.test(e.message);
+export const PAUSE = 3600e3;
+
 const budget = e => e.daily_budget ? Number(e.daily_budget) / 100 : e.lifetime_budget ? Number(e.lifetime_budget) / 100 : null; // centavos
 
 /**
  * Sincroniza campanhas, conjuntos, anúncios, gasto diário e as conversões que a Meta reporta (compras, valor, leads,
- * na janela de atribuição configurada na conta). 30 dias na primeira vez, depois os últimos 3.
+ * na janela de atribuição configurada na conta). 90 dias na primeira vez, depois os últimos 3.
  */
-export async function syncMeta(acc, days = acc.last_sync ? 3 : 30) {
+export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
+  const wait = Number(acc.sync_after) - Date.now();
+  if (wait > 0) throw new Error(`A Meta limitou as chamadas desta conta. Nova tentativa em ${Math.ceil(wait / 60e3)} min.`);
   const site = sites.get(acc.site);
   const until = localDate(Date.now(), site.timezone), since = addDays(until, -(days - 1));
   const act = acc.account_id.replace(/^act_/, '');
   const url = (path, params = {}) => `${graph()}/act_${act}${path}?` + new URLSearchParams({ limit: '500', ...params, access_token: acc.token });
   try {
     const info = await fetch(url('', { fields: 'name,currency' })).then(r => r.json());
-    if (info.error) throw new Error(info.error.message);
+    if (info.error) throw Object.assign(new Error(info.error.message), { code: info.error.code });
     const [campaigns, adsets, ads, insights] = await Promise.all([
       getAll(url('/campaigns', { fields: 'id,name,effective_status,daily_budget,lifetime_budget' })),
       getAll(url('/adsets', { fields: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget' })),
-      getAll(url('/ads', { fields: 'id,name,adset_id,effective_status' })),
+      getAll(url('/ads', { fields: 'id,name,adset_id,effective_status,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url}' })),
       getAll(url('/insights', {
         level: 'ad', time_increment: '1', time_range: JSON.stringify({ since, until }),
         fields: 'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
       })),
     ]);
-    const ENT = `INSERT INTO ad_entities(site, platform, level, id, name, parent, status, budget) VALUES (?,?,?,?,?,?,?,?)
-      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget`;
+    const ENT = `INSERT INTO ad_entities(site, platform, level, id, name, parent, status, budget, thumb) VALUES (?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget, thumb=excluded.thumb`;
+    // Só imagem da CDN da Meta (é o que a CSP do painel libera).
+    const thumb = a => [a.creative?.thumbnail_url, a.creative?.image_url].find(u => /^https:\/\/[\w.-]+\.fbcdn\.net\//.test(u || '')) || null;
     const SPEND = `INSERT INTO ad_spend(site, platform, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks,
       meta_purchases, meta_purchase_value, meta_leads, meta_link_clicks, meta_lpv, meta_atc, meta_checkouts, source) VALUES (?,'meta',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'api')
       ON CONFLICT(site, platform, date, campaign_id, adset_id, ad_id) DO UPDATE SET campaign_name=excluded.campaign_name, adset_name=excluded.adset_name,
@@ -61,18 +75,20 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 30) {
       meta_purchase_value=excluded.meta_purchase_value, meta_leads=excluded.meta_leads, meta_link_clicks=excluded.meta_link_clicks, meta_lpv=excluded.meta_lpv,
       meta_atc=excluded.meta_atc, meta_checkouts=excluded.meta_checkouts, source=excluded.source`;
     await db.batch([ // uma transação: ou grava tudo ou nada
-      ...campaigns.map(c => [ENT, [site.id, 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c)]]),
-      ...adsets.map(a => [ENT, [site.id, 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a)]]),
-      ...ads.map(a => [ENT, [site.id, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null]]),
+      ...campaigns.map(c => [ENT, [site.id, 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c), null]]),
+      ...adsets.map(a => [ENT, [site.id, 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a), null]]),
+      ...ads.map(a => [ENT, [site.id, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null, thumb(a)]]),
       ...insights.map(i => [SPEND, [site.id, i.date_start, i.campaign_id || '', i.campaign_name || '', i.adset_id || '', i.adset_name || '', i.ad_id || '', i.ad_name || '',
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),
         Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT)]]),
-      ['UPDATE ad_accounts SET last_sync=?, last_error=NULL, name=?, currency=? WHERE id=?', [Date.now(), info.name || '', info.currency || '', acc.id]],
+      ['UPDATE ad_accounts SET last_sync=?, last_error=NULL, sync_after=NULL, name=?, currency=? WHERE id=?', [Date.now(), info.name || '', info.currency || '', acc.id]],
     ]);
     return { campaigns: campaigns.length, rows: insights.length };
   } catch (e) {
-    await db.run('UPDATE ad_accounts SET last_error=? WHERE id=?', [e.message.slice(0, 300), acc.id]);
+    const limited = LIMITED(e);
+    if (limited) e.message += ' Nova tentativa em 1 hora.';
+    await db.run('UPDATE ad_accounts SET last_error=?, sync_after=? WHERE id=?', [e.message.slice(0, 300), limited ? Date.now() + PAUSE : null, acc.id]);
     throw e;
   }
 }

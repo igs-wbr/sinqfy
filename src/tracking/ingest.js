@@ -4,7 +4,7 @@ import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
 import { enqueueWeb } from '../dispatch.js';
 import { upsertContact } from '../crm.js';
-import { adKey } from '../sales/webhooks.js';
+import { adKey, cleanUtm } from '../sales/webhooks.js';
 import { enabled } from '../modules.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
@@ -21,9 +21,13 @@ async function dailySalt(day) {
 
 export const screenClass = w => !(w > 0) ? '??' : w < 576 ? 'mobile' : w < 992 ? 'tablet' : w < 1440 ? 'laptop' : 'desktop';
 
+// Navegador embutido de app (in-app): o anúncio abre aqui, não no Safari ou Chrome. A ordem importa: o Threads também traz "Instagram".
+const IN_APP_UA = [[/Barcelona/, 'Threads'], [/Instagram/, 'Instagram'], [/FBAN|FBAV|FB_IAB|FBIOS/, 'Facebook'], [/musical_ly|BytedanceWebview|TikTok/i, 'TikTok'],
+  [/LinkedInApp/, 'LinkedIn'], [/Pinterest/, 'Pinterest'], [/Snapchat/, 'Snapchat'], [/Twitter/, 'X (Twitter)'], [/\bGSA\//, 'Google'], [/; wv\)|WebView/, 'WebView']];
 export function parseUA(ua) {
-  const browser = /Edg(e|A|iOS)?\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
-    : /Firefox\/|FxiOS/.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Outro';
+  const app = IN_APP_UA.find(([re]) => re.test(ua))?.[1];
+  const browser = app || (/Edg(e|A|iOS)?\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+    : /Firefox\/|FxiOS/.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Outro');
   const os = /Windows/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
     : /Android/.test(ua) ? 'Android' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Outro';
   return { browser, os };
@@ -67,7 +71,7 @@ export const fbcOf = (fbclid, now) => CLICK_RE.test(fbclid || '') ? `fb.1.${now}
  * `edge` vem do Worker da borda (ADR 0011/0012): { rid, fbp, fbc } lidos ou criados nos cookies do domínio do cliente.
  * Com `rid`, o visitante é o cookie (atribuição entre dias); sem ele, o hash diário de IP + navegador (ADR 0002).
  */
-export async function record({ body, ua, ip, country, edge }, now = Date.now()) {
+export async function record({ body, ua, ip, country, edge, geo }, now = Date.now()) {
   let e;
   try { e = JSON.parse(body); } catch { return 400; }
   const site = typeof e?.s === 'string' && sites.get(e.s);
@@ -89,7 +93,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
     let referrer = '';
     try { if (e.r) referrer = new URL(e.r).hostname.replace(/^www\./, '').slice(0, 253); } catch {}
     s = { session: randomBytes(8).toString('hex'), referrer };
-    for (const k of UTM) s[k] = (url.searchParams.get(k) || '').trim().slice(0, 100);
+    for (const k of UTM) s[k] = cleanUtm(url.searchParams.get(k)).slice(0, 100);
     s.channel = channel(s);
   }
 
@@ -109,7 +113,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   const clientId = typeof e.g === 'string' && /^\d{1,12}\.\d{1,12}$/.test(e.g) ? e.g : null; // cookie _ga, lido pelo snippet
   const ev = { name, ts: now, rid: consent && edge?.rid || null, visitor, event_id: eventId,
     fbc: consent && (edge?.fbc || fbcOf(q.get('fbclid'), now)) || null, fbp: consent && edge?.fbp || null,
-    revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null };
+    revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null, country };
   await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
     /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null),
@@ -117,7 +121,7 @@ export async function record({ body, ua, ip, country, edge }, now = Date.now()) 
   // Envio server-side (etapa 2): IP e user agent seguem só no payload da fila, até o envio terminar (ADR 0014).
   // Compra pelo navegador não vai para a CAPI: qualquer um pode forjar um beacon; a compra real vem do webhook.
   // Retenção de vídeo fica só no painel (funis): não vira evento personalizado na Meta nem no GA4.
-  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId }, now);
+  if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, ...geo }, now);
   // Formulário com e-mail ou telefone (campo `l` do snippet): vira contato do CRM, cifrado. Nunca entra no evento.
   // Só pela borda (EDGE_SECRET): o /e direto é público e o id do site também. Limite de 30 leads por minuto por site.
   if (consent && edge && e.l && typeof e.l === 'object' && (await db.get("SELECT COUNT(*) n FROM contacts WHERE site=? AND source='site' AND created>?", [site.id, now - 60e3])).n < 30) {

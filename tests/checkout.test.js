@@ -43,6 +43,24 @@ test('Hotmart: rid em xcod casa com o clique, herda UTMs e a compra vai como web
   assert.deepEqual([g.client_id, g.events[0].name, g.events[0].params.transaction_id, g.events[0].params.value], ['123.456', 'purchase', 'hotmart-HPX1', 297]);
 });
 
+test('a compra aparece na tela de eventos, com o envio da Meta e os IDs do clique', async () => {
+  const page = (await req('/sites/chk/events?partial=1', { cookie: admin })).text;
+  const row = page.split('<tr>').find(t => t.includes('hotmart-HPX1'));
+  assert.ok(row, 'linha da compra');
+  assert.ok(row.includes('Purchase') && row.includes('Curso') && row.includes('Hotmart') && row.includes('Meta') && row.includes('na fila'), 'compra com produto, plataforma e selo da fila');
+  assert.ok(row.includes(edge['x-rastro-fbc']) && row.includes(edge['x-rastro-fbp']), 'fbc e fbp do clique');
+  await db.run("UPDATE sales SET utm_content='AD12|333::PAZXh0bgNhZW0' WHERE order_id='HPX1'");
+  const row2 = (await req('/sites/chk/events?partial=1', { cookie: admin })).text.split('<tr>').find(t => t.includes('hotmart-HPX1'));
+  assert.ok(row2.includes('BF · AD12') && !row2.includes('PAZXh0'), 'anúncio sem o código colado depois de ::');
+});
+
+test('Hotmart: sck fixo do produtor não toma o lugar da campanha do clique', async () => {
+  const body = { event: 'PURCHASE_APPROVED', data: { purchase: { transaction: 'HPSCK', price: { value: 47 }, order_date: Date.now(), origin: { xcod: RID, sck: 'lp-ahsd-47' } } } };
+  assert.equal((await post('hotmart', body)).status, 200);
+  const s = await db.get("SELECT utm_campaign, campaign_key, ad_key FROM sales WHERE order_id='HPSCK'");
+  assert.deepEqual([s.utm_campaign, s.campaign_key, s.ad_key], ['BF|111', '111', '333']);
+});
+
 test('venda anterior ao clique não herda o clique', async () => {
   const old = Date.now() - 40 * 864e5;
   const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'o@l.d' }, purchase: { transaction: 'HPOLD', price: { value: 50 }, order_date: old, origin: { xcod: RID } } } };
@@ -51,13 +69,14 @@ test('venda anterior ao clique não herda o clique', async () => {
 });
 
 test('sem clique: compra vai como other e não vai ao GA4; UTM vira a regra', async () => {
-  const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'c@d.com', checkout_phone: '(11) 98888-7777' },
+  const body = { event: 'PURCHASE_APPROVED', data: { buyer: { email: 'c@d.com', checkout_phone: '(11) 98888-7777', name: 'Ana Maria Conceição' },
     purchase: { transaction: 'HPX2', price: { value: 100 }, order_date: Date.now(), origin: { src: 'FB', sck: 'Outra|999' } } } };
   assert.equal((await post('hotmart', body)).status, 200);
   assert.equal((await db.get("SELECT match_rule FROM sales WHERE order_id='HPX2'")).match_rule, 'utm');
   const ev = await queued('hotmart-HPX2');
   assert.equal(ev.action_source, 'other');
   assert.equal(ev.user_data.ph[0], sha('5511988887777'), 'telefone com DDI 55');
+  assert.deepEqual([ev.user_data.fn, ev.user_data.ln, ev.user_data.country], [[sha('ana')], [sha('conceição')], [sha('br')]], 'nome e país em hash');
   assert.equal(await queued('hotmart-HPX2', 'ga4'), null);
 });
 

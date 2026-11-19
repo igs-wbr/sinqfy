@@ -1,7 +1,7 @@
 // Funil dos anúncios: qual fonte vale em cada etapa e onde fica o gargalo (sem banco).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFunnel, compareFunnel } from '../src/sales/funnel.js';
+import { buildFunnel, compareFunnel, siteStages } from '../src/sales/funnel.js';
 
 const meta = { imp: 100000, clicks: 1500, link: 1200, lpv: 600, ic: 40, buy: 9, spend: 1000 };
 const on = { tracking: true, webhooks: true };
@@ -36,4 +36,16 @@ test('funil: sem período anterior ou com base pequena, não aponta gargalo', ()
   assert.ok(!compareFunnel(buildFunnel(meta, { visits: 900, engaged: 420, checkout: 25 }, { n: 1 }, on), null).some(s => s.gargalo));
   const small = { imp: 500, link: 10 };
   assert.ok(!compareFunnel(buildFunnel(small, { visits: 1 }, { n: 0 }, on), buildFunnel(small, { visits: 9 }, { n: 0 }, on)).some(s => s.gargalo));
+});
+
+test('funil completo: todas as origens, taxa da visita só com quem veio do anúncio e compradores sem contar o order bump', () => {
+  const { stages, spend, metaBuys } = siteStages(meta, { visits: 900, ads: 480, engaged: 300, checkout: 60 }, { buyers: 12, orders: 15, revenue: 1500 });
+  const by = Object.fromEntries(stages.map(s => [s.k, s]));
+  assert.deepEqual(stages.map(s => s.k), ['imp', 'click', 'visit', 'engage', 'checkout', 'buy']);
+  assert.deepEqual([by.click.v, by.click.rate, by.visit.v, by.visit.rate], [1200, 0.012, 900, 0.4], 'visita: 480 dos anúncios sobre 1200 cliques, não 900');
+  assert.deepEqual([by.buy.v, by.buy.orders, by.buy.rate, by.buy.cost, by.imp.cost], [12, 15, 0.2, 1000 / 12, 10]);
+  assert.deepEqual([spend, metaBuys], [1000, 9]);
+  const noAds = siteStages({}, { visits: 50, ads: 0, engaged: 20, checkout: 5 }, { buyers: 1 }).stages;
+  assert.deepEqual(noAds.map(s => s.k), ['visit', 'engage', 'checkout', 'buy'], 'sem Meta, começa na visita');
+  assert.equal(noAds[0].rate, undefined);
 });

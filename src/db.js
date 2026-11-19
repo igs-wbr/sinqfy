@@ -12,6 +12,8 @@ const url = env.DATABASE_URL || 'postgres://rastro:rastro@127.0.0.1:55432/rastro
 const schema = env.DATABASE_SCHEMA; // só os testes usam: um schema por arquivo de teste
 if (schema && !/^\w+$/.test(schema)) throw new Error('DATABASE_SCHEMA inválido');
 const pool = new pg.Pool({ connectionString: url, max: Number(env.DATABASE_POOL) || 10, ...(schema && { options: `-c search_path=${schema}` }) });
+// Conexão ociosa que o Postgres derruba (reinício, atualização) não pode derrubar o app: o pool abre outra na próxima consulta.
+pool.on('error', e => console.warn('Postgres fechou uma conexão ociosa:', e.code || e.message));
 const pgSql = sql => { let i = 0; return sql.replace(/\?(\d+)?/g, (_, n) => '$' + (n || ++i)); };
 export const db = {
   all: async (sql, args = []) => (await pool.query(pgSql(sql), args)).rows,
@@ -173,6 +175,31 @@ async function migrate() {
     -- Funil dos anúncios: etapas que a Meta reporta entre o clique e a compra (cliques no link, página de destino, carrinho, checkout).
     ALTER TABLE ad_spend ADD COLUMN IF NOT EXISTS meta_link_clicks BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_lpv BIGINT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS meta_atc BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_checkouts BIGINT NOT NULL DEFAULT 0;
+    -- Primeiro toque pago da venda (ADR 0018): o anúncio que trouxe o lead pela primeira vez, mesmo que a compra saia por outro caminho.
+    ALTER TABLE sales ADD COLUMN IF NOT EXISTS ft_source ${T}, ADD COLUMN IF NOT EXISTS ft_medium ${T},
+      ADD COLUMN IF NOT EXISTS ft_campaign ${T}, ADD COLUMN IF NOT EXISTS ft_content ${T};
+    -- Vendas de antes do primeiro toque: preenche pelos eventos do mesmo rid (mesma regra do matchSale) e, sem eles, pela origem da venda.
+    UPDATE sales x SET (ft_source, ft_medium, ft_campaign, ft_content) = (SELECT e.utm_source, e.utm_medium, e.utm_campaign, e.utm_content FROM events e
+        WHERE e.site=x.site AND e.rid=x.rid AND e.ts BETWEEN x.ts - 2592000000 AND x.ts + 60000 AND e.utm_campaign<>'' ORDER BY e.ts LIMIT 1)
+      WHERE x.ft_campaign='' AND x.rid IS NOT NULL AND EXISTS (SELECT 1 FROM events e
+        WHERE e.site=x.site AND e.rid=x.rid AND e.ts BETWEEN x.ts - 2592000000 AND x.ts + 60000 AND e.utm_campaign<>'');
+    UPDATE sales SET ft_source=utm_source, ft_medium=utm_medium, ft_campaign=utm_campaign, ft_content=utm_content WHERE ft_campaign='' AND utm_campaign<>'';
+    -- Último Purchase enviado à Meta por contato e quem enviou ('sale' = webhook, 'crm' = coluna do quadro): a mesma compra não sai pelos dois.
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_ts BIGINT, ADD COLUMN IF NOT EXISTS purchase_src TEXT;
+    -- Comprador do Purchase (hash do e-mail, telefone ou rid): produto, order bump e upsell viram uma conversão (ADR 0019).
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS buyer TEXT;
+    -- Imagem do criativo (URL assinada da Meta, expira em dias: renovada a cada sincronização).
+    ALTER TABLE ad_entities ADD COLUMN IF NOT EXISTS thumb TEXT;
+    -- Chave de anúncio gravada com o '::<código do clique>' que o checkout cola na UTM: recalcula como o adKey() de hoje.
+    UPDATE sales SET ad_key = COALESCE(substring(split_part(utm_content, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_content, '::', 1)))
+      WHERE ad_key LIKE '%::%';
+    UPDATE sales SET adset_key = COALESCE(substring(split_part(utm_medium, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_medium, '::', 1)))
+      WHERE adset_key LIKE '%::%';
+    UPDATE sales SET campaign_key = COALESCE(substring(split_part(utm_campaign, '::', 1) from '\\|\\s*([A-Za-z0-9_-]+)\\s*$'), btrim(split_part(utm_campaign, '::', 1)))
+      WHERE campaign_key LIKE '%::%';
+    CREATE INDEX IF NOT EXISTS deliveries_buyer ON deliveries(site, buyer, created) WHERE name='Purchase';
+    -- Conta de anúncio que bateu no limite de chamadas da Meta: não sincroniza antes disso (ms).
+    ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS sync_after BIGINT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

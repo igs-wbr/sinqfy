@@ -1,6 +1,7 @@
 // Páginas de tráfego: visão geral, tempo real, eventos, funis, caminhos, atribuição.
-import { FILTERS, ATTR_DIMS, OTHER } from '../tracking/stats.js';
-import { html, raw, icon, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
+import { PLATFORMS, STATUSES } from '../sales/webhooks.js';
+import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK } from '../tracking/stats.js';
+import { html, raw, icon, brDate, delta, ratio, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
 
 export function label(col, k) {
   if (col === 'referrer') return k || 'Direto';
@@ -32,9 +33,29 @@ ${tabs('Origens', [['Referências', list(ctx, d.referrers, 'referrer', { head: '
 ${tabs('UTM', utm.map(([t, rows, col]) => [t, rows.length ? list(ctx, rows, col, { head: t, ...L }) : html`<p class="empty">Nenhuma visita com <code>${col}</code> no período.</p>`]))}
 ${tabs('Localização', [['Países', list(ctx, d.countries, 'country', { head: 'País', ...L })]])}
 ${tabs('Dispositivos', [['Tipo', list(ctx, d.screens, 'screen', { head: 'Dispositivo', ...L })], ['Navegador', list(ctx, d.browsers, 'browser', { head: 'Navegador', ...L })], ['Sistema', list(ctx, d.oss, 'os', { head: 'Sistema', ...L })]])}
+${appsCard(ctx, d.apps)}
+${visitCard(d.visitNo)}
 ${tabs('Eventos', [['Eventos', list(ctx, d.events, 'name', { head: 'Evento', cols: [['Visitantes', 'v'], ['Total', 'n'], ...(d.events.some(e => e.rev) ? [['Receita', 'rev', v => v ? m(v) : '-']] : [])], ...L })],
     ...(d.props ? [['Propriedades', list(ctx, d.props, null, { head: `Propriedades de "${f.name}"`, filter: false })]] : [])])}
 </div>`);
+}
+
+const rate = (a, b) => b ? pct(a / b) : '-';
+/** Sessões por navegador ou app (Instagram, Facebook...) com a taxa de clique no checkout. */
+function appsCard(ctx, rows) {
+  const appLabel = (c, k) => IN_APP.has(k) ? html`${k} <span class="tag">App</span>` : label(c, k);
+  return tabs('Navegador ou app', [['Ambiente', html`<p class="muted">Sessões por ambiente; ao lado, quantas clicaram no checkout.</p>
+${list(ctx, rows.map(r => ({ ...r, r: rate(r.co, r.n) })), 'browser', { head: 'Navegador ou app', cols: [['Sessões', 'n'], ['Checkout', 'r', v => v]], label: appLabel })}`]]);
+}
+const VISIT_PT = ['', '1ª visita', '2ª visita', '3ª visita', '4ª ou mais'];
+/** Em qual visita o lead clica no checkout e compra (só visitantes com o cookie _rid). */
+function visitCard(rows) {
+  const n = rows.reduce((s, r) => s + r.n, 0), first = rows.find(r => r.k === 1)?.n || 0;
+  const body = rows.length ? html`<p class="muted">Primeira visita <b>${num(first)}</b> (${rate(first, n)}) · retorno <b>${num(n - first)}</b> (${rate(n - first, n)}). Visitas contadas nos ${VISIT_LOOKBACK} dias anteriores; vendas de qualquer plataforma, pelo rid.</p>
+<div class="tw"><table class="list"><thead><tr><th scope="col">Visita</th><th scope="col">Sessões</th><th scope="col">Checkout</th><th scope="col">Vendas</th></tr></thead><tbody>${rows.map(r => html`<tr>
+<td><span class="bar-bg" style="width:${(n ? r.n / Math.max(...rows.map(x => x.n)) * 100 : 0).toFixed(1)}%"></span><span style="position:relative">${VISIT_PT[r.k]}</span></td><td>${num(r.n)}</td><td>${rate(r.co, r.n)}</td><td>${num(r.sales)}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="empty">Sem visitantes com cookie no período. A contagem usa o _rid gravado pelo Worker da borda.</p>`;
+  return tabs('Primeira visita ou retorno', [['Visitas', body]]);
 }
 
 export function realtimeBody(ctx, r) {
@@ -54,10 +75,11 @@ export function realtimePage(ctx, r) {
 }
 
 const short = (v, n = 10) => v && v.length > n ? v.slice(0, n) + '…' : v;
-const campaignName = v => (v || '').replace(/\|[\w-]+$/, '').trim();
+const campaignName = v => (v || '').split('::')[0].replace(/\|[\w-]+$/, '').trim(); // checkouts juntam '::<fbclid>' ao utm_content
 const DL = { sent: ['ok', 'enviado'], failed: ['bad', 'falhou'], pending: ['warn', 'na fila'], sending: ['warn', 'enviando'] };
 /** Selo por destino; clicar abre o inspetor (resposta da plataforma, tentativas e Reenviar). */
 function sends(ctx, e) {
+  if (!e.deliveries?.length && e.purchase) return html`<small title="Somada a outra compra do mesmo comprador (order bump ou upsell), enviada no lugar dela, ou sem e-mail, telefone nem clique para a Meta. O motivo fica em Vendas, no registro do webhook.">sem envio próprio</small>`;
   if (!e.deliveries?.length) return html`<small title="Configure Meta ou GA4 em Integrações">não enviado</small>`;
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/deliveries`;
   return e.deliveries.map(d => {
@@ -72,23 +94,42 @@ export function eventsBody(ctx, rows) {
   if (!rows.length) return html`<p class="empty">Nenhum evento ainda. Cole o snippet no site (tela Integrações) e abra uma página.</p>`;
   const ids = e => [['fbc', 'Meta (clique)'], ['fbp', 'Meta (navegador)'], ['gclid', 'Google'], ['gbraid', 'Google'], ['wbraid', 'Google'], ['ttclid', 'TikTok']]
     .filter(([k]) => e[k]).map(([k, t]) => html`<span class="tag" title="${t}: ${e[k]}">${k}</span>`);
-  return html`<div class="tw"><table class="list events left"><thead><tr><th scope="col">Quando</th><th scope="col">Evento</th><th scope="col">Envio</th><th scope="col">Página</th>
+  return html`<div class="tw"><table class="list events left mcards"><thead><tr><th scope="col">Quando</th><th scope="col">Evento</th><th scope="col">Envio</th><th scope="col">Página</th>
 <th scope="col">Origem</th><th scope="col">Visitante</th><th scope="col">IDs para anúncios</th></tr></thead><tbody>${rows.map(e => html`<tr>
 <td><time>${time(e.ts)}</time></td><td>${e.name === 'pageview' ? 'PageView' : e.name}${e.revenue ? html` <small>${num(e.revenue)}</small>` : ''}<br><small title="ID do evento (deduplicação com o Pixel)">${short(e.event_id, 12) || '-'}</small></td><td>${sends(ctx, e)}</td>
-<td>${e.path}</td><td>${e.channel}${e.utm_campaign ? html`<br><small>${campaignName(e.utm_campaign)}${e.utm_content ? ` · ${campaignName(e.utm_content)}` : ''}</small>` : ''}</td>
-<td>${e.rid ? html`<span title="Cookie primário _rid: ${e.rid}">${short(e.rid)}</span>` : html`<small title="Sem cookie: hash diário de IP e navegador">sem cookie</small>`}</td>
+<td>${e.purchase ? html`${e.product || 'Compra'}${e.status !== 'paid' ? html`<br><small>${STATUSES[e.status] ?? e.status}</small>` : ''}` : e.path}</td><td>${e.purchase ? PLATFORMS[e.platform] || e.platform : e.channel}${e.utm_campaign ? html`<br><small>${campaignName(e.utm_campaign)}${e.utm_content ? ` · ${campaignName(e.utm_content)}` : ''}</small>` : ''}</td>
+<td>${e.rid ? html`<span title="Cookie primário _rid: ${e.rid}">${short(e.rid)}</span>` : e.purchase ? html`<small title="A venda não veio com o rid do link de checkout">sem clique</small>` : html`<small title="Sem cookie: hash diário de IP e navegador">sem cookie</small>`}</td>
 <td>${ids(e).length ? ids(e) : html`<small>nenhum</small>`}</td></tr>`)}</tbody></table></div>`;
 }
 export function eventsPage(ctx, rows) {
-  return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Eventos`, raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos, do mais novo para o mais antigo. Clique no selo de envio para ver a resposta da Meta ou do GA4.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
+  return layout(ctx, `Eventos · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Eventos`, raw('Cada evento, <em>com os IDs</em> que vão para os anúncios'), 'Os últimos 100 eventos, do mais novo para o mais antigo, com as compras aprovadas que chegaram pelos webhooks. Clique no selo de envio para ver a resposta da Meta ou do GA4.', html`<span class="live"><i></i>atualiza a cada 5s</span>`)}
 <section class="card" id="ev">${eventsBody(ctx, rows)}</section>
 <script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('ev'),h)})},5000)</script>`);
 }
 
-export function funnelsPage(ctx, p, f, funnels, err) {
+const RATE_T = { click: 'clicaram (CTR)', visit: 'dos cliques chegaram ao site', engage: 'interagiram', checkout: 'foram ao checkout', buy: 'compraram' };
+/** Funil completo, em pé: largura decrescente fixa (forma, não escala) e os números de cada etapa ao lado. */
+function siteFunnel(ctx, p, fn) {
+  const st = fn.stages, m = v => money(v, ctx.site.currency), n = st.length, last = st.at(-1), visit = st.find(s => s.k === 'visit');
+  if (!st.some(s => s.v)) return html`<section class="card"><h2>Funil completo</h2><p class="empty">Nada neste período. Com o snippet no site e a Meta conectada em Integrações, o funil aparece aqui.</p></section>`;
+  const w = i => 100 - i * (48 / Math.max(1, n - 1)), inset = i => ((100 - w(Math.min(i, n - 1))) / 2).toFixed(2) + '%';
+  const when = fn.since ? `desde ${brDate(fn.since)}, quando o script começou a registrar` : p.prev ? `comparado com ${brDate(p.prev.from)} a ${brDate(p.prev.to)}` : '';
+  return html`<section class="card" id="funil"><div class="row between"><h2>Funil completo</h2><span class="muted">Todas as origens${when ? ` · ${when}` : ''}</span></div>
+<p class="flow-sum">${fn.spend ? html`<span><b>${m(fn.spend)}</b> investidos</span>` : ''}<span><b>${m(last.revenue)}</b> faturados</span>${fn.spend ? html`<span><b>${ratio(last.revenue / fn.spend)}x</b> ROAS</span>` : ''}${visit.v ? html`<span><b>${pct(last.v / visit.v)}</b> dos visitantes compraram</span>` : ''}${fn.metaBuys ? html`<span>a Meta contou <b>${num(fn.metaBuys)}</b> compras</span>` : ''}</p>
+<ol class="vf">${st.map((s, i) => html`<li class="vf-row${i === n - 1 ? ' last' : ''}" style="--t0:${inset(i)};--t1:${inset(i + 1)};--c:${(100 - i * (28 / Math.max(1, n - 1))).toFixed(0)}%">
+<div class="vf-seg" title="${s.d}"><span class="vf-t">${s.t}</span><b class="vf-v">${num(s.v)}</b>${delta(s.v, s.before, num)}</div>
+<div class="vf-side">${s.rate != null ? html`<span><b class="vf-r">${pct(s.rate)}</b> ${RATE_T[s.k]}</span>` : ''}
+${s.k === 'visit' && s.ads != null && s.v ? html`<span>${num(s.ads)} dos anúncios, ${num(s.v - s.ads)} de outras origens</span>` : ''}
+${s.k === 'buy' ? html`<span>${num(s.orders)} ${s.orders === 1 ? 'pedido' : 'pedidos'} · ${m(s.revenue)}</span>` : ''}
+${s.cost ? html`<span>${s.costT}: ${m(s.cost)}</span>` : ''}<small>${s.d} · ${s.src}</small></div></li>`)}</ol>
+</section>`;
+}
+
+export function funnelsPage(ctx, p, f, funnels, err, full = null) {
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/funnels`;
-  return layout(ctx, `Funis · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Funis`, raw('Onde as visitas <em>desistem</em>'), 'Quantas visitas passam por cada etapa, em ordem, dentro da mesma visita.')}
+  return layout(ctx, `Funis · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Funis`, raw('Onde as visitas <em>desistem</em>'), 'Do anúncio visto até a compra, e os funis que você montar por página ou evento.')}
 ${tl(ctx, p, f, false)}${notice(err, true)}
+${full ? siteFunnel(ctx, p, full) : ''}<h2 class="sec">Seus funis</h2>
 ${funnels.length ? '' : notice(`Nenhum funil ainda.${ctx.canEdit ? ' Crie o primeiro abaixo.' : ''}`)}
 ${funnels.map(fn => {
     const first = fn.counts[0] || 0;
@@ -140,11 +181,65 @@ ${tl(ctx, p, f, false)}<section class="card">${sankey(j)}</section>
 <div class="grid">${tabs('Caminhos mais comuns', [['Caminhos', list(ctx, j.paths, null, { head: 'Caminho', cols: [['Visitas', 'n']], filter: false })]])}</div>`);
 }
 
-export function attributionPage(ctx, p, f, names, event, dim, a) {
+const gap = ms => { const h = ms / 36e5; if (h < 1) return 'na mesma hora'; if (h < 24) return `${Math.round(h)} h depois`; const d = Math.round(h / 24); return d === 1 ? '1 dia depois' : `${d} dias depois`; };
+const ORD = ['1º', '2º', '3º', '4º', '5º', '6º'];
+/** Rótulo curto do anúncio ("EI-027"); dois anúncios com o mesmo começo de nome ganham o fim do id. */
+function adLabels(sq) {
+  const keys = new Set([...sq.ads.map(x => x.k), ...sq.singles.map(x => x.k), ...sq.paths.flatMap(p => p.keys), ...sq.recent.flatMap(b => b.seq.map(s => s.k))]);
+  const short = k => String(sq.info[k]?.name || k).split('|')[0].trim() || k, groups = new Map();
+  for (const k of keys) (groups.get(short(k)) || groups.set(short(k), []).get(short(k))).push(String(k));
+  // Ids da mesma conta da Meta terminam igual ("...0053"): mostra os 4 dígitos antes do fim em comum.
+  const tag = new Map();
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    let c = 0;
+    while (c < ids[0].length - 4 && ids.every(id => id.at(-1 - c) === ids[0].at(-1 - c))) c++;
+    for (const id of ids) tag.set(id, id.slice(Math.max(0, id.length - c - 4), id.length - c));
+  }
+  return k => tag.has(String(k)) ? `${short(k)} ·${tag.get(String(k))}` : short(k);
+}
+/** Selo do anúncio: miniatura e o rótulo curto, nome inteiro no title. */
+function adChip(sq, k, cls = '', label = null) {
+  const it = sq.info[k] || { name: k };
+  return html`<span class="seqc ${cls}" title="${it.name}">${it.thumb ? html`<img src="${it.thumb}" alt="" width="22" height="22" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<b>${label ? label(k) : String(it.name).split('|')[0].trim()}</b></span>`;
+}
+/** Caminho em etapas: 1º clique, 2º clique, ..., comprou, com o tempo entre os cliques em cima da seta. */
+function journey(sq, label, steps) {
+  const n = steps.length;
+  return html`<div class="jr">${steps.map((st, i) => html`${i ? html`<span class="jarrow"><small>${st.gap || ''}</small>${icon('arrow', 16)}</span>` : ''}<span class="jstep${i === n - 1 ? ' buy' : ''}"><span class="jl">${i === n - 1 ? html`${icon('cart', 13)} Comprou pelo` : i === 0 ? html`${icon('click', 13)} 1º clique` : `${ORD[i] || `${i + 1}º`} clique`}</span>${adChip(sq, st.k, i === n - 1 ? 'close' : '', label)}</span>`)}</div>`;
+}
+function adSequence(ctx, sq) {
+  const m = v => money(v, ctx.site.currency), day = ts => new Date(ts).toLocaleDateString('pt-BR', { timeZone: ctx.site.timezone, day: '2-digit', month: '2-digit' });
+  const head = html`<div class="row between"><h2>Sequência de anúncios até a compra</h2><span class="muted">${num(sq.withSeq)} de ${num(sq.purchases)} compras com anúncio no caminho</span></div>
+<p class="muted" style="margin:6px 0 0">Os anúncios em que a mesma pessoa clicou (pelo cookie do visitante) nos 30 dias antes de comprar, na ordem do clique. Impressão sem clique a Meta só informa no total, por anúncio.${sq.since ? ` O script registra desde ${brDate(sq.since)}: compras antes disso não têm sequência.` : ''}</p>`;
+  if (!sq.withSeq) return html`<section class="card" id="sequencia">${head}<p class="empty">Nenhuma compra no período com clique em anúncio registrado antes. A sequência aparece quando as vendas chegam com o rid do link de checkout.</p></section>`;
+  const label = adLabels(sq), singleN = sq.singles.reduce((t, x) => t + x.n, 0);
+  return html`<section class="card" id="sequencia">${head}
+<div class="kpis" style="margin-top:14px">${kpi('sq-n', 'Compras com anúncio no caminho', sq.withSeq, null, num)}${kpi('sq-multi', 'Passaram por 2 anúncios ou mais', sq.multi, null, num)}${kpi('sq-ads', 'Anúncios até comprar (média)', sq.avgAds, null, v => ratio(v))}${kpi('sq-days', 'Dias do 1º clique à compra (média)', sq.avgDays, null, v => ratio(v))}</div>
+
+<h3 class="seq-h">${icon('click', 16)} Passaram por mais de um anúncio <small class="muted">${num(sq.multi)} ${sq.multi === 1 ? 'compra' : 'compras'}</small></h3>
+${sq.multi ? html`<div class="grid seq-grid"><div><h4>Sequências mais comuns</h4><ol class="seq-list">${sq.paths.map(pa => html`<li>${journey(sq, label, pa.keys.map(k => ({ k })))}<span class="muted">${num(pa.n)} ${pa.n === 1 ? 'compra' : 'compras'} · ${m(pa.revenue)}</span></li>`)}</ol></div>
+<div><h4>Últimas compras com mais de um anúncio</h4><ol class="seq-list">${sq.recent.map(b => html`<li>${journey(sq, label, b.seq.map((st, i) => ({ k: st.k, gap: i ? gap(st.at - b.seq[i - 1].at) : '' })))}
+<span class="muted">${day(b.ts)} · ${m(b.gross)}${b.orders > 1 ? ` · ${b.orders} pedidos` : ''}${b.via ? ` · pagou pelo link ${b.via}` : ''}</span></li>`)}</ol></div></div>`
+  : html`<p class="empty">Ainda nenhuma compra em que a pessoa clicou em dois anúncios ou mais antes de comprar.${sq.since ? ' Com mais dias de script, as sequências aparecem aqui.' : ''}</p>`}
+
+<h3 class="seq-h">${icon('cart', 16)} Compraram no primeiro anúncio <small class="muted">${num(singleN)} ${singleN === 1 ? 'compra' : 'compras'} · clicaram em um anúncio só e compraram</small></h3>
+${sq.singles.length ? html`<div class="tw"><table class="data mcards"><thead><tr><th style="text-align:left">Anúncio</th><th>Compras</th><th>Faturamento</th><th title="Média do clique à compra">Do clique à compra</th></tr></thead>
+<tbody>${sq.singles.map(x => html`<tr><td class="c-main" style="text-align:left;white-space:normal">${adChip(sq, x.k, 'close', label)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td><b>${num(x.n)}</b></td><td>${m(x.revenue)}</td><td>${gap(x.days / x.n * 864e5).replace(' depois', '')}</td></tr>`)}</tbody></table></div>`
+  : html`<p class="empty">Nenhuma compra de quem clicou num anúncio só.</p>`}
+
+<h3 class="seq-h">Por anúncio <small class="muted">o papel de cada um nas compras</small></h3>
+<div class="tw"><table class="data mcards"><thead><tr><th style="text-align:left">Anúncio</th><th title="Impressões no período, pela Meta">Impressões</th><th title="Pessoas que entraram no site por este anúncio no período">Clicaram</th><th title="Compras em que este anúncio aparece na sequência">Em compras</th><th title="Foi o 1º clique da sequência">1º clique</th><th title="Apareceu entre o 1º clique e o da compra">No meio</th><th title="Último anúncio antes da compra">Comprou pelo</th><th>Faturamento (comprou pelo)</th><th title="Compras pelo anúncio ÷ pessoas que clicaram nele">Compras ÷ cliques</th></tr></thead>
+<tbody>${sq.ads.map(x => html`<tr><td class="c-main" style="text-align:left;white-space:normal;min-width:200px">${adChip(sq, x.k, '', label)} <small class="muted">${sq.info[x.k]?.name || x.k}</small></td><td>${x.imp ? num(x.imp) : '-'}</td><td>${num(x.seen)}</td><td>${num(x.journeys)}</td><td>${num(x.first)}</td><td>${num(x.middle)}</td><td><b>${num(x.last)}</b></td><td>${m(x.revenue)}</td><td>${x.seen ? pct(x.last / x.seen) : '-'}</td></tr>`)}</tbody></table></div>
+</section>`;
+}
+
+export function attributionPage(ctx, p, f, names, event, dim, a, seq = null) {
   const m = v => money(v, ctx.site.currency);
   const cols = [['Conversões', 'n'], ['Receita', 'rev', m]];
   return layout(ctx, `Atribuição · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Atribuição`, raw('Quem leva o <em>crédito</em>'), raw('<b>Primeiro clique</b> credita a primeira visita do visitante no dia; <b>último clique</b>, a última visita não-direta antes da conversão. Para vendas de plataformas, veja Vendas → Campanhas.'))}
 ${tl(ctx, p, f, false)}
+${seq ? adSequence(ctx, seq) : ''}<h2 class="sec">Eventos do site</h2>
 ${names.length ? html`<form method="get" class="row" style="margin-bottom:14px">${hiddenInputs(ctx.q, ['event', 'dim'])}
 <label class="f">Conversão <select name="event">${names.map(n => html`<option${n === event ? raw(' selected') : ''}>${n}</option>`)}</select></label>
 <label class="f">Agrupar por <select name="dim">${Object.entries(ATTR_DIMS).map(([k, t]) => html`<option value="${k}"${k === dim ? raw(' selected') : ''}>${t}</option>`)}</select></label><button style="align-self:end">Aplicar</button></form>` : ''}

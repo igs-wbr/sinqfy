@@ -4,6 +4,7 @@ import { period } from '../time.js';
 import { route, send, redirect, form, sitePath, HttpError } from '../http.js';
 import { ctx, siteCtx } from '../auth.js';
 import * as S from '../tracking/stats.js';
+import { siteFunnel, adSequences } from '../sales/stats.js';
 import * as V from '../views/traffic.js';
 import { deliveriesFor, retry, dispatch } from '../dispatch.js';
 
@@ -23,7 +24,8 @@ route('GET', '/share/:token', { auth: false }, async r => {
 });
 
 route('GET', '/sites/:id/events', { site: 'view' }, async r => {
-  const [c, d] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id)]);
+  const [c, ev, buys] = await Promise.all([siteCtx(r, '/events'), S.recentEvents(r.site.id), S.recentPurchases(r.site.id)]);
+  const d = [...ev, ...buys.map(b => ({ ...b, purchase: true }))].sort((a, b) => b.ts - a.ts).slice(0, 100);
   const dl = await deliveriesFor(r.site.id, d.map(e => e.event_id).filter(Boolean));
   for (const e of d) e.deliveries = dl.get(e.event_id) || [];
   send(r, 200, r.q.has('partial') ? V.eventsBody(c, d) : V.eventsPage(c, d));
@@ -41,11 +43,16 @@ route('GET', '/sites/:id/realtime', { site: 'view' }, async r => {
 
 async function funnelsView(r, err) {
   const [p, f] = range(r);
-  const list = await Promise.all((await db.all('SELECT * FROM funnels WHERE site_id=? ORDER BY id', [r.site.id])).map(async fn => {
-    const steps = JSON.parse(fn.steps);
-    return { ...fn, steps, counts: await S.funnel(r.site.id, p, f, steps) };
-  }));
-  send(r, err ? 400 : 200, V.funnelsPage(await siteCtx(r, '/funnels'), p, f, list, err));
+  const [list, full, before] = await Promise.all([
+    Promise.all((await db.all('SELECT * FROM funnels WHERE site_id=? ORDER BY id', [r.site.id])).map(async fn => {
+      const steps = JSON.parse(fn.steps);
+      return { ...fn, steps, counts: await S.funnel(r.site.id, p, f, steps) };
+    })),
+    siteFunnel(r.site, p), p.prev && siteFunnel(r.site, p.prev)]);
+  // Funil cortado no início do script: o período anterior teria outro tamanho, então não compara.
+  const old = new Map((full.since ? [] : before?.stages || []).map(s => [s.k, s.v]));
+  for (const s of full.stages) s.before = old.get(s.k);
+  send(r, err ? 400 : 200, V.funnelsPage(await siteCtx(r, '/funnels'), p, f, list, err, full));
 }
 route('GET', '/sites/:id/funnels', { site: 'view' }, r => funnelsView(r));
 route('POST', '/sites/:id/funnels', { site: 'edit' }, async r => {
@@ -68,5 +75,6 @@ route('GET', '/sites/:id/attribution', { site: 'view' }, async r => {
   const [p, f] = range(r), names = await S.eventNames(r.site.id, p);
   const event = names.includes(r.q.get('event')) ? r.q.get('event') : names[0];
   const dim = Object.hasOwn(S.ATTR_DIMS, r.q.get('dim') || '') ? r.q.get('dim') : 'channel';
-  send(r, 200, V.attributionPage(await siteCtx(r, '/attribution'), p, f, names, event, dim, event ? await S.attribution(r.site.id, p, f, event, dim) : null));
+  const [c, a, seq] = await Promise.all([siteCtx(r, '/attribution'), event ? S.attribution(r.site.id, p, f, event, dim) : null, adSequences(r.site, p)]);
+  send(r, 200, V.attributionPage(c, p, f, names, event, dim, a, seq));
 });

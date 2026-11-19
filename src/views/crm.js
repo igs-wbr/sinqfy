@@ -46,8 +46,8 @@ export function contactsPage(ctx, cols, list, q) {
 ${pageHead(`${s.name} · Contatos`, raw('Quem são os seus <em>leads</em>'), 'Nome, e-mail e telefone ficam cifrados no banco. A lista mostra os mais recentes.')}
 ${ctx.q.get('ok') === 'excluido' ? notice('Contato excluído, com o histórico. Fica registrado só que houve um pedido de exclusão.') : ''}
 <form method="get" class="row" style="margin-bottom:16px"><label class="sr" for="q">Buscar</label><span class="search">${icon('search', 16)}<input id="q" name="q" type="search" value="${q}" placeholder="Nome, e-mail ou telefone"></span><button>Buscar</button>${q ? html`<a class="btn link" href="?">Limpar</a>` : ''}</form>
-<section class="card">${list.length ? html`<div class="tw"><table class="data txt"><thead><tr><th>Contato</th><th>E-mail</th><th>Telefone</th><th>Coluna</th><th>Origem</th><th class="num">Valor</th><th>Atualizado</th></tr></thead>
-<tbody>${list.map(c => html`<tr><td><a href="${base}/contacts/${c.id}">${c.name || `Contato ${c.id}`}</a></td><td>${maskEmail(c.email) || '-'}</td><td>${maskPhone(c.phone) || '-'}</td>
+<section class="card">${list.length ? html`<div class="tw"><table class="data txt mcards"><thead><tr><th>Contato</th><th>E-mail</th><th>Telefone</th><th>Coluna</th><th>Origem</th><th class="num">Valor</th><th>Atualizado</th></tr></thead>
+<tbody>${list.map(c => html`<tr><td class="c-main"><a href="${base}/contacts/${c.id}">${c.name || `Contato ${c.id}`}</a></td><td>${maskEmail(c.email) || '-'}</td><td>${maskPhone(c.phone) || '-'}</td>
 <td><span class="badge">${colName.get(c.stage_id) || '-'}</span></td><td>${origin(c)}</td><td class="num">${c.value > 0 ? money(c.value, s.currency) : '-'}</td><td class="muted">${when(ctx, c.updated)}</td></tr>`)}</tbody></table></div>`
     : html`<p class="empty">${q ? 'Nenhum contato encontrado.' : 'Nenhum contato ainda. Os leads chegam pelos formulários do site, pelo webhook de leads e pelo Lead Ads da Meta.'}</p>`}</section>`);
 }
