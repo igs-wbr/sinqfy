@@ -13,7 +13,8 @@ export async function runJobs() {
   const out = { meta: 0, errors: [] };
   await ready;
   await db.batch([['DELETE FROM sessions WHERE expires<?', [Date.now()]], ['DELETE FROM login_fails WHERE until<?', [Date.now()]],
-    ["DELETE FROM deliveries WHERE created<? AND status IN ('sent','failed')", [Date.now() - 30 * 864e5]]]); // histórico de envios: 30 dias
+    ["DELETE FROM deliveries WHERE created<? AND status IN ('sent','failed')", [Date.now() - 30 * 864e5]], // histórico de envios: 30 dias
+    ['DELETE FROM checkout_clicks WHERE ts<?', [Date.now() - 7 * 864e5]]]); // IP cifrado do checkout: 7 dias (ADR 0020)
   out.dispatch = await dispatch();
   out.recovery = await runRecovery();
   // Retenção (ADR 0013): contatos sem atualização e eventos com mais de 13 meses; histórico de contato apagado junto.
