@@ -193,7 +193,7 @@ export function verify(platform, secret, raw, h, now = Date.now()) {
 
 // ---------- webhook personalizado (mapa de campos) ----------
 export const CUSTOM_FIELDS = { order_id: 'Id do pedido', status: 'Status', amount: 'Valor pago', net: 'Valor líquido', currency: 'Moeda', method: 'Forma de pagamento',
-  product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', rid: 'Id do visitante (rid)',
+  product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', name: 'Nome do comprador', rid: 'Id do visitante (rid)',
   utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term' };
 export const CUSTOM_STATUSES = ['paid', 'pending', 'refused', 'refunded', 'chargeback'];
 /** Lê "data.items.0.name" de um objeto; também aceita "data.items[0].name". */
@@ -209,7 +209,7 @@ export function parseCustom(b, map) {
     order_id: str(v('order_id')), status, method: method(v('method')), gross, net: v('net') != null ? num(v('net')) / k : gross,
     currency: str(v('currency') || 'BRL', 3).toUpperCase(), product: str(v('product')), ts: time(v('created_at')),
     utm: utm({ source: v('utm_source'), medium: v('utm_medium'), campaign: v('utm_campaign'), content: v('utm_content'), term: v('utm_term') }),
-    email: v('email'), phone: v('phone'), rid: ridOf(v('rid')),
+    email: v('email'), phone: v('phone'), name: v('name'), rid: ridOf(v('rid')),
   };
 }
 
