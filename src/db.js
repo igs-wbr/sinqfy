@@ -200,6 +200,8 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS deliveries_buyer ON deliveries(site, buyer, created) WHERE name='Purchase';
     -- Conta de anúncio que bateu no limite de chamadas da Meta: não sincroniza antes disso (ms).
     ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS sync_after BIGINT;
+    -- Última sincronização completa (todas as entidades, 7 dias de gasto); as de 5 em 5 min são leves.
+    ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS last_full BIGINT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

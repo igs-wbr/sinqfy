@@ -15,6 +15,7 @@ globalThis.fetch = async (url, opts) => {
   if (u.pathname.endsWith('/events')) { capiBodies.push(JSON.parse(opts.body)); return json({ events_received: 1 }); }
   if (u.searchParams.get('access_token') === 'LIMIT') return json({ error: { message: 'There have been too many calls to this ad-account. Wait a bit and try again.', code: 80004 } }, 400);
   if (u.searchParams.get('access_token') === 'BAD') return json({ error: { message: 'Invalid OAuth access token' } }, 400);
+  if (u.searchParams.has('ids')) return json(Object.fromEntries(u.searchParams.get('ids').split(',').map(id => [id, { id, name: 'Pausado', adset_id: 's1', effective_status: 'PAUSED' }])));
   const p = u.pathname.replace(/^\/v[\d.]+\/act_12345/, '');
   if (p === '') return json({ name: 'Conta X', currency: 'BRL' });
   if (p === '/campaigns' && !u.searchParams.has('after')) return json({ data: [{ id: 'c1', name: 'Black Friday', effective_status: 'ACTIVE', daily_budget: '10000' }], paging: { next: u.href + '&after=2' } });
@@ -37,7 +38,7 @@ const DB = await import('../src/db.js'), { db } = DB;
 const W = await import('../src/sales/webhooks.js');
 const S = await import('../src/sales/stats.js');
 const D = await import('../src/dispatch.js');
-const { period, localDate } = await import('../src/time.js');
+const { period, localDate, addDays } = await import('../src/time.js');
 const { action } = await import('../src/ads/meta.js');
 after(close);
 
@@ -122,6 +123,25 @@ test('Meta: sincroniza contas, entidades e gasto (com paginação) e registra er
   assert.equal(action([{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' }], ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase']), 2, 'cai para o tipo do pixel');
   assert.equal(action(undefined, ['lead']), 0);
   assert.ok(!(await req('/sites/loja/integrations', { cookie: admin })).text.includes('TOKEN'), 'token nunca é exibido');
+});
+
+test('Meta: rodada leve só traz o ativo e o gasto de 2 dias; a completa, 1x por dia, traz tudo', async () => {
+  const { syncMeta } = await import('../src/ads/meta.js');
+  const acc = () => db.get("SELECT * FROM ad_accounts WHERE account_id='12345'");
+  assert.ok((await acc()).last_full, 'a primeira sincronização é completa');
+  await db.run("INSERT INTO ad_entities(site, platform, level, id, name, parent, status) VALUES ('loja','meta','ad','zz','Velho','s1','ACTIVE')");
+  const from = graphCalls.length;
+  assert.equal((await syncMeta(await acc())).full, false);
+  const calls = graphCalls.slice(from), path = c => c.pathname.replace(/^\/v[\d.]+(\/act_12345)?/, '');
+  for (const p of ['/campaigns', '/adsets', '/ads']) assert.ok(calls.filter(c => path(c) === p).every(c => /ACTIVE/.test(c.searchParams.get('filtering'))), `${p} só ativos`);
+  const tr = JSON.parse(calls.find(c => path(c) === '/insights').searchParams.get('time_range'));
+  assert.equal(tr.since, addDays(tr.until, -1), 'gasto de hoje e ontem');
+  assert.ok(calls.some(c => c.searchParams.get('ids') === 'zz'), 'busca pelo id o que saiu de ativo');
+  assert.equal((await db.get("SELECT status FROM ad_entities WHERE id='zz'")).status, 'PAUSED');
+  await db.run("UPDATE ad_accounts SET last_full=? WHERE account_id='12345'", [Date.now() - 865e5]);
+  const n = graphCalls.length;
+  assert.equal((await syncMeta(await acc())).full, true, 'depois de 24 h volta a ser completa');
+  assert.ok(!graphCalls.slice(n).some(c => c.searchParams.has('filtering')), 'completa sem filtro');
 });
 
 test('Meta: no limite de chamadas, a conta para por 1 hora sem gastar mais chamadas', async () => {

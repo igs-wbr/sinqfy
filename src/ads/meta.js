@@ -41,31 +41,58 @@ export const PAUSE = 3600e3;
 
 const budget = e => e.daily_budget ? Number(e.daily_budget) / 100 : e.lifetime_budget ? Number(e.lifetime_budget) / 100 : null; // centavos
 
+const FIELDS = {
+  campaign: 'id,name,effective_status,daily_budget,lifetime_budget',
+  adset: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget',
+  ad: 'id,name,adset_id,effective_status,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url}',
+  adBare: 'id,name,adset_id,effective_status', // completa: miniatura é o mais pesado e só importa nos ativos (vem na leve)
+};
+const ONLY_ACTIVE = JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]);
+export const FULL_EVERY = 864e5;
+
 /**
  * Sincroniza campanhas, conjuntos, anúncios, gasto diário e as conversões que a Meta reporta (compras, valor, leads,
- * na janela de atribuição configurada na conta). 90 dias na primeira vez, depois os últimos 3.
+ * na janela de atribuição configurada na conta).
+ * Completa (1x por dia, e na primeira vez com 90 dias): todas as entidades e 7 dias de gasto, para pegar os ajustes da Meta.
+ * Leve (as outras rodadas de 5 min): só entidades ativas, as que deixaram de ser, e o gasto de hoje e ontem. Uma conta
+ * com milhares de anúncios pausados estourava o limite da Meta baixando tudo a cada 5 min.
  */
-export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
+export async function syncMeta(acc, { full = !acc.last_full || Date.now() - Number(acc.last_full) > FULL_EVERY } = {}) {
   const wait = Number(acc.sync_after) - Date.now();
   if (wait > 0) throw new Error(`A Meta limitou as chamadas desta conta. Nova tentativa em ${Math.ceil(wait / 60e3)} min.`);
-  const site = sites.get(acc.site);
+  const site = sites.get(acc.site), days = !acc.last_sync ? 90 : full ? 7 : 2;
   const until = localDate(Date.now(), site.timezone), since = addDays(until, -(days - 1));
   const act = acc.account_id.replace(/^act_/, '');
   const url = (path, params = {}) => `${graph()}/act_${act}${path}?` + new URLSearchParams({ limit: '500', ...params, access_token: acc.token });
+  const entities = async (level, path) => {
+    const list = await getAll(url(path, { fields: FIELDS[full && level === 'ad' ? 'adBare' : level], ...(!full && { filtering: ONLY_ACTIVE }) }));
+    if (full) return list;
+    // Deixou de ser ativo desde a última rodada (pausado, reprovado): busca só esses pelo id, para o status não ficar velho.
+    const seen = new Set(list.map(e => e.id));
+    const gone = (await db.all("SELECT id FROM ad_entities WHERE site=? AND platform='meta' AND level=? AND status='ACTIVE'", [site.id, level]))
+      .map(r => r.id).filter(id => !seen.has(id));
+    for (let i = 0; i < gone.length; i += 50) {
+      const res = await fetch(`${graph()}/?` + new URLSearchParams({ ids: gone.slice(i, i + 50).join(','), fields: FIELDS[level], access_token: acc.token }));
+      const j = await res.json().catch(() => ({}));
+      if (j.error && LIMITED(j.error)) throw Object.assign(new Error(`ids: ${j.error.message}`), { code: j.error.code });
+      if (!j.error) list.push(...Object.values(j)); // id apagado na Meta: fica para a sincronização completa
+    }
+    return list;
+  };
   try {
     const info = await fetch(url('', { fields: 'name,currency' })).then(r => r.json());
     if (info.error) throw Object.assign(new Error(info.error.message), { code: info.error.code });
     const [campaigns, adsets, ads, insights] = await Promise.all([
-      getAll(url('/campaigns', { fields: 'id,name,effective_status,daily_budget,lifetime_budget' })),
-      getAll(url('/adsets', { fields: 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget' })),
-      getAll(url('/ads', { fields: 'id,name,adset_id,effective_status,creative.thumbnail_width(160).thumbnail_height(160){thumbnail_url,image_url}' })),
+      entities('campaign', '/campaigns'),
+      entities('adset', '/adsets'),
+      entities('ad', '/ads'),
       getAll(url('/insights', {
         level: 'ad', time_increment: '1', time_range: JSON.stringify({ since, until }),
         fields: 'date_start,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
       })),
     ]);
     const ENT = `INSERT INTO ad_entities(site, platform, level, id, name, parent, status, budget, thumb) VALUES (?,?,?,?,?,?,?,?,?)
-      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget, thumb=excluded.thumb`;
+      ON CONFLICT(site, platform, level, id) DO UPDATE SET name=excluded.name, parent=excluded.parent, status=excluded.status, budget=excluded.budget, thumb=COALESCE(excluded.thumb, ad_entities.thumb)`; // a completa vem sem miniatura
     // Só imagem da CDN da Meta (é o que a CSP do painel libera).
     const thumb = a => [a.creative?.thumbnail_url, a.creative?.image_url].find(u => /^https:\/\/[\w.-]+\.fbcdn\.net\//.test(u || '')) || null;
     const SPEND = `INSERT INTO ad_spend(site, platform, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks,
@@ -82,9 +109,10 @@ export async function syncMeta(acc, days = acc.last_sync ? 3 : 90) {
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),
         Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT)]]),
-      ['UPDATE ad_accounts SET last_sync=?, last_error=NULL, sync_after=NULL, name=?, currency=? WHERE id=?', [Date.now(), info.name || '', info.currency || '', acc.id]],
+      ['UPDATE ad_accounts SET last_sync=?, last_full=COALESCE(?, last_full), last_error=NULL, sync_after=NULL, name=?, currency=? WHERE id=?',
+        [Date.now(), full ? Date.now() : null, info.name || '', info.currency || '', acc.id]],
     ]);
-    return { campaigns: campaigns.length, rows: insights.length };
+    return { campaigns: campaigns.length, rows: insights.length, full };
   } catch (e) {
     const limited = LIMITED(e);
     if (limited) e.message += ' Nova tentativa em 1 hora.';
