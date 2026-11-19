@@ -84,6 +84,16 @@ test('formulário do site: contato cifrado no CRM com clique e campanha; o event
   assert.equal((await db.get('SELECT name FROM stages WHERE id=?', [c.stage_id])).name, 'Novo');
 });
 
+test('eventos do site para a Meta: o Lead leva e-mail, telefone e nome em hash; depois dele, os eventos do mesmo rid também', async () => {
+  const ud = async id => JSON.parse((await db.get("SELECT payload FROM deliveries WHERE site='crm' AND dest='meta' AND event_id=?", [id])).payload).user_data;
+  assert.equal((await ud('evt_crm000001')).em, undefined, 'antes do lead, anônimo');
+  const lead = await ud('evt_crm000002');
+  assert.deepEqual([lead.em, lead.ph, lead.fn, lead.ln], [[sha('joana@exemplo.com')], [sha('5511988887777')], [sha('joana')], [sha('silva')]]);
+  await beacon({ n: 'InitiateCheckout', u: 'https://loja.dev/checkout', i: 'evt_crm000003' });
+  const ic = await ud('evt_crm000003');
+  assert.deepEqual([ic.em, ic.ph, ic.fn, ic.external_id], [[sha('joana@exemplo.com')], [sha('5511988887777')], [sha('joana')], [sha(RID)]], 'contato achado pelo rid');
+});
+
 test('webhook de leads e Lead Ads da Meta (verificação, assinatura e busca do lead)', async () => {
   assert.equal((await hook('leads', { name: 'Pedro', email: 'pedro@x.com', utm_campaign: 'Webinar|44' })).status, 200);
   assert.equal((await hook('leads', { email: 'pedro@x.com', phone: '21977776666' })).status, 200);

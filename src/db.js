@@ -202,6 +202,8 @@ async function migrate() {
     ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS sync_after BIGINT;
     -- Última sincronização completa (todas as entidades, 7 dias de gasto); as de 5 em 5 min são leves.
     ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS last_full BIGINT;
+    -- Contato pelo rid: eventos do site de quem já é contato vão à Meta com e-mail e telefone em hash.
+    CREATE INDEX IF NOT EXISTS contacts_rid ON contacts(site, rid) WHERE rid IS NOT NULL;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

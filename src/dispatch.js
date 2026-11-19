@@ -3,6 +3,7 @@
 // IP e user agent só existem no payload enquanto o envio está pendente (ADR 0014): ao terminar, saem do banco.
 import { createHash } from 'node:crypto';
 import { db, env, sites } from './db.js';
+import { metaEmail, metaPhone } from './pii.js';
 
 const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}`;
 const sha = v => createHash('sha256').update(v).digest('hex');
@@ -25,6 +26,8 @@ const city = v => letters(String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 const code2 = v => /^[A-Za-z]{2}$/.test(v || '') && !/^xx$/i.test(v) ? v.toLowerCase() : '';
 /** Acrescenta ao user_data, em SHA-256, só os campos que vieram. */
 function addHashed(user_data, fields) { for (const [k, v] of Object.entries(fields)) if (v) user_data[k] = [sha(v)]; }
+/** Primeiro e último nome, só letras em minúsculas. */
+const names = name => { const p = String(name || '').trim().split(/\s+/).map(letters).filter(Boolean); return { fn: p[0], ln: p.length > 1 && p.at(-1) }; };
 
 /** Evento do site para a Conversions API. `ctx` traz ip, ua e a URL da página (sem query string). */
 export function metaWebEvent(site, ev, ctx) {
@@ -36,6 +39,14 @@ export function metaWebEvent(site, ev, ctx) {
   if (ev.rid) user_data.external_id = [sha(ev.rid)];
   // Local aproximado pelo IP (Cloudflare): país, UF e cidade. Não fica no banco, só no payload pendente.
   addHashed(user_data, { country: code2(ev.country), st: code2(ctx.region), ct: city(ctx.city) });
+  // Quem preencheu o formulário agora ou já é contato (pelo rid): e-mail, telefone e nome só em SHA-256, só no payload pendente.
+  const p = ctx.person;
+  if (p) {
+    const em = metaEmail(p.email), ph = metaPhone(p.phone);
+    if (em) user_data.em = [em];
+    if (ph) user_data.ph = [ph];
+    addHashed(user_data, names(p.name));
+  }
   const out = { event_name: metaName(ev.name), event_time: Math.floor(ev.ts / 1000), event_id: ev.event_id, action_source: 'website', event_source_url: url, user_data };
   if (ev.revenue != null) out.custom_data = { value: ev.revenue, currency: site.currency };
   return out;
@@ -57,8 +68,7 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   if (click?.rid) user_data.external_id = [sha(click.rid)];
   if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador (nome e país sozinhos não bastam)
   // Nome e país só reforçam a correspondência: a Meta não casa ninguém só com eles.
-  const parts = String(name || '').trim().split(/\s+/).map(letters).filter(Boolean);
-  addHashed(user_data, { fn: parts[0], ln: parts.length > 1 && parts.at(-1), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : '') });
+  addHashed(user_data, { ...names(name), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : '') });
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
   const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;
