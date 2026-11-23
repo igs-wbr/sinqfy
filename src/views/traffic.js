@@ -80,10 +80,10 @@ const DL = { sent: ['ok', 'enviado'], failed: ['bad', 'falhou'], pending: ['warn
 /** Selo por destino; clicar abre o inspetor (resposta da plataforma, tentativas e Reenviar). */
 function sends(ctx, e) {
   if (!e.deliveries?.length && e.purchase) return html`<small title="Somada a outra compra do mesmo comprador (order bump ou upsell), enviada no lugar dela, ou sem e-mail, telefone nem clique para a Meta. O motivo fica em Vendas, no registro do webhook.">sem envio próprio</small>`;
-  if (!e.deliveries?.length) return html`<small title="Configure Meta ou GA4 em Integrações">não enviado</small>`;
+  if (!e.deliveries?.length) return html`<small title="Configure Meta, GA4 ou Google Ads em Integrações">não enviado</small>`;
   const base = `/sites/${encodeURIComponent(ctx.site.id)}/deliveries`;
   return e.deliveries.map(d => {
-    const [cls, txt] = DL[d.status] || ['', d.status], dest = d.dest === 'ga4' ? 'GA4' : 'Meta';
+    const [cls, txt] = DL[d.status] || ['', d.status], dest = { ga4: 'GA4', gads: 'Google Ads' }[d.dest] || 'Meta';
     return html`<details class="dl"><summary><span class="tag ${cls}">${dest} ${d.status === 'sent' ? '✓' : d.status === 'failed' ? '✕' : `· ${txt}`}</span>${d.status === 'sent' || d.status === 'failed' ? html`<span class="sr">${txt}</span>` : ''}</summary>
 <div><b>${dest}: ${txt}</b> · ${d.attempts} ${d.attempts === 1 ? 'tentativa' : 'tentativas'}${d.response ? html`<br>${d.response}` : ''}
 ${d.status === 'failed' && ctx.canEdit ? html`<form method="post" action="${base}/${d.id}/retry" style="margin-top:6px"><button>Reenviar</button></form>` : ''}</div></details>`;

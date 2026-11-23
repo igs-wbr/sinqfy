@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
 import { SESSION_GAP } from './stats.js';
-import { enqueueWeb, metaReady } from '../dispatch.js';
+import { enqueueWeb, metaReady, gadsReady } from '../dispatch.js';
 import { upsertContact, reveal } from '../crm.js';
 import { piiReady, seal } from '../pii.js';
 import { adKey, cleanUtm } from '../sales/webhooks.js';
@@ -126,7 +126,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
   // Retenção de vídeo fica só no painel (funis): não vira evento personalizado na Meta nem no GA4.
   if (consent && name !== 'Purchase' && !/^video_\d+$/.test(name)) {
     // Quem já é contato pelo rid (formulário, pedido pendente, compra, WhatsApp) leva e-mail, telefone e nome em hash à Meta.
-    const person = l || (ev.rid && metaReady(site) && piiReady()
+    const person = l || (ev.rid && (metaReady(site) || gadsReady(site)) && piiReady()
       ? reveal(await db.get('SELECT name_enc, email_enc, phone_enc FROM contacts WHERE site=? AND rid=? ORDER BY id LIMIT 1', [site.id, ev.rid])) : null);
     await enqueueWeb(site, ev, { ip, ua, url: url.origin + url.pathname, clientId, person, ...geo }, now);
     // Clique no checkout: IP (cifrado), cidade e UF esperam o webhook da compra para o Purchase (ADR 0020).

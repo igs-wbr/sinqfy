@@ -3,9 +3,9 @@
 import { timingSafeEqual, createHmac, createHash } from 'node:crypto';
 import { db, sites } from '../db.js';
 import { localDate } from '../time.js';
-import { enqueue, enqueuePurchase, PURCHASE_HOLD, metaPurchase, metaReady, ga4Purchase, ga4Ready } from '../dispatch.js';
+import { enqueue, enqueuePurchase, PURCHASE_HOLD, metaPurchase, metaReady, ga4Purchase, ga4Ready, gadsAction, gadsEvent, gadsReady, enqueueGadsPurchase } from '../dispatch.js';
 import { findContact, saleToCrm, recentPurchase } from '../crm.js';
-import { hashEmail, hashPhone, piiReady, open } from '../pii.js';
+import { hashEmail, hashPhone, piiReady, open, metaEmail, metaPhone, sha } from '../pii.js';
 import { trackPending } from '../recovery.js';
 
 export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
@@ -296,7 +296,7 @@ export async function matchSale(site, s) {
   if (s.rid) {
     // Só o que aconteceu até a venda, nos 30 dias anteriores: um remarketing clicado depois de comprar não leva o crédito.
     const W = 'site=? AND rid=? AND ts BETWEEN ? AND ?', a = [site.id, s.rid, s.ts - 30 * 864e5, s.ts + 60e3];
-    const [last, fb, ga, paid, first, geo] = await Promise.all([
+    const [last, fb, ga, paid, first, geo, gc] = await Promise.all([
       db.get(`SELECT ua, host, path, fbp, country FROM events WHERE ${W} ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT fbc FROM events WHERE ${W} AND fbc IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
       db.get(`SELECT ga_cid FROM events WHERE ${W} AND ga_cid IS NOT NULL ORDER BY ts DESC LIMIT 1`, a),
@@ -304,11 +304,12 @@ export async function matchSale(site, s) {
       // Primeiro toque pago (ADR 0018): o anúncio que abriu a porta, mesmo que a compra venha pela bio, recuperação ou direto.
       db.get(`SELECT utm_source, utm_medium, utm_campaign, utm_content FROM events WHERE ${W} AND utm_campaign<>'' ORDER BY ts ASC LIMIT 1`, a),
       db.get('SELECT ip_enc, city, region FROM checkout_clicks WHERE site=? AND rid=? AND ts BETWEEN ? AND ?', [site.id, s.rid, s.ts - 7 * 864e5, s.ts + 60e3]),
+      db.get(`SELECT gclid, gbraid, wbraid, ts FROM events WHERE ${W} AND (gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL) ORDER BY ts DESC LIMIT 1`, a),
     ]);
     if (last) {
       out.rule = via;
       out.click = { rid: s.rid, fbc: fb?.fbc || null, fbp: last.fbp, ua: last.ua, country: last.country, gaCid: ga?.ga_cid || null, url: last.host ? `https://${last.host}${last.path}` : null,
-        ip: open(geo?.ip_enc), city: geo?.city || null, region: geo?.region || null };
+        ip: open(geo?.ip_enc), city: geo?.city || null, region: geo?.region || null, gclid: gc?.gclid || null, gbraid: gc?.gbraid || null, wbraid: gc?.wbraid || null, gclickTs: gc ? Number(gc.ts) : 0 };
       // Sem campanha na venda (link da bio): completa com a última campanha da visita.
       if (!s.utm.campaign && paid) out.utm = utm({ source: s.utm.source || paid.utm_source, medium: s.utm.medium || paid.utm_medium, campaign: paid.utm_campaign,
         content: s.utm.content || paid.utm_content, term: s.utm.term || paid.utm_term });
@@ -326,7 +327,18 @@ export async function matchSale(site, s) {
 
 export const MATCH_PT = { rid: 'Clique (rid)', email: 'Lead (e-mail ou telefone)', utm: 'UTM', none: 'Sem origem' };
 
-/** Compra aprovada há mais que isso não vai à Meta nem ao GA4 (a Meta recusa eventos com mais de 7 dias). */
+/**
+ * Plataforma do último clique quando a pessoa clicou em anúncio das duas: 'meta' ou 'gads'; senão null.
+ * Clique da Meta = data de criação do fbc (fb.1.<ms>.<fbclid>); do Google = evento com gclid, gbraid ou wbraid na URL.
+ */
+export function lastClick(click) {
+  let fb = Number(String(click?.fbc || '').split('.')[2]) || 0;
+  if (fb && fb < 1e12) fb *= 1000; // fbc com a data em segundos
+  const g = click?.gclickTs || 0;
+  return fb && g ? (g > fb ? 'gads' : 'meta') : null;
+}
+
+/** Compra aprovada há mais que isso não vai à Meta, ao GA4 nem ao Google Ads (a Meta recusa eventos com mais de 7 dias). */
 export const LATE_PURCHASE = 3 * 864e5;
 
 /** Grava a venda normalizada, casa com o clique e enfileira a compra para Meta e GA4. */
@@ -362,9 +374,13 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     // feita antes do webhook existir): não é conversão nova. Enviada, a Meta a contaria hoje e daria o crédito a um anúncio de hoje.
     const paidAt = s.paid_at ?? ts, late = now - paidAt > LATE_PURCHASE;
     let sent = false;
+    // Último clique (ADR 0024): quem clicou em anúncio da Meta e do Google tem a compra enviada só para o clique mais recente.
+    // Só com os dois destinos ativos: sem o Google Ads configurado, a compra não pode deixar de ir à Meta (e vice-versa).
+    const last = metaReady(site) && gadsReady(site) && gadsAction(site, 'Purchase') ? lastClick(m.click) : null, skip = msg => log(site.id, platform, s, true, `Último clique no ${last === 'gads' ? 'Google Ads' : 'anúncio da Meta'}: ${msg}`);
     if (late) await log(site.id, platform, s, true, `Aprovada em ${localDate(paidAt, site.timezone)}, chegou ${Math.floor((now - paidAt) / 864e5)} dias depois: gravada, mas não enviada à Meta nem ao GA4`);
     else if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
     else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
+    else if (last === 'gads' && metaReady(site)) { await skip('compra não enviada à Meta'); sent = true; } // sent: o quadro do CRM também não reenvia
     else if (metaReady(site)) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, name: s.name, click: m.click }, now);
       if (ev) {
@@ -379,6 +395,16 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     }
     const g = !twin && !late && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
     if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
+    // Google Ads: uma conversão por checkout, como na Meta (order bump e upsell do mesmo comprador somam no valor).
+    const action = !twin && !late && gadsReady(site) && gadsAction(site, 'Purchase');
+    if (action && last === 'meta') await skip('compra não enviada ao Google Ads');
+    const ga = action && last !== 'meta' && gadsEvent({ ts: Math.min(ts, now), value: s.gross, currency: s.currency.toUpperCase() || site.currency, id: `${platform}-${s.order_id}`,
+      click: m.click, email: s.email, phone: s.phone, web: !!m.click?.rid });
+    if (ga) {
+      const q = await enqueueGadsPurchase(site.id, metaEmail(s.email) || metaPhone(s.phone) || sha(m.click?.rid || s.rid), action, ga, now);
+      if (q.action !== 'new') await log(site.id, platform, s, true, q.action === 'merged' ? `Somada à compra ${q.eventId} no Google Ads (mesmo comprador): uma conversão só`
+        : `Parte da compra ${q.eventId}, já enviada ao Google Ads: não vira outra conversão`);
+    }
     if (pii) await saleToCrm(site, { ...sale, utm: u }, m.click, now, { sent }); // comprador no CRM, coluna de ganho
   }
   return { ok: true, message };

@@ -114,6 +114,9 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   assert.deepEqual([ud.ct[0], ud.st[0], ud.zp[0], ud.country[0]], [h('saopaulo'), h('sp'), h('01310100'), h('br')]);
   const cu = W.parseCustom({ id: 'C1', price: 10, c: { cidade: 'Belo Horizonte', uf: 'MG', cep: '30140-071' } }, { fields: { order_id: 'id', amount: 'price', city: 'c.cidade', state: 'c.uf', zipcode: 'c.cep' } });
   assert.deepEqual(cu.addr, { city: 'Belo Horizonte', state: 'MG', zipcode: '30140-071' }, 'webhook personalizado mapeia o endereço');
+  // Sem endereço nem clique: a UF sai do DDD; o endereço, quando vem, vale mais.
+  const uf = (phone, state) => D.metaPurchase(DB.sites.get('loja'), { platform: 'x', order_id: '1', ts: 1, addr: { state } }, { phone }).user_data.st?.[0];
+  assert.deepEqual([uf('(31) 99999-0000'), uf('+55 85 99999-0000'), uf('31999990000', 'SP'), uf('(20) 99999-0000'), uf('+351 912 345 678')], [h('mg'), h('ce'), h('sp'), undefined, undefined]);
 
   // PURCHASE_COMPLETE (fim da garantia) de venda aprovada antes do webhook: grava, mas não vira compra de hoje na Meta.
   const old = Date.now() - 8 * 864e5;
