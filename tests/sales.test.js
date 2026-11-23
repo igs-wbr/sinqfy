@@ -113,7 +113,12 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   const ud = D.metaPurchase(DB.sites.get('loja'), { ...addr, platform: 'hotmart' }, { email: addr.email }).user_data;
   assert.deepEqual([ud.ct[0], ud.st[0], ud.zp[0], ud.country[0]], [h('saopaulo'), h('sp'), h('01310100'), h('br')]);
   const cu = W.parseCustom({ id: 'C1', price: 10, c: { cidade: 'Belo Horizonte', uf: 'MG', cep: '30140-071' } }, { fields: { order_id: 'id', amount: 'price', city: 'c.cidade', state: 'c.uf', zipcode: 'c.cep' } });
-  assert.deepEqual(cu.addr, { city: 'Belo Horizonte', state: 'MG', zipcode: '30140-071' }, 'webhook personalizado mapeia o endereço');
+  assert.deepEqual(cu.addr, { city: 'Belo Horizonte', state: 'MG', zipcode: '30140-071', country_iso: undefined }, 'webhook personalizado mapeia o endereço');
+  // OnProfit V2: sobrenome em campo próprio e endereço em customer_address.
+  const op = W.parseCustom({ id: 9, price: 6700, status: 'paid', customer: { name: 'Ana', lastname: 'Souza Lima', cell: '+5531999990000' }, customer_address: { city: 'Contagem', state: 'MG', zip_code: '32000-000', country: 'Brasil' } },
+    { cents: true, fields: { order_id: 'id', amount: 'price', name: 'customer.name', lastname: 'customer.lastname', phone: 'customer.cell', city: 'customer_address.city', state: 'customer_address.state', zipcode: 'customer_address.zip_code', country: 'customer_address.country' } });
+  const ou = D.metaPurchase(DB.sites.get('loja'), { ...op, platform: 'custom' }, { phone: op.phone, name: op.name }).user_data;
+  assert.deepEqual([op.name, ou.fn[0], ou.ln[0], ou.ct[0], ou.zp[0], ou.country[0]], ['Ana Souza Lima', h('ana'), h('lima'), h('contagem'), h('32000000'), h('br')]);
   // Sem endereço nem clique: a UF sai do DDD; o endereço, quando vem, vale mais.
   const uf = (phone, state) => D.metaPurchase(DB.sites.get('loja'), { platform: 'x', order_id: '1', ts: 1, addr: { state } }, { phone }).user_data.st?.[0];
   assert.deepEqual([uf('(31) 99999-0000'), uf('+55 85 99999-0000'), uf('31999990000', 'SP'), uf('(20) 99999-0000'), uf('+351 912 345 678')], [h('mg'), h('ce'), h('sp'), undefined, undefined]);
