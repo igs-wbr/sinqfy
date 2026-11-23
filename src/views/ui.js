@@ -3,6 +3,7 @@ import { RANGES } from '../time.js';
 import { iconSvg } from './icons.js';
 import { NO_LOGIN } from '../auth.js';
 import { enabled } from '../modules.js';
+import { clientsOf } from '../clients.js';
 
 // ---------- template com escape automático ----------
 class Raw { constructor(s) { this.s = s; } }
@@ -530,6 +531,7 @@ const NAV = [
   { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban', null, 'crm'], ['/contacts', 'Contatos', 'users', null, 'crm'], ['/conversations', 'Conversas', 'message-circle', null, 'whatsapp'], ['/audiences', 'Públicos', 'target', null, 'audiences', true]] },
   { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/whatsapp', 'WhatsApp', 'phone', null, 'whatsapp'], ['/settings', 'Configurações', 'settings']] },
 ];
+const CLIENT_TABS = new Set(['', '/campaigns', '/orders']);
 const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);
 
 const item = (href, text, ic, cur, badge) => html`<a class="it${cur ? ' on' : ''}" href="${href}"${cur ? raw(' aria-current="page"') : ''}>${icon(ic)}<span class="t">${text}</span>${badge ? html`<span class="cnt"><i></i>${badge}</span>` : ''}</a>`;
@@ -553,7 +555,7 @@ ${NO_LOGIN ? '' : html`<form method="post" action="/logout"><button class="it">$
 // Barra de abas do celular: 4 destinos mais usados (conforme os recursos ligados) e Menu, que abre a gaveta com o resto.
 function tabbar(ctx, href, groups) {
   const has = p => groups.some(g => g.items.some(i => i[0] === p));
-  const tabs = [['', 'Resumo', 'house'], ['/traffic', 'Tráfego', 'chart-column'], has('/crm') ? ['/crm', 'CRM', 'square-kanban'] : ['/orders', 'Pedidos', 'list'], has('/conversations') ? ['/conversations', 'Conversas', 'message-circle'] : ['/events', 'Eventos', 'activity']];
+  const tabs = ctx.site.ids ? [['', 'Resumo', 'house'], ['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list']] : [['', 'Resumo', 'house'], ['/traffic', 'Tráfego', 'chart-column'], has('/crm') ? ['/crm', 'CRM', 'square-kanban'] : ['/orders', 'Pedidos', 'list'], has('/conversations') ? ['/conversations', 'Conversas', 'message-circle'] : ['/events', 'Eventos', 'activity']];
   const inTabs = tabs.some(([p]) => p === ctx.tab);
   return html`<nav class="tabbar" aria-label="Navegação rápida">${tabs.map(([p, t, ic]) => html`<a href="${href(p)}"${on(ctx.tab === p)}><span class="ti">${icon(ic, 20)}</span>${t}</a>`)}<label for="nav-t"${inTabs ? '' : raw(' class="on"')}><span class="ti">${icon('menu', 20)}</span>Menu</label></nav>`;
 }
@@ -563,13 +565,14 @@ function sidebar(ctx) {
   const keep = new URLSearchParams([...(ctx.q || [])].filter(([k]) => ['range', 'from', 'to', 'compare'].includes(k))).toString();
   const href = p => `/sites/${encodeURIComponent(site.id)}${p}${keep && KEEP_PERIOD.has(p) ? '?' + keep : ''}`;
   // Item com recurso (src/modules.js) some quando o recurso está desligado; o 6º campo marca item só de quem edita.
-  const groups = site ? NAV.filter(g => !g.edit || ctx.canEdit).map(g => ({ ...g, items: g.items.filter(([, , , , mod, ed]) => (!mod || enabled(site, mod)) && (!ed || ctx.canEdit)) })).filter(g => g.items.length) : [];
+  // Visão do cliente (sites somados): só as telas de vendas que somam (src/clients.js).
+  const groups = site ? NAV.filter(g => !g.edit || ctx.canEdit).map(g => ({ ...g, items: g.items.filter(([p, , , , mod, ed]) => (site.ids ? CLIENT_TABS.has(p) : !mod || enabled(site, mod)) && (!ed || ctx.canEdit)) })).filter(g => g.items.length) : [];
   return html`<input type="checkbox" id="nav-t" class="nav-t" aria-label="Abrir menu de navegação">
 <header class="mtop"><label for="nav-t" class="menu-btn" title="Menu">${icon('menu', 22)}</label>${brand('/')}${site ? html`<span class="site">${site.name}</span>` : ''}</header>
 <aside class="side" id="side" aria-label="Barra lateral">
 <label for="nav-t" class="side-x" title="Fechar menu">${icon('x', 22)}</label>
 ${brand('/')}
-${site ? html`<details class="menu"><summary class="it" title="Trocar de site">${icon('layers')}<span class="t">${site.name}</span><span class="chev">${icon('chevron-right', 16)}</span></summary><div>${(ctx.sites || []).map(s => html`<a href="/sites/${encodeURIComponent(s.id)}">${s.name}</a>`)}${user?.role === 'admin' ? html`<a href="/sites">+ Novo site</a>` : ''}</div></details>
+${site ? html`<details class="menu"><summary class="it" title="Trocar de site">${icon('layers')}<span class="t">${site.name}</span><span class="chev">${icon('chevron-right', 16)}</span></summary><div>${clientsOf(ctx.sites || []).map(c => html`<a href="/sites/~${c.key}">${c.name}</a>`)}${(ctx.sites || []).map(s => html`<a href="/sites/${encodeURIComponent(s.id)}">${s.name}</a>`)}${user?.role === 'admin' ? html`<a href="/sites">+ Novo site</a>` : ''}</div></details>
 <nav class="sec" aria-label="Seções do site">${groups.map(g => html`<p class="glabel">${g.label}</p>${g.items.map(([p, t, ic, badge]) => item(href(p), t, ic, ctx.tab === p, badge))}`)}</nav>` : ''}
 ${site ? '' : html`<nav aria-label="Agência">${adminItems(ctx)}</nav>`}
 </aside><label for="nav-t" class="scrim" aria-hidden="true"></label>${site ? tabbar(ctx, href, groups) : ''}

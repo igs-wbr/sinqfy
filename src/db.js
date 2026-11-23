@@ -207,6 +207,8 @@ async function migrate() {
     -- Último clique no checkout por rid (ADR 0020): IP cifrado com a DATA_KEY, cidade e UF, para o Purchase do webhook.
     -- Apagado quando a compra entra na fila da Meta ou depois de 7 dias (jobs.js).
     CREATE TABLE IF NOT EXISTS checkout_clicks(site TEXT NOT NULL, rid TEXT NOT NULL, ts BIGINT NOT NULL, ip_enc TEXT, city TEXT, region TEXT, PRIMARY KEY(site, rid));
+    -- Sites do mesmo cliente (um por funil ou produto) e o trecho do nome das campanhas cujo gasto é deste site (src/clients.js).
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS client TEXT NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS spend_rule TEXT NOT NULL DEFAULT '';
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

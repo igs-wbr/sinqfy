@@ -1,6 +1,7 @@
 // Integração com a Meta: leitura de campanhas/gastos (Marketing API). O envio server-side fica em src/dispatch.js.
 // Somente leitura nas contas de anúncio: o token precisa apenas de `ads_read`.
 import { db, env, sites } from '../db.js';
+import { clientSites, spendSite } from '../clients.js';
 import { localDate, addDays } from '../time.js';
 
 const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}`;
@@ -63,13 +64,14 @@ export async function syncMeta(acc, { full = !acc.last_full || Date.now() - Numb
   const site = sites.get(acc.site), days = !acc.last_sync ? 90 : full ? 7 : 2;
   const until = localDate(Date.now(), site.timezone), since = addDays(until, -(days - 1));
   const act = acc.account_id.replace(/^act_/, '');
+  const group = clientSites(site).map(s => s.id); // a conta é de um site, mas o gasto de cada campanha vai para o site do cliente que ela atende
   const url = (path, params = {}) => `${graph()}/act_${act}${path}?` + new URLSearchParams({ limit: '500', ...params, access_token: acc.token });
   const entities = async (level, path) => {
     const list = await getAll(url(path, { fields: FIELDS[full && level === 'ad' ? 'adBare' : level], ...(!full && { filtering: ONLY_ACTIVE }) }));
     if (full) return list;
     // Deixou de ser ativo desde a última rodada (pausado, reprovado): busca só esses pelo id, para o status não ficar velho.
     const seen = new Set(list.map(e => e.id));
-    const gone = (await db.all("SELECT id FROM ad_entities WHERE site=? AND platform='meta' AND level=? AND status='ACTIVE'", [site.id, level]))
+    const gone = (await db.all("SELECT id FROM ad_entities WHERE site = ANY(?::text[]) AND platform='meta' AND level=? AND status='ACTIVE'", [group, level]))
       .map(r => r.id).filter(id => !seen.has(id));
     for (let i = 0; i < gone.length; i += 50) {
       const res = await fetch(`${graph()}/?` + new URLSearchParams({ ids: gone.slice(i, i + 50).join(','), fields: FIELDS[level], access_token: acc.token }));
@@ -101,11 +103,30 @@ export async function syncMeta(acc, { full = !acc.last_full || Date.now() - Numb
       ad_name=excluded.ad_name, spend=excluded.spend, impressions=excluded.impressions, clicks=excluded.clicks, meta_purchases=excluded.meta_purchases,
       meta_purchase_value=excluded.meta_purchase_value, meta_leads=excluded.meta_leads, meta_link_clicks=excluded.meta_link_clicks, meta_lpv=excluded.meta_lpv,
       meta_atc=excluded.meta_atc, meta_checkouts=excluded.meta_checkouts, source=excluded.source`;
+    // Site de cada campanha (regra pelo nome), conjunto e anúncio. A rodada leve só traz o ativo: nomes e hierarquia já gravados completam.
+    const known = group.length > 1 ? await db.all("SELECT level, id, name, parent FROM ad_entities WHERE site = ANY(?::text[]) AND platform='meta' AND level IN ('campaign','adset')", [group]) : [];
+    const campName = new Map(known.filter(e => e.level === 'campaign').map(e => [e.id, e.name])), setParent = new Map(known.filter(e => e.level === 'adset').map(e => [e.id, e.parent]));
+    for (const c of campaigns) campName.set(c.id, c.name || '');
+    for (const a of adsets) setParent.set(a.id, a.campaign_id || '');
+    const to = (campaignId, name) => spendSite(site, campName.get(campaignId) ?? name);
+    const rows = [
+      ...campaigns.map(c => [to(c.id), 'campaign', c.id, [ENT, [to(c.id), 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c), null]]]),
+      ...adsets.map(a => [to(a.campaign_id), 'adset', a.id, [ENT, [to(a.campaign_id), 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a), null]]]),
+      ...ads.map(a => { const t = to(setParent.get(a.adset_id)); return [t, 'ad', a.id, [ENT, [t, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null, thumb(a)]]]; }),
+    ];
+    // Campanha que mudou de site (regra nova ou editada): sai dos outros sites do cliente no mesmo período/entidade, sem duplicar gasto.
+    const moves = [];
+    if (group.length > 1) {
+      const by = new Map(), add = (k, v) => (by.get(k) || by.set(k, []).get(k)).push(v);
+      for (const [t, level, id] of rows) add(`${t}\n${level}`, id);
+      for (const [k, list] of by) { const [t, level] = k.split('\n'); moves.push(["DELETE FROM ad_entities WHERE site = ANY(?::text[]) AND site<>? AND platform='meta' AND level=? AND id = ANY(?::text[])", [group, t, level, list]]); }
+      const spendBy = new Map();
+      for (const i of insights) { const t = to(i.campaign_id, i.campaign_name); (spendBy.get(t) || spendBy.set(t, new Set()).get(t)).add(i.campaign_id || ''); }
+      for (const [t, list] of spendBy) moves.push(["DELETE FROM ad_spend WHERE site = ANY(?::text[]) AND site<>? AND platform='meta' AND date BETWEEN ? AND ? AND campaign_id = ANY(?::text[])", [group, t, since, until, [...list]]]);
+    }
     await db.batch([ // uma transação: ou grava tudo ou nada
-      ...campaigns.map(c => [ENT, [site.id, 'meta', 'campaign', c.id, c.name || '', '', c.effective_status || '', budget(c), null]]),
-      ...adsets.map(a => [ENT, [site.id, 'meta', 'adset', a.id, a.name || '', a.campaign_id || '', a.effective_status || '', budget(a), null]]),
-      ...ads.map(a => [ENT, [site.id, 'meta', 'ad', a.id, a.name || '', a.adset_id || '', a.effective_status || '', null, thumb(a)]]),
-      ...insights.map(i => [SPEND, [site.id, i.date_start, i.campaign_id || '', i.campaign_name || '', i.adset_id || '', i.adset_name || '', i.ad_id || '', i.ad_name || '',
+      ...moves, ...rows.map(x => x[3]),
+      ...insights.map(i => [SPEND, [to(i.campaign_id, i.campaign_name), i.date_start, i.campaign_id || '', i.campaign_name || '', i.adset_id || '', i.adset_name || '', i.ad_id || '', i.ad_name || '',
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),
         Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT)]]),
