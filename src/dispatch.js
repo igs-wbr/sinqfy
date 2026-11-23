@@ -32,6 +32,12 @@ const city = v => letters(String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 const code2 = v => /^[A-Za-z]{2}$/.test(v || '') && !/^xx$/i.test(v) ? v.toLowerCase() : '';
 /** Acrescenta ao user_data, em SHA-256, só os campos que vieram. */
 function addHashed(user_data, fields) { for (const [k, v] of Object.entries(fields)) if (v) user_data[k] = [sha(v)]; }
+/** UF pelo DDD do celular brasileiro (com o 55 na frente): reserva quando a venda não traz endereço nem o local do clique. */
+const DDD_UF = Object.fromEntries(Object.entries({ sp: '11 12 13 14 15 16 17 18 19', rj: '21 22 24', es: '27 28', mg: '31 32 33 34 35 37 38',
+  pr: '41 42 43 44 45 46', sc: '47 48 49', rs: '51 53 54 55', df: '61', go: '62 64', to: '63', mt: '65 66', ms: '67', ac: '68', ro: '69',
+  ba: '71 73 74 75 77', se: '79', pe: '81 87', al: '82', pb: '83', rn: '84', ce: '85 88', pi: '86 89', pa: '91 93 94', am: '92 97', rr: '95',
+  ap: '96', ma: '98 99' }).flatMap(([uf, l]) => l.split(' ').map(d => [d, uf])));
+const ufOfPhone = d => /^55\d{10,11}$/.test(d) && Object.hasOwn(DDD_UF, d.slice(2, 4)) ? DDD_UF[d.slice(2, 4)] : '';
 /** Primeiro e último nome, só letras em minúsculas. */
 const names = name => { const p = String(name || '').trim().split(/\s+/).map(letters).filter(Boolean); return { fn: p[0], ln: p.length > 1 && p.at(-1) }; };
 
@@ -77,7 +83,7 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   // Endereço do comprador (Hotmart: buyer.address) vale mais que o local do IP; cobre também a venda sem clique.
   const a = sale.addr || {};
   addHashed(user_data, { ...names(name), country: code2(a.country_iso) || code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : ''),
-    st: code2(a.state) || code2(click?.region), ct: city(a.city) || city(click?.city), zp: String(a.zipcode || '').replace(/\W/g, '').toLowerCase() });
+    st: code2(a.state) || code2(click?.region) || ufOfPhone(d), ct: city(a.city) || city(click?.city), zp: String(a.zipcode || '').replace(/\W/g, '').toLowerCase() });
   if (click?.ip) user_data.client_ip_address = click.ip; // do clique no checkout (ADR 0020)
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
