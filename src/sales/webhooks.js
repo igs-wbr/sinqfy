@@ -89,6 +89,7 @@ export const PARSERS = {
       currency: str(c.currency || 'BRL', 3), product: str(b.Product?.product_name), ts: time(b.created_at), paid_at: time(b.approved_date),
       utm: utm({ source: t.utm_source || t.src, medium: t.utm_medium, campaign: t.utm_campaign || (ridOf(t.sck) ? '' : t.sck), content: t.utm_content, term: t.utm_term }),
       email: b.Customer?.email, phone: b.Customer?.mobile, name: b.Customer?.full_name, rid: ridOf(t.rid) || ridOf(t.sck),
+      addr: { city: b.Customer?.city, state: b.Customer?.state, zipcode: b.Customer?.zipcode },
     };
   },
   // Eduzz: aceita o webhook novo (JSON com `data`) e o legado (form com trans_*). Valide com um pedido de teste.
@@ -194,7 +195,8 @@ export function verify(platform, secret, raw, h, now = Date.now()) {
 // ---------- webhook personalizado (mapa de campos) ----------
 export const CUSTOM_FIELDS = { order_id: 'Id do pedido', status: 'Status', amount: 'Valor pago', net: 'Valor líquido', currency: 'Moeda', method: 'Forma de pagamento',
   product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', name: 'Nome do comprador', rid: 'Id do visitante (rid)',
-  utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term' };
+  utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term',
+  city: 'Cidade do comprador', state: 'UF do comprador', zipcode: 'CEP do comprador' };
 export const CUSTOM_STATUSES = ['paid', 'pending', 'refused', 'refunded', 'chargeback'];
 /** Lê "data.items.0.name" de um objeto; também aceita "data.items[0].name". */
 export const pick = (o, path) => !path ? undefined : String(path).replace(/\[(\d+)\]/g, '.$1').split('.').reduce((x, k) => x == null || !Object.hasOwn(Object(x), k) ? undefined : x[k], o);
@@ -209,7 +211,7 @@ export function parseCustom(b, map) {
     order_id: str(v('order_id')), status, method: method(v('method')), gross, net: v('net') != null ? num(v('net')) / k : gross,
     currency: str(v('currency') || 'BRL', 3).toUpperCase(), product: str(v('product')), ts: time(v('created_at')),
     utm: utm({ source: v('utm_source'), medium: v('utm_medium'), campaign: v('utm_campaign'), content: v('utm_content'), term: v('utm_term') }),
-    email: v('email'), phone: v('phone'), name: v('name'), rid: ridOf(v('rid')),
+    email: v('email'), phone: v('phone'), name: v('name'), rid: ridOf(v('rid')), addr: { city: v('city'), state: v('state'), zipcode: v('zipcode') },
   };
 }
 
