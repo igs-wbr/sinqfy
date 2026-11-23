@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Trackify",
-  "short_name": "Trackify",
+  "name": "Sinqfy",
+  "short_name": "Sinqfy",
   "description": "Vendas, tráfego e campanhas, sem cookies.",
   "start_url": "/",
   "scope": "/",

@@ -6,8 +6,8 @@
 
 const MIN_BASE = 20; // abaixo disso a taxa é ruído e a etapa não vira gargalo
 
-const choose = (ours, theirs, trust) => trust && ours > 0 ? { v: ours, src: 'trackify', alt: theirs, altSrc: 'meta' }
-  : theirs > 0 ? { v: theirs, src: 'meta', alt: ours, altSrc: 'trackify' } : { v: ours, src: 'trackify', alt: theirs, altSrc: 'meta' };
+const choose = (ours, theirs, trust) => trust && ours > 0 ? { v: ours, src: 'sinqfy', alt: theirs, altSrc: 'meta' }
+  : theirs > 0 ? { v: theirs, src: 'meta', alt: ours, altSrc: 'sinqfy' } : { v: ours, src: 'sinqfy', alt: theirs, altSrc: 'meta' };
 
 /**
  * meta: { imp, clicks, link, lpv, ic, buy, spend } somado da ad_spend
@@ -20,7 +20,7 @@ export function buildFunnel(meta, own, sales, { tracking, webhooks }) {
     { k: 'imp', t: 'Viu o anúncio', d: 'Impressões', v: n(meta.imp), src: 'meta' },
     { k: 'click', t: 'Clicou no anúncio', d: 'Cliques no link', v: n(meta.link) || n(meta.clicks), src: 'meta' },
     { k: 'visit', t: 'Chegou à página', d: 'Visitantes da campanha', ...choose(n(own.visits), n(meta.lpv), tracking) },
-    ...(tracking ? [{ k: 'engage', t: 'Interagiu na página', d: 'Viu 2 páginas ou mais, ou disparou um evento', v: n(own.engaged), src: 'trackify' }] : []),
+    ...(tracking ? [{ k: 'engage', t: 'Interagiu na página', d: 'Viu 2 páginas ou mais, ou disparou um evento', v: n(own.engaged), src: 'sinqfy' }] : []),
     { k: 'checkout', t: 'Foi para o checkout', d: 'Início de checkout', ...choose(n(own.checkout), n(meta.ic), tracking) },
     { k: 'buy', t: 'Comprou', d: 'Vendas aprovadas', ...choose(n(sales.n), n(meta.buy), webhooks) },
   ];

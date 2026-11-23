@@ -1,4 +1,4 @@
-# Segurança do Trackify
+# Segurança do Sinqfy
 
 Como o sistema se protege, o resultado da última auditoria e o que conferir de tempos em tempos. Para relatar uma falha, veja o [SECURITY.md](../SECURITY.md).
 

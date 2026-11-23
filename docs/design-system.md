@@ -1,4 +1,4 @@
-# Design system: Trackify
+# Design system: Sinqfy
 
 Moldura neutra (grafite), azul da marca só como acento. Revisado em 15/11/2026 com a skill [unslop](https://github.com/heydamir/unslop) (Damir Sokolovsky, CC BY 4.0), que substituiu o "Rastro Azul" (barra lateral e card de destaque azuis, fundos azul-marinho no escuro). Referências que continuam valendo:
 
@@ -15,19 +15,19 @@ Tudo continua em `src/views/ui.js`, num único bloco de CSS com tokens. Ícones 
 - **Momentos:** o gráfico principal da tela e o número de destaque (faturamento líquido, visitantes, conversões).
 - **Assinatura:** a linha tracejada do período anterior em toda comparação.
 
-## Marca: Trackify
+## Marca: Sinqfy
 
 Arquivos em `public/brand/` (SVG vetorial, nome em traço desenhado, sem depender de fonte):
 
 | Arquivo | Uso |
 |---|---|
 | `../favicon.svg` | Favicon e ícone do app, servido em `/favicon.svg`. Traço mais grosso e trecho inicial em 50% para ler em 16px |
-| `trackify-mark.svg` | Símbolo completo (rastro tracejado virando linha até o ponto), avatar e redes |
-| `trackify-mark-mono.svg` | Símbolo de uma cor (`currentColor`), sem fundo |
-| `trackify-logo-light.svg` / `-dark.svg` | Logo horizontal sobre fundo claro / escuro |
-| `trackify-logo-mono.svg` | Logo horizontal de uma cor (`currentColor`) |
-| `trackify-wordmark-light.svg` / `-dark.svg` | Só o nome |
-| `trackify-stacked-light.svg` | Logo empilhado (símbolo sobre o nome) |
+| `sinqfy-mark.svg` | Símbolo completo (rastro tracejado virando linha até o ponto), avatar e redes |
+| `sinqfy-mark-mono.svg` | Símbolo de uma cor (`currentColor`), sem fundo |
+| `sinqfy-logo-light.svg` / `-dark.svg` | Logo horizontal sobre fundo claro / escuro |
+| `sinqfy-logo-mono.svg` | Logo horizontal de uma cor (`currentColor`) |
+| `sinqfy-wordmark-light.svg` / `-dark.svg` | Só o nome |
+| `sinqfy-stacked-light.svg` | Logo empilhado (símbolo sobre o nome) |
 
 No painel, o símbolo vai inline (`MARK` em `ui.js`) ao lado do nome em Figtree. Área de respiro mínima: metade da altura do símbolo. Nomes técnicos ficam como estão (cabeçalho `X-Rastro-Signature`, coluna `Rastro` da planilha, chaves `rastro-*` do navegador) para não quebrar integrações existentes.
 

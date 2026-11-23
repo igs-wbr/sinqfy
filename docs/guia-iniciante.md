@@ -16,14 +16,14 @@ Para quem nunca configurou rastreamento. Siga na ordem; cada etapa termina com u
 
 A tabela que você vai consultar o tempo todo. Os nomes de menu das plataformas mudam de vez em quando; se não achar, procure pela palavra em negrito.
 
-| O que | Onde pegar | Onde colar no Trackify |
+| O que | Onde pegar | Onde colar no Sinqfy |
 |---|---|---|
 | **ID do pixel** | Meta: Gerenciador de Eventos → Fontes de dados → seu pixel. É o número embaixo do nome | Primeiros passos → passo 4 |
 | **Token da Conversions API** | Gerenciador de Eventos → seu pixel → Configurações → **API de Conversões** → Gerar token de acesso | Primeiros passos → passo 4 |
 | **Código de teste da Meta** (opcional) | Gerenciador de Eventos → seu pixel → **Testar eventos** → código `TEST...` | Integrações → 7 · Meta: envio server-side |
 | **ID da conta de anúncios** | Gerenciador de Anúncios: o número depois de `act=` no endereço da página (use com `act_` na frente) | Integrações → 6 · Meta Ads |
 | **Token de leitura dos anúncios** | Configurações do negócio → Usuários → **Usuários do sistema** → Gerar token, permissão `ads_read`, com a conta de anúncios atribuída | Integrações → 6 · Meta Ads |
-| **URL de webhook de vendas** | Já vem pronta no Trackify | Integrações → 2 · Plataformas de venda → cole na plataforma |
+| **URL de webhook de vendas** | Já vem pronta no Sinqfy | Integrações → 2 · Plataformas de venda → cole na plataforma |
 | **Hottok da Hotmart** (assinatura) | Hotmart: Ferramentas → **Webhook** → Autenticação | Integrações → 2 · Plataformas de venda → Segredos de assinatura |
 | **ID de medição do GA4** (opcional) | Google Analytics: Administrador → **Fluxos de dados** → seu site → `G-...` | Integrações → 8 · GA4 |
 | **Segredo do Measurement Protocol** (opcional) | Mesmo fluxo de dados → **Chaves secretas da API do Measurement Protocol** → Criar | Integrações → 8 · GA4 |
@@ -32,11 +32,11 @@ A tabela que você vai consultar o tempo todo. Os nomes de menu das plataformas 
 | **ID do número de telefone** (opcional) | developers.facebook.com → seu app → WhatsApp → **Configuração da API** | WhatsApp → Cloud API |
 | **Token de envio do WhatsApp** (opcional) | Usuário do sistema com a permissão `whatsapp_business_messaging` → Gerar token | WhatsApp → Cloud API |
 
-> Token é senha. Cole só no Trackify, nunca em grupo, print ou e-mail.
+> Token é senha. Cole só no Sinqfy, nunca em grupo, print ou e-mail.
 
 ## Etapa 1: painel no ar
 
-O Trackify roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deploy-oracle.md) (servidor grátis) e o [guia da Cloudflare](guia-cloudflare.md) (domínio e túnel).
+O Sinqfy roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deploy-oracle.md) (servidor grátis) e o [guia da Cloudflare](guia-cloudflare.md) (domínio e túnel).
 
 **Deu certo quando:** você abre `https://app.seudominio.com.br` e entra com o e-mail e a senha que pôs no `.env`.
 
@@ -44,7 +44,7 @@ O Trackify roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deplo
 
 1. No menu de baixo, **Sites** → **Novo site**.
 2. Preencha: **id** (curto, sem espaço, ex.: `loja`), **nome**, **fuso horário** e **moeda**.
-3. Abra o site criado → **Configurações** → em **Domínios do site**, escreva o domínio (ex.: `meusite.com.br`). Assim o Trackify recusa eventos de sites que não são seus.
+3. Abra o site criado → **Configurações** → em **Domínios do site**, escreva o domínio (ex.: `meusite.com.br`). Assim o Sinqfy recusa eventos de sites que não são seus.
 4. Se paga imposto sobre o faturamento, preencha a porcentagem: ela sai do lucro.
 
 **Deu certo quando:** o site aparece no seletor do topo do menu e o assistente **Primeiros passos** abre com o passo 1 verde.
@@ -54,11 +54,11 @@ O Trackify roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deplo
 É o que faz o cookie durar 400 dias, inclusive no iPhone, e o rastreamento passar pelos bloqueadores.
 
 1. **Primeiros passos** → passo 2 → digite o domínio do seu site. Pode digitar só `meusite.com.br`: o `t.` entra sozinho.
-2. O Trackify mostra um registro para criar. Vá ao **DNS do seu domínio** (na Cloudflare: seu domínio → **DNS** → **Records** → **Add record**) e crie:
+2. O Sinqfy mostra um registro para criar. Vá ao **DNS do seu domínio** (na Cloudflare: seu domínio → **DNS** → **Records** → **Add record**) e crie:
 
    | Tipo | Nome | Destino | Proxy |
    |---|---|---|---|
-   | CNAME | `t` | o destino que o Trackify mostrou | desligado (nuvem cinza) |
+   | CNAME | `t` | o destino que o Sinqfy mostrou | desligado (nuvem cinza) |
 
 3. Volte e clique em **Verificar agora**. A propagação leva de minutos a algumas horas; a tela confere sozinha a cada 5 minutos.
 
@@ -82,7 +82,7 @@ O Trackify roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deplo
    | Página HTML | Dentro de `<head>...</head>` em cada página |
    | Construtor de página (Hotmart Pages, Greatpages, etc.) | Campo de **scripts no cabeçalho** ou "código de rastreamento" |
 
-3. Abra o seu site numa **aba anônima** (o Trackify ignora `localhost`).
+3. Abra o seu site numa **aba anônima** (o Sinqfy ignora `localhost`).
 
 **Deu certo quando:** o passo 3 fica verde com "Primeiro evento recebido" e a visita aparece em **Eventos**.
 
@@ -97,11 +97,11 @@ O Trackify roda num servidor seu, ligado 24 horas. Siga o [guia da Oracle](deplo
 
 **Deu certo quando:** aparece "Pixel conectado". Em **Eventos**, os eventos novos ganham o selo verde da Meta.
 
-> Já usa o pixel no navegador? Mantenha. Para não contar em dobro, use `data-pixel="mirror"` no script e apague a linha `fbq('track','PageView')` do código do pixel: o Trackify repete cada evento no pixel com o mesmo id, e a Meta conta uma vez só.
+> Já usa o pixel no navegador? Mantenha. Para não contar em dobro, use `data-pixel="mirror"` no script e apague a linha `fbq('track','PageView')` do código do pixel: o Sinqfy repete cada evento no pixel com o mesmo id, e a Meta conta uma vez só.
 
 ### 5.2 UTM em todos os anúncios
 
-Sem isso, o Trackify não sabe qual anúncio vendeu. No **Gerenciador de Anúncios**, em cada anúncio → **Rastreamento** → **Parâmetros de URL**, cole:
+Sem isso, o Sinqfy não sabe qual anúncio vendeu. No **Gerenciador de Anúncios**, em cada anúncio → **Rastreamento** → **Parâmetros de URL**, cole:
 
 ```
 utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}
@@ -149,7 +149,7 @@ Pronto: o rastreamento está completo.
 
 ## Depois do básico (quando quiser)
 
-- **WhatsApp:** troque o link `wa.me` do botão por um **link rastreável** (tela WhatsApp). Com a Cloud API oficial, as conversas chegam no Trackify ligadas ao anúncio. Detalhes em [Integrações, seção 7](integracoes.md#7-whatsapp).
+- **WhatsApp:** troque o link `wa.me` do botão por um **link rastreável** (tela WhatsApp). Com a Cloud API oficial, as conversas chegam no Sinqfy ligadas ao anúncio. Detalhes em [Integrações, seção 7](integracoes.md#7-whatsapp).
 - **CRM:** formulários do site viram leads sozinhos. Monte as colunas do seu processo e ligue um evento à coluna "Qualificado" para a Meta aprender quem vira cliente.
 - **Recursos opcionais** (Configurações → Recursos): recuperação de boleto e Pix pelo WhatsApp, públicos para remarketing, retenção de vídeo, robô por palavra-chave e checkout com Pix. O que cada um faz está no [manual](manual.md#recursos-que-cada-site-liga-ou-desliga).
 - **Equipe e clientes:** convide pessoas em **Equipe** (Dono, Gestor ou Cliente) ou mande o **link público** de tráfego.
@@ -161,9 +161,9 @@ Pronto: o rastreamento está completo.
 | Passo 3 não fica verde | Script no lugar errado, cache do site ou teste no `localhost` | Confira o script no código-fonte da página (Ctrl+U, procure `s.js`), limpe o cache do WordPress e teste numa aba anônima |
 | Domínio fica em "Aguardando DNS" | CNAME com nome errado ou com proxy ligado | Nome é só `t`, destino exatamente o mostrado, nuvem **cinza**. Espere até algumas horas |
 | "Testar conexão" da Meta falha | Token de outro pixel ou expirado | Gere um token novo no mesmo pixel do ID informado |
-| Webhook com erro 401 | Segredo de assinatura diferente do da plataforma | Copie de novo o segredo da plataforma ou apague o do Trackify para testar |
+| Webhook com erro 401 | Segredo de assinatura diferente do da plataforma | Copie de novo o segredo da plataforma ou apague o do Sinqfy para testar |
 | Webhook com erro 404 | URL incompleta ou de outra plataforma | Copie de novo a URL da plataforma certa em Integrações |
-| Venda com origem "Sem origem" | Link de compra sem `rid` e sem UTM | Confira se o botão de compra é um link (`<a href>`) para o checkout e se o anúncio tem a UTM. Para link que o Trackify não reconhece sozinho, adicione o atributo `data-rastro-rid` |
+| Venda com origem "Sem origem" | Link de compra sem `rid` e sem UTM | Confira se o botão de compra é um link (`<a href>`) para o checkout e se o anúncio tem a UTM. Para link que o Sinqfy não reconhece sozinho, adicione o atributo `data-rastro-rid` |
 | Eventos do Safari duram pouco | Site principal fora da Cloudflare | Para os 400 dias no Safari, o site principal também precisa passar pela Cloudflare |
 
 Ainda travado? Abra a tela **Eventos**: ela mostra cada evento, o que foi enviado e a resposta da Meta.

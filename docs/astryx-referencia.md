@@ -1,4 +1,4 @@
-# Referência Astryx (Meta, MIT) para o Trackify
+# Referência Astryx (Meta, MIT) para o Sinqfy
 
 Raiz citada: `astryx-src/repo/`. Valores lidos direto do código. Tokens do core em `packages/core/src/theme/tokens.stylex.ts` (T), tema neutro em `packages/themes/neutral/src/neutralTheme.ts` (N), paleta em `packages/themes/neutral/src/neutralPaletteRefs.generated.ts`. Docs de design em `docs/design/*.md`.
 

@@ -1,9 +1,9 @@
-<p align="center"><img src="public/brand/trackify-logo-light.svg" alt="Trackify" height="56"></p>
+<p align="center"><img src="public/brand/sinqfy-logo-light.svg" alt="Sinqfy" height="56"></p>
 
 <p align="center">Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.</p>
 
 <p align="center">
-<a href="https://github.com/igs-wbr/trackify/releases/tag/v1.0.0"><img alt="Versão 1.0.0" src="https://img.shields.io/badge/vers%C3%A3o-1.0.0-0E58DB"></a>
+<a href="https://github.com/igs-wbr/sinqfy/releases/tag/v1.0.0"><img alt="Versão 1.0.0" src="https://img.shields.io/badge/vers%C3%A3o-1.0.0-0E58DB"></a>
 <a href="LICENSE"><img alt="Licença FCL-1.0-MIT (Fair Source)" src="https://img.shields.io/badge/licen%C3%A7a-FCL--1.0--MIT-0E58DB"></a>
 <img alt="Node 24" src="https://img.shields.io/badge/node-24.x-171717">
 <img alt="PostgreSQL" src="https://img.shields.io/badge/banco-PostgreSQL-171717">
@@ -38,7 +38,7 @@ Requisitos: Node 24 e Docker (para o PostgreSQL).
 
 ```sh
 npm install
-docker run -d --name trackify-pg -p 55432:5432 -e POSTGRES_USER=rastro -e POSTGRES_PASSWORD=rastro -e POSTGRES_DB=rastro postgres:16
+docker run -d --name sinqfy-pg -p 55432:5432 -e POSTGRES_USER=rastro -e POSTGRES_PASSWORD=rastro -e POSTGRES_DB=rastro postgres:16
 cp .env.example .env    # preencha ADMIN_EMAIL e ADMIN_PASSWORD
 node --env-file=.env src/server.js   # http://127.0.0.1:8080
 ```
@@ -105,7 +105,7 @@ Issues e pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBU
 
 ## Versões
 
-O que mudou em cada versão está no [CHANGELOG](CHANGELOG.md) e nos [releases](https://github.com/igs-wbr/trackify/releases).
+O que mudou em cada versão está no [CHANGELOG](CHANGELOG.md) e nos [releases](https://github.com/igs-wbr/sinqfy/releases).
 
 ## Criador
 

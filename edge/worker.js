@@ -18,7 +18,7 @@ const rand = bytes => btoa(String.fromCharCode(...crypto.getRandomValues(new Uin
 const digits = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => b % 10).join('');
 
 /**
- * t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. Só para hosts "t.*" (o padrão do Trackify);
+ * t.cliente.com.br → cliente.com.br: o cookie vale para o site inteiro do cliente. Só para hosts "t.*" (o padrão do Sinqfy);
  * qualquer outro host fica com cookie só do host, para nunca cair num sufixo público como com.br.
  */
 export const cookieDomain = host => /^t\.[^.]+\.[^.]+/.test(host) ? host.slice(2) : null;

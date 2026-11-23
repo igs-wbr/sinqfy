@@ -1,6 +1,14 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "trackify", "runtimeExecutable": "node", "runtimeArgs": ["--env-file=deploy/.env.local", "src/server.js"], "port": 8080 }
+    {
+      "name": "sinqfy",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--env-file=deploy/.env.local",
+        "src/server.js"
+      ],
+      "port": 8080
+    }
   ]
 }
