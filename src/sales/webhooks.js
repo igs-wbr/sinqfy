@@ -194,9 +194,9 @@ export function verify(platform, secret, raw, h, now = Date.now()) {
 
 // ---------- webhook personalizado (mapa de campos) ----------
 export const CUSTOM_FIELDS = { order_id: 'Id do pedido', status: 'Status', amount: 'Valor pago', net: 'Valor líquido', currency: 'Moeda', method: 'Forma de pagamento',
-  product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', name: 'Nome do comprador', rid: 'Id do visitante (rid)',
+  product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', name: 'Nome do comprador', lastname: 'Sobrenome do comprador', rid: 'Id do visitante (rid)',
   utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term',
-  city: 'Cidade do comprador', state: 'UF do comprador', zipcode: 'CEP do comprador' };
+  city: 'Cidade do comprador', state: 'UF do comprador', zipcode: 'CEP do comprador', country: 'País do comprador' };
 export const CUSTOM_STATUSES = ['paid', 'pending', 'refused', 'refunded', 'chargeback'];
 /** Lê "data.items.0.name" de um objeto; também aceita "data.items[0].name". */
 export const pick = (o, path) => !path ? undefined : String(path).replace(/\[(\d+)\]/g, '.$1').split('.').reduce((x, k) => x == null || !Object.hasOwn(Object(x), k) ? undefined : x[k], o);
@@ -211,7 +211,9 @@ export function parseCustom(b, map) {
     order_id: str(v('order_id')), status, method: method(v('method')), gross, net: v('net') != null ? num(v('net')) / k : gross,
     currency: str(v('currency') || 'BRL', 3).toUpperCase(), product: str(v('product')), ts: time(v('created_at')),
     utm: utm({ source: v('utm_source'), medium: v('utm_medium'), campaign: v('utm_campaign'), content: v('utm_content'), term: v('utm_term') }),
-    email: v('email'), phone: v('phone'), name: v('name'), rid: ridOf(v('rid')), addr: { city: v('city'), state: v('state'), zipcode: v('zipcode') },
+    email: v('email'), phone: v('phone'), name: [v('name'), v('lastname')].filter(x => x != null && x !== '').join(' ') || undefined, rid: ridOf(v('rid')),
+    // Sobrenome à parte (OnProfit V2: customer.lastname) completa o nome; país por extenso "Brasil" vira BR.
+    addr: { city: v('city'), state: v('state'), zipcode: v('zipcode'), country_iso: /^bra[sz]il$/i.test(String(v('country') ?? '').trim()) ? 'BR' : v('country') },
   };
 }
 
