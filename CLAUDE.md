@@ -19,12 +19,13 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/pii.js` (cifra e hash de dados pessoais, `DATA_KEY`) e `src/crm.js` (contatos, colunas, evento offline por coluna, compra leva o contato para Ganhou). `src/routes/crm.js` é importado antes de `sales.js` por causa das rotas `/hooks/:token/leads` e `/meta-leads`.
 - `src/whatsapp.js` + `src/routes/whatsapp.js`: link rastreável `/w/:slug` com código, webhook da Cloud API, conversas e sugestão de coluna ([ADR 0016](docs/adr/0016-whatsapp.md)). `routes/whatsapp.js` também vem antes de `sales.js`.
 - `src/clients.js`: cliente com vários sites, um por funil ([ADR 0021](docs/adr/0021-cliente-com-varios-sites.md)). Visão somada em `/sites/~chave` (rotas com `client: true`, pedido repetido conta uma vez) e gasto da conta dividido pelo nome da campanha (`spend_rule`) em `syncMeta`.
+- `src/license.js`: plano da instalação ([ADR 0022](docs/adr/0022-licenca-fair-core.md), licença FCL-1.0-MIT). Grátis abre 1 site no painel (os outros seguem coletando; rotas com `free: true` ficam abertas); Pro por chave Ed25519 validada offline ou teste de 7 dias, na tabela `install`. Chaves emitidas com `scripts/license.mjs` (chave privada fora do repositório). Nunca remova nem contorne essa checagem.
 - `src/modules.js`: recursos liga/desliga por site ([ADR 0017](docs/adr/0017-recursos-modulares.md)). Rota com `module` dá 404 desligada; item do `NAV` com o 5º campo some do menu.
 - `src/recovery.js` (venda pendente → `pending_orders` e sequência no WhatsApp, rodada em `runJobs`), `src/checkout.js` (BR Code do Pix e QR em SVG com `src/vendor/qrcode.cjs`, MIT), `src/routes/audiences.js` (CSV em SHA-256). Envio e robô em `src/whatsapp.js` (`sendWhatsapp`, `matchRule`).
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
-- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0022`), fluxo com skills.
+- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0023`), fluxo com skills.
 
 ## Regras
 - Toda consulta é `await db.…`; consultas independentes vão em `Promise.all`/`awaitAll`.

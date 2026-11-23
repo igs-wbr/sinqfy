@@ -3,7 +3,7 @@
 <p align="center">Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.</p>
 
 <p align="center">
-<a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-0E58DB"></a>
+<a href="LICENSE"><img alt="Licença FCL-1.0-MIT (Fair Source)" src="https://img.shields.io/badge/licen%C3%A7a-FCL--1.0--MIT-0E58DB"></a>
 <img alt="Node 24" src="https://img.shields.io/badge/node-24.x-171717">
 <img alt="PostgreSQL" src="https://img.shields.io/badge/banco-PostgreSQL-171717">
 </p>
@@ -105,6 +105,13 @@ Issues e pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBU
 - GitHub: [@igs-wbr](https://github.com/igs-wbr)
 - E-mail: [iegosweber@gmail.com](mailto:iegosweber@gmail.com)
 
+## Planos
+
+- **Grátis, para sempre:** 1 site (1 funil) com todos os recursos.
+- **Pro, R$ 97 em pagamento único:** sites ilimitados, visão somada por cliente, até 2 instalações, atualizações por 12 meses e 7 dias de teste grátis. A chave é ativada em Plano, no menu da conta, e validada sem depender de internet.
+
 ## Licença
 
-[MIT](LICENSE) © 2026 Iegos Weber. Componentes de terceiros e as licenças deles estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[Fair Core License 1.0, com MIT futura (FCL-1.0-MIT)](LICENSE) © 2026 Iegos Weber. É Fair Source: o código é aberto para ler, usar, alterar e redistribuir, inclusive em uso comercial próprio, só não para oferecer um produto ou serviço concorrente. Os recursos do plano Pro são liberados por chave de licença, que não pode ser contornada. Cada versão vira MIT dois anos depois de publicada. Agências podem dar acesso aos próprios clientes (permissão adicional no fim do [LICENSE](LICENSE)). Decisão em [ADR 0022](docs/adr/0022-licenca-fair-core.md).
+
+Componentes de terceiros e as licenças deles estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

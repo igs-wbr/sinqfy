@@ -24,6 +24,9 @@ export async function boot() {
   }
   const login = async (email = ADMIN.email, password = ADMIN.password) => (await req('/login', { form: { email, password } })).cookie;
   const { db } = await import('../src/db.js');
+  // Testes rodam como instalação no teste do Pro (vários sites); tests/license.test.js cobre o Grátis.
+  await (await import('../src/db.js')).ready;
+  if (!process.env.TEST_FREE_PLAN) await db.run("INSERT INTO install(k, v) VALUES ('trial_started', ?) ON CONFLICT(k) DO NOTHING", [String(Date.now())]);
   const close = async () => {
     await server.jobs; // tarefas da subida ainda rodando seguram tabelas: DROP SCHEMA no meio delas dá deadlock
     server.closeAllConnections(); server.close();

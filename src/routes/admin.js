@@ -11,6 +11,7 @@ import { ROLES } from '../views/ui.js';
 import { removeHost } from '../cloudflare.js';
 import { MODULES, fromForm } from '../modules.js';
 import { clientSites } from '../clients.js';
+import { planOf, verifyKey, setInstall, freeSiteId, FREE_SITES, PRICE, BUY_URL } from '../license.js';
 import * as V from '../views/admin.js';
 
 const TIMEZONES = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
@@ -42,8 +43,8 @@ route('GET', '/cron', { auth: false }, async r => {
 });
 
 // --- configurações do site ---
-route('GET', '/sites/:id/settings', { site: 'edit' }, async r => send(r, 200, V.settingsPage(await siteCtx(r, '/settings'), origin(r.req), msg(r))));
-route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
+route('GET', '/sites/:id/settings', { site: 'edit', free: true }, async r => send(r, 200, V.settingsPage(await siteCtx(r, '/settings'), origin(r.req), msg(r))));
+route('POST', '/sites/:id/settings', { site: 'edit', free: true }, async r => {
   const f = await form(r.req), id = r.site.id, action = f.get('action');
   if (action === 'save') {
     const name = (f.get('name') || '').trim().slice(0, 80), tz = f.get('timezone'), cur = (f.get('currency') || '').toUpperCase(), tax = Number(f.get('tax_rate') || 0);
@@ -70,7 +71,7 @@ route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
   await loadSites();
   redirect(r, sitePath(r.site, `/settings?ok=${action === 'save' ? 'saved' : action}`));
 });
-route('POST', '/sites/:id/delete', { site: 'edit', admin: true }, async r => {
+route('POST', '/sites/:id/delete', { site: 'edit', admin: true, free: true }, async r => {
   const f = await form(r.req);
   if (f.get('confirm') !== r.site.id) throw new HttpError(400, 'A confirmação não confere. Nada foi apagado.');
   if (r.site.edge_host) await removeHost(r.site); // libera o domínio na Cloudflare
@@ -97,6 +98,8 @@ route('POST', '/sites', { admin: true }, async r => {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) return sitesView(r, 'Id inválido: use letras, números, ponto ou hífen.');
   if (await db.get('SELECT 1 FROM sites WHERE id=? UNION ALL SELECT 1 FROM deleted_sites WHERE id=?', [id, id])) return sitesView(r, 'Esse id não está disponível. Escolha outro.');
   if (!name || !TIMEZONES.has(tz) || !/^[A-Z]{3}$/.test(cur)) return sitesView(r, 'Preencha nome, fuso horário e moeda válidos.');
+  // Grátis: 1 site na instalação (ADR 0022). Com mais, o painel dos outros fica bloqueado; aqui nem deixa criar.
+  if (sites.size >= FREE_SITES && !(await planOf()).pro) return sitesView(r, `O plano Grátis tem ${FREE_SITES} site. Para criar outro, ative o Pro (ou o teste de 7 dias) em Plano.`);
   // Cliente: um dos que já existem na agência ou um novo (src/clients.js).
   const pick = f.get('client') || '', client = (pick === V.NEW_CLIENT ? f.get('client_new') || '' : pick).trim().slice(0, 80);
   if (pick === V.NEW_CLIENT && !client) return sitesView(r, 'Dê um nome ao novo cliente.');
@@ -158,6 +161,27 @@ async function agenciesView(r, extra = {}) {
     FROM agencies a ORDER BY a.id`);
   send(r, extra.err ? 400 : 200, V.agenciesPage(ctx(r, { tab: 'agencies' }), rows, extra));
 }
+// --- plano da instalação (ADR 0022): só o dono da plataforma ativa a chave ou o teste ---
+async function planView(r, extra = {}) {
+  platformOnly(r);
+  const plan = await planOf();
+  send(r, extra.err ? 400 : 200, V.planPage(ctx(r, { tab: 'plano' }), plan, { price: PRICE, buyUrl: BUY_URL, sites: sites.size, free: sites.get(await freeSiteId()), ...extra }));
+}
+route('GET', '/plano', {}, r => planView(r, { msg: { key: 'Licença Pro ativada.', trial: 'Teste do Pro ativado por 7 dias.' }[r.q.get('ok')] }));
+route('POST', '/plano', {}, async r => {
+  platformOnly(r);
+  const f = await form(r.req), action = f.get('action');
+  if (action === 'key') {
+    const key = (f.get('key') || '').replace(/\s+/g, '');
+    if (!verifyKey(key)) return planView(r, { err: 'Chave inválida. Copie a chave inteira, do jeito que veio na compra.' });
+    await setInstall('license', key);
+  } else if (action === 'trial') {
+    if ((await planOf()).trialUsed) return planView(r, { err: 'O teste grátis já foi usado nesta instalação.' });
+    await setInstall('trial_started', Date.now());
+  } else throw new HttpError(400, 'Ação inválida.');
+  redirect(r, `/plano?ok=${action}`);
+});
+
 route('GET', '/agencies', {}, r => agenciesView(r));
 route('POST', '/agencies', {}, async r => {
   platformOnly(r);
