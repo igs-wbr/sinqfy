@@ -1,9 +1,9 @@
-// Etapa 2: fila de envio server-side para a Meta (Conversions API) e o GA4 (Measurement Protocol).
+// Etapa 2: fila de envio server-side para a Meta (Conversions API), o GA4 (Measurement Protocol) e o Google Ads (Data Manager API, ADR 0024).
 // Ingestão e webhooks só enfileiram (enqueue); dispatch() envia em lotes, com reenvio e espera crescente.
 // IP e user agent só existem no payload enquanto o envio está pendente (ADR 0014): ao terminar, saem do banco.
-import { createHash } from 'node:crypto';
+import { createHash, createSign } from 'node:crypto';
 import { db, env, sites } from './db.js';
-import { metaEmail, metaPhone } from './pii.js';
+import { metaEmail, metaPhone, normEmail, normPhone, open } from './pii.js';
 
 const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0'}`;
 const sha = v => createHash('sha256').update(v).digest('hex');
@@ -12,6 +12,13 @@ const MAX_AGE = 7 * 864e5; // a Meta recusa eventos com mais de 7 dias
 
 export const metaReady = s => !!(s.meta_pixel && s.meta_capi_token);
 export const ga4Ready = s => !!(s.ga4_id && s.ga4_secret);
+export const gadsReady = s => !!(s.gads_customer && s.gads_key && s.gads_actions);
+/** Ação de conversão do Google Ads para o nome do evento (mapa salvo em Integrações), ou null. */
+export function gadsAction(s, name) {
+  try { const m = JSON.parse(s.gads_actions || '{}'); return Object.hasOwn(m, name) ? m[name] : null; } catch { return null; }
+}
+/** Chave JSON da conta de serviço: cifrada com a DATA_KEY quando ela existe. */
+export const gadsKey = s => { try { return JSON.parse(s.gads_key?.startsWith('{') ? s.gads_key : open(s.gads_key)); } catch { return null; } };
 
 // ---------- montagem dos eventos ----------
 const GA4_NAMES = { pageview: 'page_view', Purchase: 'purchase', Lead: 'generate_lead', InitiateCheckout: 'begin_checkout', AddToCart: 'add_to_cart',
@@ -99,6 +106,27 @@ export function ga4WebEvent(site, ev, { url, clientId }) {
   return { client_id: clientId || ev.rid || ev.visitor, timestamp_micros: ev.ts * 1000, events: [{ name: ga4Name(ev.name), params }] };
 }
 
+// Normalização do Google: e-mail em minúsculas (Gmail sem pontos antes do @), telefone em E.164 com +.
+const gEmail = e => { const v = normEmail(e); if (!v) return null; const [u, d] = v.split('@'); return sha(/^(gmail|googlemail)\.com$/.test(d) ? `${u.replace(/\./g, '')}@${d}` : v); };
+const gPhone = p => { const v = normPhone(p); return v && sha('+' + v); };
+/**
+ * Conversão para a Data Manager API. Precisa de um identificador: clique do anúncio (gclid, gbraid, wbraid)
+ * ou e-mail/telefone em SHA-256 (conversões otimizadas para leads). Sem nenhum, não vai.
+ */
+export function gadsEvent({ ts, value, currency, id, click, email, phone, web }) {
+  const ad = {}, ids = [];
+  for (const k of ['gclid', 'gbraid', 'wbraid']) if (click?.[k]) ad[k] = click[k];
+  const em = gEmail(email), ph = gPhone(phone);
+  if (em) ids.push({ emailAddress: em });
+  if (ph) ids.push({ phoneNumber: ph });
+  if (!Object.keys(ad).length && !ids.length) return null;
+  const ev = { eventTimestamp: new Date(ts).toISOString(), eventSource: web ? 'WEB' : 'OTHER', transactionId: id };
+  if (Object.keys(ad).length) ev.adIdentifiers = ad;
+  if (ids.length) ev.userData = { userIdentifiers: ids };
+  if (value != null) Object.assign(ev, { conversionValue: value, currency });
+  return ev;
+}
+
 // ---------- fila ----------
 export const enqueue = (site, dest, eventId, name, payload, now = Date.now()) => db.run(
   `INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload) VALUES (?,?,?,?,'pending',0,?,?,?)
@@ -141,17 +169,71 @@ export async function enqueuePurchase(siteId, ev, now = Date.now()) {
   return { action: ids.includes(oid) ? 'merged' : 'skipped', eventId: first.event_id };
 }
 
+/**
+ * Mesma regra de compra única por checkout (ADR 0019) para o Google Ads: o Purchase espera PURCHASE_HOLD, order bump
+ * e upsell do mesmo comprador somam no valor dele (mesmo transactionId) e o que chega depois do envio, até PURCHASE_GROUP,
+ * não vira outra conversão. Os pedidos somados ficam em `order_ids`, fora do evento (o Google recusa campo desconhecido).
+ * Retorna { action: 'new' | 'merged' | 'skipped', eventId }.
+ */
+export async function enqueueGadsPurchase(siteId, buyer, action, ev, now = Date.now()) {
+  const oid = ev.transactionId, p = 'payload::jsonb', since = now - PURCHASE_GROUP;
+  if (!buyer) { await enqueue(siteId, 'gads', oid, 'Purchase', { action, event: ev, order_ids: [oid] }, now); return { action: 'new', eventId: oid }; }
+  await db.batch([
+    ['SELECT pg_advisory_xact_lock(hashtext(?))', [`${siteId}|gads|${buyer}`]],
+    [`UPDATE deliveries SET payload = jsonb_set(jsonb_set(${p}, '{event,conversionValue}', to_jsonb(round((${p} #>> '{event,conversionValue}')::numeric + ?::numeric, 2))),
+        '{order_ids}', COALESCE(${p} -> 'order_ids', '[]'::jsonb) || jsonb_build_array(?::text))::text
+      WHERE site=? AND dest='gads' AND name='Purchase' AND buyer=? AND status='pending' AND attempts=0 AND created>?
+        AND NOT COALESCE(${p} -> 'order_ids', '[]'::jsonb) @> jsonb_build_array(?::text)`,
+    [ev.conversionValue || 0, oid, siteId, buyer, since, oid]],
+    [`INSERT INTO deliveries(site, dest, event_id, name, status, attempts, next_at, created, payload, buyer)
+      SELECT ?, 'gads', ?, 'Purchase', 'pending', 0, ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE site=? AND dest='gads' AND name='Purchase' AND buyer=? AND created>?)
+      ON CONFLICT(site, dest, event_id) DO NOTHING`,
+    [siteId, oid, now + PURCHASE_HOLD, now, JSON.stringify({ action, event: ev, order_ids: [oid] }), buyer, siteId, buyer, since]],
+  ]);
+  const first = await db.get(`SELECT event_id, payload FROM deliveries WHERE site=? AND dest='gads' AND name='Purchase' AND buyer=? AND created>? ORDER BY id LIMIT 1`, [siteId, buyer, since]);
+  if (!first) return { action: 'skipped', eventId: null };
+  if (first.event_id === oid) return { action: 'new', eventId: oid };
+  const ids = first.payload ? JSON.parse(first.payload).order_ids || [] : [];
+  return { action: ids.includes(oid) ? 'merged' : 'skipped', eventId: first.event_id };
+}
+
 /** Enfileira um evento do site para os destinos configurados. */
 export async function enqueueWeb(site, ev, ctx, now = Date.now()) {
   if (metaReady(site)) await enqueue(site.id, 'meta', ev.event_id, ev.name, metaWebEvent(site, ev, ctx), now);
   // page_view não vai ao GA4: o gtag do site já conta, e o GA4 não deduplica. Só eventos de conversão.
   if (ga4Ready(site) && ev.name !== 'pageview') await enqueue(site.id, 'ga4', ev.event_id, ev.name, ga4WebEvent(site, ev, ctx), now);
+  // Google Ads: só os eventos com ação de conversão mapeada, com o último clique de anúncio do visitante (90 dias).
+  const action = gadsReady(site) && gadsAction(site, ev.name);
+  if (action) {
+    const [col, key] = ev.rid ? ['rid', ev.rid] : ['visitor', ev.visitor];
+    const click = await db.get(`SELECT gclid, gbraid, wbraid FROM events WHERE site=? AND ${col}=? AND ts>? AND (gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL)
+      ORDER BY ts DESC LIMIT 1`, [site.id, key, now - 90 * 864e5]);
+    const event = gadsEvent({ ts: ev.ts, value: ev.revenue, currency: site.currency, id: ev.event_id, click, email: ctx.person?.email, phone: ctx.person?.phone, web: true });
+    if (event) await enqueue(site.id, 'gads', ev.event_id, ev.name, { action, event }, now);
+  }
 }
 
 class SendError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
 /** 4xx (menos 429) não melhora tentando de novo: token inválido, parâmetro errado. */
 const permanent = e => e.status >= 400 && e.status < 500 && e.status !== 429;
 const TIMEOUT = 10e3;
+
+/** Token de acesso da conta de serviço (JWT assinado com a chave dela). ponytail: cache por instância, 1 h. */
+const tokens = new Map();
+async function googleToken(key) {
+  const c = tokens.get(key.client_email);
+  if (c && c.exp > Date.now() + 60e3) return c.token;
+  const iat = Math.floor(Date.now() / 1000), b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const aud = 'https://oauth2.googleapis.com/token'; // fixo: nunca o token_uri da chave colada
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope: 'https://www.googleapis.com/auth/datamanager', aud, iat, exp: iat + 3600 })}`;
+  const jwt = `${unsigned}.${createSign('RSA-SHA256').update(unsigned).sign(key.private_key, 'base64url')}`;
+  const res = await fetch(aud, { method: 'POST', body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }), signal: AbortSignal.timeout(TIMEOUT) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.access_token) throw new SendError(`Login da conta de serviço recusado: ${j.error_description || j.error || `HTTP ${res.status}`}`, res.ok ? 400 : res.status);
+  tokens.set(key.client_email, { token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
+  return j.access_token;
+}
 
 const SENDERS = {
   async meta(site, payloads) {
@@ -169,7 +251,21 @@ const SENDERS = {
     if (!res.ok) throw new SendError(`HTTP ${res.status}`, res.status); // o GA4 responde 2xx mesmo para evento inválido; validar com o endpoint de debug
     return 'aceito pelo GA4';
   },
+  async gads(site, [{ action, event }]) {
+    const key = gadsKey(site);
+    if (!key?.private_key) throw new SendError('Chave da conta de serviço ilegível (DATA_KEY trocada?)', 400);
+    const account = id => ({ accountType: 'GOOGLE_ADS', accountId: id });
+    const body = { destinations: [{ operatingAccount: account(site.gads_customer), ...(site.gads_login && { loginAccount: account(site.gads_login) }), productDestinationId: String(action) }],
+      encoding: 'HEX', events: [event] };
+    const res = await fetch('https://datamanager.googleapis.com/v1/events:ingest', { method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT),
+      headers: { authorization: `Bearer ${await googleToken(key)}`, 'x-goog-user-project': key.project_id, 'content-type': 'application/json' } });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SendError(j.error?.details?.find(d => d.fieldViolations)?.fieldViolations?.[0]?.description || j.error?.message || `HTTP ${res.status}`, res.status);
+    // ponytail: erros apurados depois do aceite (diagnósticos do requestStatus.retrieve) não voltam para cá.
+    return `aceito pelo Google Ads${j.requestId ? ` · requestId ${j.requestId}` : ''}`;
+  },
 };
+const READY = { meta: metaReady, ga4: ga4Ready, gads: gadsReady };
 
 const strip = p => { const o = JSON.parse(p); if (o.user_data) { delete o.user_data.client_ip_address; delete o.user_data.client_user_agent; } return JSON.stringify(o); };
 
@@ -185,14 +281,14 @@ async function finish(rows, err, now, giveUp) {
 const isFinal = (r, now, giveUp) => giveUp || r.attempts + 1 > BACKOFF.length || now - r.created > MAX_AGE;
 
 /**
- * Envia um grupo (lote da Meta ou um evento do GA4). Se a Meta recusar o lote por causa de um evento (4xx),
+ * Envia um grupo (lote da Meta ou um evento do GA4 ou do Google Ads). Se a Meta recusar o lote por causa de um evento (4xx),
  * reparte em envios de um evento, para o erro ficar só no evento ruim; 4xx num evento sozinho falha na hora.
  */
 async function sendGroup(list, now, out) {
   const { site: id, dest } = list[0], site = sites.get(id);
   let err = null, giveUp = false, response;
   try {
-    if (!site || !(dest === 'meta' ? metaReady(site) : ga4Ready(site))) throw new SendError('Destino não configurado', 0);
+    if (!site || !READY[dest](site)) throw new SendError('Destino não configurado', 0);
     response = await SENDERS[dest](site, list.map(r => JSON.parse(r.payload)));
   } catch (e) {
     if (permanent(e) && list.length > 1) { for (const r of list) await sendGroup([r], now, out); return; }
@@ -225,7 +321,7 @@ async function run({ now = Date.now(), limit = 500 } = {}) {
     const k = r.dest === 'meta' ? `${r.site}
 meta` : `${r.site}
 ${r.dest}
-${r.id}`; // Meta em lote; GA4 um por requisição
+${r.id}`; // Meta em lote; GA4 e Google Ads um por requisição
     (groups.get(k) || groups.set(k, []).get(k)).push(r);
   }
   const queue = [...groups.values()];

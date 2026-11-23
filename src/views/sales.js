@@ -3,6 +3,7 @@ import { PLATFORMS, STATUSES, METHODS, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, M
 import { SALE_FILTERS, LEVEL_PT } from '../sales/stats.js';
 import { html, raw, icon, brDate, layout, pageHead, toolbar, kpi, list, tabs, chart, share, tone, notice, num, pct, ratio, money, link, on, hiddenInputs } from './ui.js';
 import { BRANDS, brandSvg } from './icons.js';
+import { gadsKey } from '../dispatch.js';
 
 const saleLabel = (col, k) => col === 'platform' ? PLATFORMS[k] ?? k : col === 'status' ? STATUSES[k] ?? k : col === 'method' ? METHODS[k] ?? k : k === '' ? '(sem UTM)' : k;
 const sx = (n, d = 1) => n == null ? '-' : `${ratio(n)}${d ? 'x' : ''}`;
@@ -191,7 +192,7 @@ function rastroConfigurar() {
 }`;
 
 // Seção de cada ação de Integrações (o POST volta para a âncora dela).
-export const INTEG_SECTION = { rotate: 'plataformas', secrets: 'plataformas', custom_map: 'custom', custom_preview: 'custom', meta_add: 'meta', meta_sync: 'meta', meta_remove: 'meta', capi: 'capi', meta_test: 'capi', ga4: 'ga4' };
+export const INTEG_SECTION = { rotate: 'plataformas', secrets: 'plataformas', custom_map: 'custom', custom_preview: 'custom', meta_add: 'meta', meta_sync: 'meta', meta_remove: 'meta', capi: 'capi', meta_test: 'capi', ga4: 'ga4', gads: 'gads' };
 
 /** Integrações em grade de ícones: cada um abre só a sua configuração (âncora + :target, funciona sem JavaScript). */
 export function integrationsPage(ctx, originUrl, d, msg, err) {
@@ -264,6 +265,19 @@ ${health(d, 'ga4')}
 <form method="post" action="${act('ga4')}" class="stack" style="margin-top:12px"><input type="hidden" name="action" value="ga4">
 <label class="f">ID de medição<input name="ga4_id" value="${s.ga4_id || ''}" pattern="[Gg]-[A-Za-z0-9]{4,20}" placeholder="G-XXXXXXX (vazio = desativado)" autocapitalize="characters"></label>
 <label class="f">Segredo da API<span>Admin, Fluxos de dados, Measurement Protocol, Criar.</span><input name="ga4_secret" type="password" autocomplete="off" placeholder="${s.ga4_secret ? '•••••• (mantido; preencha para trocar)' : ''}"></label>
+<div><button class="primary">Salvar</button></div></form></section>`],
+    ['gads', 'Google Ads: conversões offline', 'google-ads', 'Compras e leads enviados ao Google Ads pelo servidor.', s.gads_customer ? st(true, 'Ativo') : st(null, 'Desativado'), html`
+<section class="card"><p class="muted" style="margin-top:0">Cada compra aprovada e os eventos que você escolher vão ao Google Ads pela Data Manager API, com o clique do anúncio (<code>gclid</code>, <code>gbraid</code>, <code>wbraid</code>) e, quando houver, e-mail e telefone só em SHA-256 (conversões otimizadas para leads). O mesmo pedido nunca conta duas vezes.</p>
+${health(d, 'gads')}
+<ol class="steps"><li>No Google Cloud: crie um projeto, peça acesso à <b>Data Manager API</b> (formulário do Google) e ative a API. Em <b>IAM, Contas de serviço</b>, crie uma conta e baixe uma chave <b>JSON</b>.</li>
+<li>No Google Ads: <b>Admin, Acesso e segurança</b>, adicione o e-mail da conta de serviço${gadsKey(s)?.client_email ? html` (<code>${gadsKey(s).client_email}</code>)` : ''} como usuário padrão.</li>
+<li>Em <b>Metas, Conversões</b>, crie uma ação do tipo <b>Importar, de cliques</b> para cada evento. O ID da ação é o número depois de <code>ctId=</code> na URL dela.</li>
+<li>Para não contar a mesma compra duas vezes: se o site também tem a tag de conversão do Google Ads ou importa a compra do GA4, deixe só uma delas como <b>ação principal</b> e as outras como secundárias.</li></ol>
+<form method="post" action="${act('gads')}" class="stack" style="margin-top:12px"><input type="hidden" name="action" value="gads">
+<label class="f">ID da conta do Google Ads<span>A conta dona das ações de conversão.</span><input name="gads_customer" value="${s.gads_customer || ''}" pattern="[0-9]{3}-?[0-9]{3}-?[0-9]{4}" placeholder="123-456-7890 (vazio = desativado)" inputmode="numeric"></label>
+<label class="f">ID da MCC (opcional)<span>Só se a conta de serviço entrou pela conta de administrador.</span><input name="gads_login" value="${s.gads_login || ''}" pattern="[0-9]{3}-?[0-9]{3}-?[0-9]{4}" inputmode="numeric"></label>
+<label class="f">Eventos e ações de conversão<span>Um por linha: nome do evento = ID da ação. Compras dos webhooks usam <code>Purchase</code>.</span><textarea name="gads_actions" rows="3" spellcheck="false" placeholder="Purchase = 123456789&#10;Lead = 987654321">${s.gads_actions ? Object.entries(JSON.parse(s.gads_actions)).map(([k, id]) => `${k} = ${id}`).join('\n') : ''}</textarea></label>
+<label class="f">Chave JSON da conta de serviço<span>${s.gads_key ? 'Mantida; cole outra só para trocar.' : 'Cole o arquivo inteiro.'}</span><textarea name="gads_key" rows="3" spellcheck="false" autocomplete="off" placeholder="${s.gads_key ? '•••••• (mantida)' : '{ "type": "service_account", ... }'}"></textarea></label>
 <div><button class="primary">Salvar</button></div></form></section>`],
   ];
   return layout(ctx, `Integrações · ${s.name}`, html`

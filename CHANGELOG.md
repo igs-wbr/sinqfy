@@ -2,6 +2,11 @@
 
 Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Novo
+- Google Ads em Integrações: compras aprovadas e eventos escolhidos vão ao Google Ads como conversões, pela Data Manager API, com `gclid`/`gbraid`/`wbraid` e e-mail e telefone em SHA-256. Order bump e upsell do mesmo comprador viram uma conversão só, como na Meta, e quem clicou em anúncio da Meta e do Google tem a compra enviada só para o último clique. Login por conta de serviço do Google Cloud, com a chave cifrada no banco (ADR 0024).
+
 ## [1.1.0] - 2026-11-23
 
 ### Mudou

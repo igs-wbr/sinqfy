@@ -211,6 +211,8 @@ async function migrate() {
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS client TEXT NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS spend_rule TEXT NOT NULL DEFAULT '';
     -- Dados da instalação (src/license.js): chave do Pro e início do teste grátis.
     CREATE TABLE IF NOT EXISTS install(k TEXT PRIMARY KEY, v TEXT NOT NULL);
+    -- Google Ads pela Data Manager API (ADR 0024): conta que recebe, MCC opcional, chave da conta de serviço e evento → ação de conversão.
+    ALTER TABLE sites ADD COLUMN IF NOT EXISTS gads_customer TEXT, ADD COLUMN IF NOT EXISTS gads_login TEXT, ADD COLUMN IF NOT EXISTS gads_key TEXT, ADD COLUMN IF NOT EXISTS gads_actions TEXT;
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

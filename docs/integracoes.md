@@ -160,6 +160,16 @@ A partir daí:
 - IP e user agent saem do banco assim que o envio termina ([ADR 0014](adr/0014-fila-de-envio-server-side.md)).
 - A tela Integrações mostra quantos eventos foram enviados, estão na fila ou falharam nas últimas 24 h.
 
+### Google Ads (Data Manager API)
+
+Compras aprovadas e os eventos que você escolher vão ao Google Ads como conversões importadas de cliques ([ADR 0024](adr/0024-google-ads-pela-data-manager.md)). Configure em três passos:
+
+1. **Google Cloud:** crie um projeto, peça acesso à Data Manager API pelo formulário do Google e ative a API. Em IAM → Contas de serviço, crie uma conta e baixe uma chave JSON.
+2. **Google Ads:** Admin → Acesso e segurança, adicione o e-mail da conta de serviço como usuário padrão (na conta dona das conversões ou na MCC dela).
+3. **Ações de conversão:** em Metas → Conversões, crie uma ação "Importar, de cliques" para cada evento. O ID é o número depois de `ctId=` na URL da ação.
+
+No Sinqfy, informe o ID da conta, a MCC (se o acesso veio por ela), o mapa `evento = ID da ação` (um por linha; compras usam `Purchase`) e cole a chave JSON. Como na Meta, order bump e upsell do mesmo comprador viram uma conversão só, com o valor somado, e cada ação de conversão recebe um evento só. Com a Meta e o Google Ads ativos, quem clicou em anúncio dos dois tem a compra enviada só para o último clique. Se o site também tem a tag de conversão do Google Ads ou importa a compra do GA4, deixe só uma delas como ação principal no Google Ads, senão a compra conta duas vezes. Cada conversão leva o último `gclid`, `gbraid` ou `wbraid` do visitante e, quando houver, e-mail e telefone em SHA-256. A chave fica cifrada com a `DATA_KEY`.
+
 ## 6. Leads e CRM
 
 Precisa de `DATA_KEY` no servidor (veja `.env.example`). Nome, e-mail e telefone ficam cifrados; o painel mostra mascarado na lista e aberto só na ficha.

@@ -1,7 +1,9 @@
 // Vendas: resumo (página inicial do site), campanhas, pedidos, integrações e o endpoint público de webhooks.
 import { db, env, newToken, loadSites, awaitAll } from '../db.js';
 import { period } from '../time.js';
+import { createPrivateKey } from 'node:crypto';
 import { route, send, redirect, form, readBody, origin, sitePath, HttpError } from '../http.js';
+import { piiReady, seal } from '../pii.js';
 import { siteCtx } from '../auth.js';
 import * as S from '../sales/stats.js';
 import { edgeUrlFor } from '../cloudflare.js';
@@ -61,7 +63,7 @@ route('GET', '/sites/:id/orders', { site: 'view', client: true }, async r => {
 // --- integrações ---
 const MSG = {
   rotate: 'Novo token gerado. Atualize a URL do webhook nas plataformas.', meta_add: 'Conta conectada e sincronizada.',
-  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.', meta_test: 'Conexão com a Meta conferida.', secrets: 'Segredos dos webhooks salvos.', custom_map: 'Mapa do webhook personalizado salvo.',
+  meta_sync: 'Sincronização concluída.', meta_remove: 'Conta removida (os gastos já importados foram mantidos).', capi: 'Conversions API salva.', ga4: 'GA4 salvo.', gads: 'Google Ads salvo.', meta_test: 'Conexão com a Meta conferida.', secrets: 'Segredos dos webhooks salvos.', custom_map: 'Mapa do webhook personalizado salvo.',
 };
 async function integrationsView(r, msg, err, extra = {}) {
   const d = await awaitAll({
@@ -120,6 +122,37 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
       if (id && !secret && !site.ga4_secret) return integrationsView(r, null, 'Informe o segredo da API do Measurement Protocol.');
       if (id) await db.run('UPDATE sites SET ga4_id=?, ga4_secret=COALESCE(?, ga4_secret) WHERE id=?', [id, secret || null, site.id]);
       else await db.run('UPDATE sites SET ga4_id=NULL, ga4_secret=NULL WHERE id=?', [site.id]);
+      await loadSites();
+      return done();
+    }
+    case 'gads': {
+      const digits = k => (f.get(k) || '').replace(/[\s-]/g, '');
+      const customer = digits('gads_customer'), login = digits('gads_login'), rawKey = (f.get('gads_key') || '').trim();
+      if (!customer) {
+        await db.run('UPDATE sites SET gads_customer=NULL, gads_login=NULL, gads_key=NULL, gads_actions=NULL WHERE id=?', [site.id]);
+        await loadSites();
+        return done();
+      }
+      if (!/^\d{10}$/.test(customer) || (login && !/^\d{10}$/.test(login))) return integrationsView(r, null, 'ID de conta inválido: são 10 dígitos (ex.: 123-456-7890).');
+      const actions = {};
+      for (const line of (f.get('gads_actions') || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)) {
+        const m = /^(.{1,60}?)\s*[=:]\s*(\d{1,20})$/.exec(line);
+        if (!m) return integrationsView(r, null, `Linha inválida no mapa de conversões: "${line.slice(0, 80)}". Use Evento = ID da ação.`);
+        actions[m[1]] = m[2];
+      }
+      // Dois eventos na mesma ação contariam a mesma compra (ou lead) duas vezes, com transactionId diferente.
+      const dup = Object.values(actions).find((id, i, all) => all.indexOf(id) !== i);
+      if (dup) return integrationsView(r, null, `A ação ${dup} aparece em mais de um evento: cada ação de conversão recebe um evento só, senão a conversão conta duas vezes.`);
+      if (!Object.keys(actions).length) return integrationsView(r, null, 'Informe ao menos um evento e a ação de conversão dele (ex.: Purchase = 123456789).');
+      let key = null;
+      if (rawKey) {
+        let k;
+        try { k = JSON.parse(rawKey); createPrivateKey(k.private_key); } catch { k = null; }
+        if (k?.type !== 'service_account' || !k.client_email || !k.project_id) return integrationsView(r, null, 'Chave inválida: cole o arquivo JSON inteiro da conta de serviço.');
+        const json = JSON.stringify({ type: k.type, project_id: k.project_id, client_email: k.client_email, private_key: k.private_key });
+        key = piiReady() ? seal(json) : json; // com a DATA_KEY, a chave privada fica cifrada no banco
+      } else if (!site.gads_key) return integrationsView(r, null, 'Cole a chave JSON da conta de serviço.');
+      await db.run('UPDATE sites SET gads_customer=?, gads_login=?, gads_key=COALESCE(?, gads_key), gads_actions=? WHERE id=?', [customer, login || null, key, JSON.stringify(actions), site.id]);
       await loadSites();
       return done();
     }
