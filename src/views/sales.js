@@ -11,6 +11,8 @@ const synced = (ctx, lastSync) => lastSync
   ? html`<span class="live" title="A página recarrega sozinha a cada 5 minutos"><i></i>Meta atualizada às ${new Date(lastSync).toLocaleTimeString('pt-BR', { timeZone: ctx.site.timezone, hour: '2-digit', minute: '2-digit' })}</span>`
   : ctx.canEdit ? html`<a class="live" href="/sites/${encodeURIComponent(ctx.site.id)}/integrations">Conectar a Meta →</a>` : '';
 const AUTO = { refresh: 300 }; // o gasto da Meta atualiza a cada 5 min
+/** "Integrações" como link só para quem edita (leitor e a visão do cliente não abrem a tela). */
+const integLink = (ctx, hash = '') => ctx.canEdit ? html`<a href="/sites/${encodeURIComponent(ctx.site.id)}/integrations${hash}">Integrações</a>` : 'Integrações';
 
 function selects(ctx, opts) {
   return html`<form method="get" class="row">${hiddenInputs(ctx.q, Object.keys(opts).map(k => 'f_' + k))}
@@ -27,7 +29,7 @@ export function salesPage(ctx, p, f, d) {
   return layout(ctx, `Resumo · ${site.name}`, html`
 ${pageHead(`${site.name} · Resumo`, raw('Faturamento, gastos e <em>lucro</em>'), 'Vendas aprovadas das suas plataformas, cruzadas com o que você investiu em anúncios.', synced(ctx, d.lastSync))}
 ${toolbar(ctx, p, f, { filters: SALE_FILTERS, label: saleLabel, extra: selects(ctx, { platform: d.platforms.map(k => [k, PLATFORMS[k] ?? k]), product: d.products.map(x => [x, x]) }) })}
-${empty ? notice(raw(`Ainda não há vendas nem gastos. Conecte uma plataforma de vendas e a Meta em <a href="/sites/${encodeURIComponent(site.id)}/integrations">Integrações</a>.`)) : ''}
+${empty ? notice(html`Ainda não há vendas nem gastos. Conecte uma plataforma de vendas e a Meta em ${integLink(ctx)}.`) : ''}
 <div class="hero">${kpi('net', 'Faturamento líquido', c.net, pv.net, m, { feature: true, spark: sp('v') })}${kpi('spend', 'Gastos com anúncios', c.spend, pv.spend, m, { invert: true, spark: sp('s') })}
 ${kpi('roas', 'ROAS', c.roas, pv.roas, sx, { tone: tone(c.roas, 1) })}${kpi('profit', 'Lucro', c.profit, pv.profit, m, { tone: tone(c.profit) })}</div>
 <div class="kpis">${kpi('paid', 'Vendas aprovadas', c.paid, pv.paid, num)}${kpi('meta-purchases', 'Compras (Meta)', c.metaPurchases, pv.metaPurchases, num)}${kpi('meta-roas', 'ROAS (Meta)', c.metaRoas, pv.metaRoas, sx)}${c.metaLeads || pv.metaLeads ? kpi('meta-leads', 'Leads (Meta)', c.metaLeads, pv.metaLeads, num) : ''}${kpi('gross', 'Faturamento bruto', c.gross, pv.gross, m)}${kpi('ticket', 'Ticket médio', c.ticket, pv.ticket, m)}
@@ -89,7 +91,7 @@ function adFunnel(ctx, fn, m) {
     ...(s.cost ? [`Custo por pessoa: ${m(s.cost)}`] : [])].join('|');
   return html`<section class="card" id="funil"><div class="row between"><h2>Funil dos anúncios</h2>
 <form method="get" action="#funil" class="row">${hiddenInputs(ctx.q, ['fc'])}<label class="sr" for="fc">Campanha</label><select id="fc" name="fc" data-submit><option value="">Todas as campanhas da Meta</option>${metas.map(r => html`<option value="${r.id}"${fn.fc === r.id ? raw(' selected') : ''}>${r.name}</option>`)}</select><button class="auto-btn">Ver</button></form></div>
-${!imp.v ? html`<p class="empty">Sem dados da Meta neste período. Conecte a conta em <a href="/sites/${encodeURIComponent(ctx.site.id)}/integrations#meta">Integrações</a>.</p>` : html`
+${!imp.v ? html`<p class="empty">Sem dados da Meta neste período. Conecte a conta em ${integLink(ctx, '#meta')}.</p>` : html`
 <p class="flow-sum"><span><b>${num(imp.v)}</b> impressões</span><span><b>${pct(st[0]?.rate)}</b> clicaram</span>${fn.spend ? html`<span><b>${m(fn.spend)}</b> investidos</span>` : ''}</p>
 <div class="tw"><div class="flow" style="--n:${st.length}">
 <svg class="flow-band" viewBox="0 0 ${W} 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="flow-g"><stop offset="0" stop-color="var(--s1)"/><stop offset="1" stop-color="var(--s1)" stop-opacity=".45"/></linearGradient>${g ? html`<clipPath id="flow-c"><rect x="${(gi - 1) * 100 + 55}" y="0" width="${W}" height="100"/></clipPath>` : ''}</defs>
@@ -130,7 +132,7 @@ ${rows.length ? html`<section class="card"><div class="tw"><table class="data mc
 <td>${r.budget != null ? m(r.budget) : '-'}</td><td>${m(r.spend)}</td><td>${num(r.sales)}</td><td>${num(r.first)}</td><td>${num(r.touched)}</td><td>${r.cpa != null ? m(r.cpa) : '-'}</td><td>${m(r.net)}</td>
 <td>${sx(r.roas)}</td><td>${num(r.metaPurchases)}</td><td>${sx(r.metaRoas)}</td>${leads ? html`<td>${num(r.metaLeads)}</td>` : ''}<td class="${r.profit < 0 ? 'neg' : r.profit > 0 ? 'pos' : ''}">${m(r.profit)}</td><td>${pct(r.roi)}</td><td>${pct(r.ctr)}</td></tr>`)}</tbody>
 <tfoot><tr><th style="text-align:left">Total</th><th></th><th></th><th>${m(spend)}</th><th>${num(sales)}</th><th>${num(sum('first'))}</th><th></th><th>${sales ? m(spend / sales) : '-'}</th><th>${m(net)}</th><th>${sx(spend ? net / spend : null)}</th><th>${num(metaP)}</th><th>${sx(spend ? metaV / spend : null)}</th>${leads ? html`<th>${num(leads)}</th>` : ''}<th>${m(profit)}</th><th>${pct(spend ? profit / spend : null)}</th><th></th></tr></tfoot></table></div></section>`
-    : notice(raw(`Nenhum gasto ou venda com UTM no período. Conecte a conta de anúncios da Meta em <a href="/sites/${encodeURIComponent(site.id)}/integrations">Integrações</a>.`))}`, AUTO);
+    : notice(html`Nenhum gasto ou venda com UTM no período. Conecte a conta de anúncios da Meta em ${integLink(ctx)}.`)}`, AUTO);
 }
 
 export function ordersPage(ctx, p, f, d, page) {

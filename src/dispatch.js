@@ -9,7 +9,6 @@ const graph = () => `https://graph.facebook.com/${env.META_API_VERSION || 'v23.0
 const sha = v => createHash('sha256').update(v).digest('hex');
 export const BACKOFF = [60e3, 5 * 60e3, 30 * 60e3, 6 * 3600e3]; // 4 reenvios; o 5º erro encerra
 const MAX_AGE = 7 * 864e5; // a Meta recusa eventos com mais de 7 dias
-export const DESTS = { meta: 'Meta', ga4: 'GA4' };
 
 export const metaReady = s => !!(s.meta_pixel && s.meta_capi_token);
 export const ga4Ready = s => !!(s.ga4_id && s.ga4_secret);

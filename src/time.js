@@ -13,11 +13,6 @@ export const localDate = (ts, tz) => { const p = parts(ts, tz); return `${p.year
 /** ms a somar a um instante UTC para obter a hora local */
 export const tzOffset = (ts, tz) => { const p = parts(ts, tz); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(ts / 60e3) * 60e3; };
 export const addDays = (d, n) => new Date(Date.parse(d) + n * DAY).toISOString().slice(0, 10);
-/** instante UTC de "data às HH:00" no fuso tz */
-export function zoned(d, hour, tz) {
-  const wall = Date.parse(d) + hour * 3600e3;
-  return wall - tzOffset(wall - tzOffset(wall, tz), tz);
-}
 export const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && !isNaN(Date.parse(s));
 
 export const RANGES = { today: 'Hoje', yesterday: 'Ontem', '7d': '7 dias', '30d': '30 dias', '90d': '90 dias', '12m': '12 meses' };
