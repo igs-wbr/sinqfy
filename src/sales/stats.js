@@ -16,9 +16,14 @@ export function saleFiltersFrom(q) {
   for (const k in SALE_FILTERS) if (q.get('f_' + k)) f[k] = q.get('f_' + k).slice(0, 200);
   return f;
 }
+/** Sites da consulta: o próprio, ou os do cliente na visão somada (src/clients.js). */
+export const ids = site => site.ids || [site.id];
+// Na visão do cliente, o pedido que chegou a dois sites (ex.: webhook da Hotmart nos dois) conta uma vez.
+const once = (site, a = '') => site.ids ? [` AND ${a}id IN (SELECT min(id) FROM sales WHERE site = ANY(?::text[]) GROUP BY platform, order_id)`, [site.ids]] : ['', []];
 function scope(site, { from, to }, f = {}, { status = true } = {}) {
-  let sql = 'site=? AND date BETWEEN ? AND ?';
-  const args = [site, from, to];
+  const [o, oa] = once(site);
+  let sql = `site = ANY(?::text[]) AND date BETWEEN ? AND ?${o}`;
+  const args = [ids(site), from, to, ...oa];
   for (const k in f) if (status || k !== 'status') { sql += ` AND ${k}=?`; args.push(f[k]); } // k vem da whitelist SALE_FILTERS
   return [sql, args];
 }
@@ -26,17 +31,17 @@ const div = (a, b) => b ? a / b : null;
 
 export const spendTotal = (site, { from, to }) =>
   db.get(`SELECT COALESCE(SUM(spend), 0) s, COALESCE(SUM(impressions), 0) i, COALESCE(SUM(clicks), 0) c, COALESCE(SUM(meta_purchases), 0) mp,
-    COALESCE(SUM(meta_purchase_value), 0) mv, COALESCE(SUM(meta_leads), 0) ml FROM ad_spend WHERE site=? AND date BETWEEN ? AND ?`, [site, from, to]);
+    COALESCE(SUM(meta_purchase_value), 0) mv, COALESCE(SUM(meta_leads), 0) ml FROM ad_spend WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ?`, [ids(site), from, to]);
 
 export async function salesTotals(site, range, f = {}) {
-  const [w, a] = scope(site.id, range, f, { status: false });
+  const [w, a] = scope(site, range, f, { status: false });
   const [t, sp] = await Promise.all([db.get(`SELECT
       COUNT(CASE WHEN status='paid' THEN 1 END) paid, COALESCE(SUM(CASE WHEN status='paid' THEN gross END), 0) gross,
       COALESCE(SUM(CASE WHEN status='paid' THEN net END), 0) net,
       COUNT(CASE WHEN status='pending' THEN 1 END) pending, COALESCE(SUM(CASE WHEN status='pending' THEN gross END), 0) pending_value,
       COUNT(CASE WHEN status='refunded' THEN 1 END) refunded, COALESCE(SUM(CASE WHEN status='refunded' THEN gross END), 0) refunded_value,
       COUNT(CASE WHEN status='chargeback' THEN 1 END) chargeback, COUNT(CASE WHEN status='refused' THEN 1 END) refused, COUNT(*) total
-    FROM sales WHERE ${w}`, a), spendTotal(site.id, range)]);
+    FROM sales WHERE ${w}`, a), spendTotal(site, range)]);
   const tax = t.gross * (site.tax_rate || 0) / 100, profit = t.net - sp.s - tax, closed = t.paid + t.refunded + t.chargeback;
   return {
     ...t, spend: sp.s, impressions: sp.i, clicks: sp.c, tax, profit,
@@ -48,7 +53,7 @@ export async function salesTotals(site, range, f = {}) {
 
 /** Faturamento líquido (vendas aprovadas) e gastos por hora/dia/mês. Gastos não existem por hora. */
 export async function salesSeries(site, range, f, days) {
-  const [w, a] = scope(site.id, range, f, { status: false });
+  const [w, a] = scope(site, range, f, { status: false });
   let rev, spend = new Map();
   if (days === 1) {
     const off = tzOffset(Date.parse(range.from) + 12 * 3600e3, site.timezone);
@@ -57,7 +62,7 @@ export async function salesSeries(site, range, f, days) {
     const k = days <= 92 ? 'date' : 'substr(date, 1, 7)';
     const [r, s] = await Promise.all([
       db.all(`SELECT ${k} k, SUM(net) v, COUNT(*) n FROM sales WHERE ${w} AND status='paid' GROUP BY k`, a),
-      db.all(`SELECT ${k} k, SUM(spend) v FROM ad_spend WHERE site=? AND date BETWEEN ? AND ? GROUP BY k`, [site.id, range.from, range.to]),
+      db.all(`SELECT ${k} k, SUM(spend) v FROM ad_spend WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? GROUP BY k`, [ids(site), range.from, range.to]),
     ]);
     rev = r; spend = new Map(s.map(x => [x.k, x.v]));
   }
@@ -67,8 +72,8 @@ export async function salesSeries(site, range, f, days) {
 
 /** Marcações do gráfico: campanha que começou a gastar ou parou de gastar dentro do período (dias com gasto > 0). */
 export async function campaignMarks(site, range) {
-  const rows = await db.all(`SELECT MAX(campaign_name) name, MIN(date) a, MAX(date) b, (SELECT MAX(date) FROM ad_spend WHERE site=? AND spend>0) last
-    FROM ad_spend WHERE site=? AND spend>0 GROUP BY campaign_id`, [site.id, site.id]);
+  const rows = await db.all(`SELECT MAX(campaign_name) name, MIN(date) a, MAX(date) b, (SELECT MAX(date) FROM ad_spend WHERE site = ANY(?::text[]) AND spend>0) last
+    FROM ad_spend WHERE site = ANY(?::text[]) AND spend>0 GROUP BY campaign_id`, [ids(site), ids(site)]);
   const out = [];
   for (const r of rows) {
     const name = r.name || 'campanha sem nome';
@@ -84,13 +89,13 @@ const keyOf = col => `COALESCE(substring(split_part(${col}, '::', 1) from '\\S\\
 /** Dados do funil dos anúncios da Meta (uma campanha ou todas), cruzando a Meta com os nossos eventos e vendas. Ver src/sales/funnel.js. */
 export async function adFunnel(site, range, campaign = null) {
   const only = campaign ? ' AND campaign_id=?' : '';
-  const base = [site.id, range.from, range.to, ...(campaign ? [campaign] : [])];
+  const base = [ids(site), range.from, range.to, ...(campaign ? [campaign] : [])];
   const [meta, camps, tracking, webhooks] = await Promise.all([
     db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_lpv) lpv, SUM(meta_checkouts) ic, SUM(meta_purchases) buy, SUM(spend) spend
-      FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
-    db.all(`SELECT DISTINCT campaign_id, campaign_name FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
-    db.get('SELECT 1 FROM events WHERE site=? AND date BETWEEN ? AND ? LIMIT 1', [site.id, range.from, range.to]),
-    db.get('SELECT 1 FROM sales WHERE site=? LIMIT 1', [site.id]),
+      FROM ad_spend WHERE site = ANY(?::text[]) AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
+    db.all(`SELECT DISTINCT campaign_id, campaign_name FROM ad_spend WHERE site = ANY(?::text[]) AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
+    db.get('SELECT 1 FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? LIMIT 1', [ids(site), range.from, range.to]),
+    db.get('SELECT 1 FROM sales WHERE site = ANY(?::text[]) LIMIT 1', [ids(site)]),
   ]);
   // Venda e visita casam com a campanha pelo id da UTM ou, sem id, pelo nome.
   const keys = [...new Set(camps.flatMap(c => [c.campaign_id, c.campaign_name]).filter(Boolean))];
@@ -98,10 +103,10 @@ export async function adFunnel(site, range, campaign = null) {
     db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout
       FROM (SELECT visitor, COUNT(*) FILTER (WHERE name='pageview') pv, COUNT(*) FILTER (WHERE name<>'pageview') ev,
         COUNT(*) FILTER (WHERE ${CHECKOUT_SQL}) co
-        FROM events WHERE site=? AND date BETWEEN ? AND ?
-          AND visitor IN (SELECT visitor FROM events WHERE site=? AND date BETWEEN ? AND ? AND name='pageview' AND ${UTM_KEY} = ANY(?))
-        GROUP BY visitor) x`, [site.id, range.from, range.to, site.id, range.from, range.to, keys]),
-    db.get("SELECT COUNT(*) n FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid' AND campaign_key = ANY(?)", [site.id, range.from, range.to, keys]),
+        FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ?
+          AND visitor IN (SELECT visitor FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND name='pageview' AND ${UTM_KEY} = ANY(?))
+        GROUP BY visitor) x`, [ids(site), range.from, range.to, ids(site), range.from, range.to, keys]),
+    db.get(`SELECT COUNT(*) n FROM sales WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND status='paid' AND campaign_key = ANY(?)${once(site)[0]}`, [ids(site), range.from, range.to, keys, ...once(site)[1]]),
   ]) : [{}, {}];
   return { stages: buildFunnel(meta || {}, own, sales, { tracking: !!tracking, webhooks: !!webhooks }), spend: Number(meta?.spend) || 0 };
 }
@@ -196,20 +201,20 @@ export async function adSequences(site, range) {
 }
 
 export function byMethod(site, range, f) {
-  const [w, a] = scope(site.id, range, f, { status: false });
+  const [w, a] = scope(site, range, f, { status: false });
   return db.all(`SELECT method k, COUNT(*) n, SUM(net) v FROM sales WHERE ${w} AND status='paid' GROUP BY method ORDER BY v DESC`, a);
 }
 
 export function topSales(site, range, f, col, limit = 8) {
-  const [w, a] = scope(site.id, range, f, { status: false });
+  const [w, a] = scope(site, range, f, { status: false });
   return db.all(`SELECT ${col} k, COUNT(*) n, SUM(net) v FROM sales WHERE ${w} AND status='paid' GROUP BY k ORDER BY v DESC LIMIT ${limit}`, a);
 }
 
 export async function orders(site, range, f, page = 0, size = 50) {
-  const [w, a] = scope(site.id, range, f);
+  const [w, a] = scope(site, range, f);
   const [rows, products] = await Promise.all([
     db.all(`SELECT * FROM sales WHERE ${w} ORDER BY ts DESC LIMIT ${size + 1} OFFSET ${page * size}`, a),
-    db.all("SELECT DISTINCT product FROM sales WHERE site=? AND product<>'' ORDER BY product", [site.id]),
+    db.all("SELECT DISTINCT product FROM sales WHERE site = ANY(?::text[]) AND product<>'' ORDER BY product", [ids(site)]),
   ]);
   return { rows, products: products.map(r => r.product) };
 }
@@ -220,10 +225,10 @@ const LEVEL_UTM = { campaign: 'campaign', adset: 'medium', ad: 'content' };
 export const LEVEL_PT = { campaign: 'Campanhas', adset: 'Conjuntos', ad: 'Anúncios' };
 
 /** Ids de conjuntos ou anúncios dentro de uma campanha ou conjunto: pela hierarquia da Meta e pelo gasto (cobre o que já saiu da conta). */
-async function inScope(site, level, scope, campaign) {
+async function inScope(group, level, scope, campaign) {
   const [ents, spent] = await Promise.all([
-    db.all("SELECT level, id, parent FROM ad_entities WHERE site=? AND platform='meta' AND level IN ('adset','ad')", [site]),
-    db.all(`SELECT DISTINCT ${level}_id id FROM ad_spend WHERE site=? AND platform='meta' AND ${scope.col}=?`, [site, scope.id]),
+    db.all("SELECT level, id, parent FROM ad_entities WHERE site = ANY(?::text[]) AND platform='meta' AND level IN ('adset','ad')", [group]),
+    db.all(`SELECT DISTINCT ${level}_id id FROM ad_spend WHERE site = ANY(?::text[]) AND platform='meta' AND ${scope.col}=?`, [group, scope.id]),
   ]);
   const ids = new Set(spent.map(r => r.id));
   const sets = new Set(scope.col === 'adset_id' ? [scope.id] : ents.filter(e => e.level === 'adset' && e.parent === campaign).map(e => e.id));
@@ -239,15 +244,16 @@ export async function campaigns(site, range, level = 'campaign', { campaign = nu
   const L = LEVELS[level] || 'campaign';
   // Navegação como na Meta: conjuntos da campanha escolhida, anúncios do conjunto (ou da campanha) escolhido.
   const scope = L === 'adset' ? (campaign ? { col: 'campaign_id', id: campaign } : null) : L === 'ad' ? (adset ? { col: 'adset_id', id: adset } : campaign ? { col: 'campaign_id', id: campaign } : null) : null;
-  const allowed = scope && await inScope(site.id, L, scope, campaign);
-  const U = LEVEL_UTM[L], W = "x.site=? AND x.date BETWEEN ? AND ? AND x.status='paid'", wa = [site.id, range.from, range.to];
+  const allowed = scope && await inScope(ids(site), L, scope, campaign);
+  const [o, oa] = once(site), [ox] = once(site, 'x.');
+  const U = LEVEL_UTM[L], W = `x.site = ANY(?::text[]) AND x.date BETWEEN ? AND ? AND x.status='paid'${ox}`, wa = [ids(site), range.from, range.to, ...oa];
   const [entities, spends, salesRows, firstRows, touchRows] = await Promise.all([
-    db.all('SELECT * FROM ad_entities WHERE site=? AND level=?', [site.id, L]),
+    db.all('SELECT * FROM ad_entities WHERE site = ANY(?::text[]) AND level=?', [ids(site), L]),
     db.all(`SELECT platform, ${L}_id id, MAX(${L}_name) name, SUM(spend) spend, SUM(impressions) imp, SUM(clicks) clicks,
         SUM(meta_purchases) mp, SUM(meta_purchase_value) mv, SUM(meta_leads) ml
-      FROM ad_spend WHERE site=? AND date BETWEEN ? AND ? AND ${L}_id<>'' GROUP BY platform, ${L}_id`, [site.id, range.from, range.to]),
-    db.all(`SELECT ${L}_key k, COUNT(*) n, SUM(net) net, SUM(gross) gross FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid' GROUP BY k`,
-      [site.id, range.from, range.to]),
+      FROM ad_spend WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND ${L}_id<>'' GROUP BY platform, ${L}_id`, [ids(site), range.from, range.to]),
+    db.all(`SELECT ${L}_key k, COUNT(*) n, SUM(net) net, SUM(gross) gross FROM sales WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND status='paid'${o} GROUP BY k`,
+      [ids(site), range.from, range.to, ...oa]),
     // Abriu: a venda cujo primeiro toque pago foi este anúncio (ADR 0018).
     db.all(`SELECT ${keyOf('x.ft_' + U)} k, COUNT(*) n FROM sales x WHERE ${W} AND x.ft_campaign<>'' GROUP BY k`, wa),
     // Participou: o anúncio aparece em alguma visita do mesmo rid nos 30 dias antes da venda, ou é a origem da própria venda.

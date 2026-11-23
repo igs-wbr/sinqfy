@@ -16,6 +16,8 @@ ${notice(msg)}
 <label class="f">Moeda<input name="currency" value="${s.currency}" pattern="[A-Za-z]{3}" maxlength="3" required></label>
 <label class="f">Domínios do site<span>Separados por vírgula, ex.: loja.com.br. Eventos de outros domínios são recusados. Vazio aceita qualquer um.</span><input name="domains" value="${s.domains || ''}" maxlength="500" placeholder="loja.com.br, ofertas.loja.com.br"></label>
 <label class="f">Imposto sobre o faturamento (%)<span>Descontado do lucro. Ex.: 6 para Simples Nacional na faixa inicial.</span><input name="tax_rate" type="number" min="0" max="100" step="0.01" value="${s.tax_rate}"></label>
+<label class="f">Cliente<span>Sites com o mesmo cliente (um por funil, produto ou faixa de preço) ganham a visão somada "Cliente (todos)" no seletor de sites.</span><input name="client" value="${s.client || ''}" maxlength="80" list="clients" placeholder="Ex.: Jean Alessandro"><datalist id="clients">${[...new Set((ctx.sites || []).map(x => x.client).filter(Boolean))].map(c => html`<option value="${c}">`)}</datalist></label>
+<label class="f">Campanhas deste site<span>Trechos do nome das campanhas, separados por vírgula. Com a conta de anúncios ligada a outro site do mesmo cliente, o gasto dessas campanhas vem para este site. Vazio: o gasto fica no site da conta.</span><input name="spend_rule" value="${s.spend_rule || ''}" maxlength="300" placeholder="Ex.: BLACK997"></label>
 <div><button class="primary">Salvar</button></div></form></section>
 <div class="stack">
 <section class="card"><h2>Recursos</h2><p class="muted">Ligue só o que este site usa. Desligado, o item some do menu e as telas, envios e tarefas do recurso param.</p>

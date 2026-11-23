@@ -10,6 +10,7 @@ import { runJobs } from '../jobs.js';
 import { ROLES } from '../views/ui.js';
 import { removeHost } from '../cloudflare.js';
 import { MODULES, fromForm } from '../modules.js';
+import { clientSites } from '../clients.js';
 import * as V from '../views/admin.js';
 
 const TIMEZONES = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
@@ -49,7 +50,15 @@ route('POST', '/sites/:id/settings', { site: 'edit' }, async r => {
     if (!name || !TIMEZONES.has(tz) || !/^[A-Z]{3}$/.test(cur) || !(tax >= 0 && tax <= 100)) throw new HttpError(400, 'Nome, fuso horário, moeda ou imposto inválidos.');
     const domains = (f.get('domains') || '').toLowerCase().split(/[\s,]+/).map(d => d.replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean);
     if (domains.some(d => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d))) throw new HttpError(400, 'Domínio inválido. Use só o domínio, ex.: loja.com.br');
-    await db.run('UPDATE sites SET name=?, timezone=?, currency=?, tax_rate=?, domains=? WHERE id=?', [name, tz, cur, tax, domains.join(', ') || null, id]);
+    const client = (f.get('client') || '').trim().slice(0, 80), rule = (f.get('spend_rule') || '').split(',').map(t => t.trim()).filter(Boolean).join(', ').slice(0, 300);
+    await db.run('UPDATE sites SET name=?, timezone=?, currency=?, tax_rate=?, domains=?, client=?, spend_rule=? WHERE id=?', [name, tz, cur, tax, domains.join(', ') || null, client, rule, id]);
+    // Mudou o cliente ou a regra: a próxima sincronização das contas do cliente refaz 90 dias e redistribui o gasto entre os sites.
+    if (client !== r.site.client || rule !== r.site.spend_rule) {
+      const group = [...new Set([...clientSites(r.site), ...clientSites({ ...r.site, client })].map(s => s.id))];
+      await db.run("UPDATE ad_accounts SET last_sync=NULL, last_full=NULL WHERE site = ANY(?::text[])", [group]);
+      // Sem conta própria, todo gasto deste site veio da conta do cliente: limpa, e a ressincronização devolve o que ainda for dele.
+      if (!await db.get('SELECT 1 FROM ad_accounts WHERE site=?', [id])) await db.batch([['DELETE FROM ad_spend WHERE site=?', [id]], ['DELETE FROM ad_entities WHERE site=?', [id]]]);
+    }
   } else if (action === 'share_on') await db.run('UPDATE sites SET share_token=? WHERE id=?', [newToken(), id]);
   else if (action === 'share_off') await db.run('UPDATE sites SET share_token=NULL WHERE id=?', [id]);
   else if (action === 'modules') {

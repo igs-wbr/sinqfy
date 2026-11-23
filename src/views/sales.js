@@ -34,6 +34,7 @@ ${kpi('roas', 'ROAS', c.roas, pv.roas, sx, { tone: tone(c.roas, 1) })}${kpi('pro
 ${kpi('cpa', 'CPA', c.cpa, pv.cpa, m, { invert: true })}${kpi('roi', 'ROI', c.roi, pv.roi, pct)}${kpi('margin', 'Margem', c.margin, pv.margin, pct)}
 ${kpi('pending', 'Pendentes', c.pending_value, pv.pending_value, m)}${kpi('refunds', 'Reembolsos', c.refund_rate, pv.refund_rate, pct, { invert: true })}
 ${kpi('chargeback', 'Chargeback', c.chargeback_rate, pv.chargeback_rate, pct, { invert: true })}${kpi('tax', `Imposto (${num(site.tax_rate)}%)`, c.tax, pv.tax, m)}</div>
+${d.funnels ? funnelsTable(ctx, d.funnels, m) : ''}
 <section class="card"><h2>Faturamento × gastos</h2>${chart(d.series, d.prevSeries, {
     label: 'Faturamento líquido', color: 'var(--s1)', fmt: m, line: p.days > 1 ? { key: 's', label: 'Gastos', color: 'var(--s2)' } : null, tip: x => [`${num(x.n)} vendas`], marks: d.marks, empty: next('Sem vendas nem gastos no período.', 'Conecte a plataforma de vendas e a Meta'),
   })}</section>
@@ -43,6 +44,15 @@ ${tabs('Origem das vendas', [['Campanha', list(ctx, d.campaigns, 'utm_campaign',
 ${tabs('Produtos', [['Produtos', list(ctx, d.productsTop, 'product', { head: 'Produto', cols: [['Faturamento', 'v', m], ['Vendas', 'n']], label: saleLabel, empty: noSales })]])}
 ${tabs('Plataformas', [['Plataformas', list(ctx, d.platformsTop, 'platform', { head: 'Plataforma', cols: [['Faturamento', 'v', m], ['Vendas', 'n']], label: saleLabel, empty: noSales })]])}
 </div>`, AUTO);
+}
+
+/** Visão do cliente: um funil (site) por linha, do que mais fatura ao que menos, com o link para o painel de cada um. */
+function funnelsTable(ctx, rows, m) {
+  const keep = new URLSearchParams([...ctx.q].filter(([k]) => ['range', 'from', 'to', 'compare'].includes(k))).toString();
+  return html`<section class="card"><h2>Funis do cliente</h2><p class="muted">Cada site é um funil, com o próprio pixel e o gasto das campanhas dele. Um pedido que chegou a dois sites conta nos dois aqui, e uma vez no total acima.</p>
+<div class="tw"><table class="list"><thead><tr><th scope="col">Funil</th><th scope="col">Faturamento líquido</th><th scope="col">Gastos</th><th scope="col">ROAS</th><th scope="col">Lucro</th><th scope="col">Vendas</th><th scope="col">Ticket médio</th></tr></thead>
+<tbody>${[...rows].sort((a, b) => b.t.net - a.t.net).map(({ site: s, t }) => html`<tr><td><a href="/sites/${encodeURIComponent(s.id)}${keep ? '?' + keep : ''}">${s.name}</a></td>
+<td>${m(t.net)}</td><td>${m(t.spend)}</td><td>${sx(t.roas)}</td><td class="${t.profit < 0 ? 'neg' : t.profit > 0 ? 'pos' : ''}">${m(t.profit)}</td><td>${num(t.paid)}</td><td>${t.ticket == null ? '-' : m(t.ticket)}</td></tr>`)}</tbody></table></div></section>`;
 }
 
 const SRC = { trackify: 'Trackify', meta: 'Meta' };

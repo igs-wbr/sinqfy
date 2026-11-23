@@ -7,41 +7,44 @@ import * as S from '../sales/stats.js';
 import { edgeUrlFor } from '../cloudflare.js';
 import { handleWebhook, handleSheet, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, parseCustom, secretsOf } from '../sales/webhooks.js';
 import { syncMeta } from '../ads/meta.js';
+import { clientSites } from '../clients.js';
 import { compareFunnel } from '../sales/funnel.js';
 import * as V from '../views/sales.js';
 
 const range = r => [period(r.q, r.site.timezone), S.saleFiltersFrom(r.q)];
-const lastSync = async site => (await db.get("SELECT MAX(last_sync) t FROM ad_accounts WHERE site=? AND platform='meta'", [site]))?.t;
+// A conta de anúncios pode estar ligada a outro site do mesmo cliente (o gasto vem dividido pela regra de cada site).
+const lastSync = async site => (await db.get("SELECT MAX(last_sync) t FROM ad_accounts WHERE site = ANY(?::text[]) AND platform='meta'", [site.ids || clientSites(site).map(s => s.id)]))?.t;
 
-route('GET', '/sites/:id', { site: 'view' }, async r => {
+route('GET', '/sites/:id', { site: 'view', client: true }, async r => {
   const [p, f] = range(r), site = r.site;
-  const distinct = async col => (await db.all(`SELECT DISTINCT ${col} k FROM sales WHERE site=? AND ${col}<>'' ORDER BY k`, [site.id])).map(x => x.k);
+  const distinct = async col => (await db.all(`SELECT DISTINCT ${col} k FROM sales WHERE site = ANY(?::text[]) AND ${col}<>'' ORDER BY k`, [S.ids(site)])).map(x => x.k);
   const d = await awaitAll({
-    ctx: siteCtx(r, ''), lastSync: lastSync(site.id),
-    hasData: Promise.all([db.get('SELECT 1 FROM sales WHERE site=? LIMIT 1', [site.id]), db.get('SELECT 1 FROM ad_spend WHERE site=? LIMIT 1', [site.id])]).then(x => x.some(Boolean)),
+    ctx: siteCtx(r, ''), lastSync: lastSync(site),
+    hasData: Promise.all([db.get('SELECT 1 FROM sales WHERE site = ANY(?::text[]) LIMIT 1', [S.ids(site)]), db.get('SELECT 1 FROM ad_spend WHERE site = ANY(?::text[]) LIMIT 1', [S.ids(site)])]).then(x => x.some(Boolean)),
     platforms: distinct('platform'), products: distinct('product'),
     cur: S.salesTotals(site, p, f), prev: p.prev && S.salesTotals(site, p.prev, f),
     series: S.salesSeries(site, p, f, p.days), prevSeries: p.prev && S.salesSeries(site, p.prev, f, p.days),
     marks: p.days > 1 && p.days <= 92 ? S.campaignMarks(site, p) : [],
     methods: S.byMethod(site, p, f), campaigns: S.topSales(site, p, f, 'utm_campaign'), sources: S.topSales(site, p, f, 'utm_source'),
     productsTop: S.topSales(site, p, f, 'product'), platformsTop: S.topSales(site, p, f, 'platform'),
+    funnels: site.members && Promise.all(site.members.map(async s => ({ site: s, t: await S.salesTotals(s, p, f) }))), // visão do cliente: um funil por site
   });
   send(r, 200, V.salesPage(d.ctx, p, f, d));
 });
 
-route('GET', '/sites/:id/campaigns', { site: 'view' }, async r => {
+route('GET', '/sites/:id/campaigns', { site: 'view', client: true }, async r => {
   const p = period(r.q, r.site.timezone);
   let level = Object.hasOwn(S.LEVEL_PT, r.q.get('level') || '') ? r.q.get('level') : 'campaign';
   const id = k => /^[\w-]{1,40}$/.test(r.q.get(k) || '') ? r.q.get(k) : null;
   const campaign = id('campaign');
   // Conjunto só vale dentro da campanha escolhida (trocar a campanha no seletor não pode deixar o conjunto da outra).
-  const adset = campaign && id('adset') && await db.get(`SELECT 1 FROM ad_spend WHERE site=? AND campaign_id=? AND adset_id=?
-    UNION ALL SELECT 1 FROM ad_entities WHERE site=? AND level='adset' AND parent=? AND id=? LIMIT 1`, [r.site.id, campaign, id('adset'), r.site.id, campaign, id('adset')]) ? id('adset') : null;
+  const adset = campaign && id('adset') && await db.get(`SELECT 1 FROM ad_spend WHERE site = ANY(?::text[]) AND campaign_id=? AND adset_id=?
+    UNION ALL SELECT 1 FROM ad_entities WHERE site = ANY(?::text[]) AND level='adset' AND parent=? AND id=? LIMIT 1`, [S.ids(r.site), campaign, id('adset'), S.ids(r.site), campaign, id('adset')]) ? id('adset') : null;
   // Como na Meta: escolher a campanha abre os conjuntos dela; escolher o conjunto, os anúncios dele.
   if (adset) level = 'ad';
   else if (campaign && level === 'campaign') level = 'adset';
   const fc = id('fc') || campaign; // campanha do funil: a escolhida em cima, ou a do seletor do funil (vazio = todas)
-  const [c, rows, ls, funnel, before, camps, sets] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level, { campaign, adset }), lastSync(r.site.id),
+  const [c, rows, ls, funnel, before, camps, sets] = await Promise.all([siteCtx(r, '/campaigns'), S.campaigns(r.site, p, level, { campaign, adset }), lastSync(r.site),
     S.adFunnel(r.site, p, fc), p.prev && S.adFunnel(r.site, p.prev, fc),
     level === 'campaign' ? null : S.campaigns(r.site, p), campaign && (level === 'adset' ? null : S.campaigns(r.site, p, 'adset', { campaign }))]);
   compareFunnel(funnel.stages, before?.stages); // gargalo contra a própria campanha no período anterior, nunca contra média de mercado
@@ -49,7 +52,7 @@ route('GET', '/sites/:id/campaigns', { site: 'view' }, async r => {
   send(r, 200, V.campaignsPage(c, p, level, rows, ls, { ...funnel, fc, prev: p.prev, options: campaigns }, { campaign, adset, campaigns, adsets }));
 });
 
-route('GET', '/sites/:id/orders', { site: 'view' }, async r => {
+route('GET', '/sites/:id/orders', { site: 'view', client: true }, async r => {
   const [p, f] = range(r), page = Math.max(0, Math.min(1000, Number(r.q.get('page')) || 0));
   const [c, d] = await Promise.all([siteCtx(r, '/orders'), S.orders(r.site, p, f, page)]);
   send(r, 200, V.ordersPage(c, p, f, d, page));

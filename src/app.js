@@ -4,7 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { ready, refreshSites, sites, env } from './db.js';
 import { routes, readBody, send, redirect, clientIp, edgeInfo, HttpError } from './http.js';
-import { ctx, currentUser, canView, canEdit } from './auth.js';
+import { ctx, currentUser, canView, canEdit, allowedSites } from './auth.js';
+import { clientView } from './clients.js';
 import { record } from './tracking/ingest.js';
 import { messagePage } from './views/admin.js';
 import { enabled } from './modules.js';
@@ -67,6 +68,13 @@ async function handle(r) {
     if (rt.o.auth !== false && !r.user) return redirect(r, req.method === 'GET' ? '/login?next=' + encodeURIComponent(path + r.url.search) : '/login');
     if (rt.o.admin && r.user.role !== 'admin') throw new HttpError(403, 'Apenas admins podem fazer isso.');
     if (rt.o.site) {
+      // "~chave": visão somada dos sites de um cliente (src/clients.js), só nas telas marcadas com `client` e sem edição.
+      if (r.params.id.startsWith('~')) {
+        r.site = rt.o.client && rt.o.site === 'view' ? clientView(r.params.id.slice(1), await allowedSites(r.user)) : null;
+        if (!r.site) throw new HttpError(404, 'Site não encontrado.');
+        r.canEdit = false;
+        return await rt.fn(r);
+      }
       r.site = sites.get(r.params.id);
       if (!r.site || !await canView(r.user, r.site.id)) throw new HttpError(404, 'Site não encontrado.');
       r.canEdit = await canEdit(r.user, r.site.id);
