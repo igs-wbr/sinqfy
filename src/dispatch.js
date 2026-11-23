@@ -73,9 +73,9 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   if (click?.ip) user_data.client_ip_address = click.ip; // do clique no checkout (ADR 0020)
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
-  const ts = now - sale.ts > MAX_AGE - 864e5 ? now : sale.ts;
+  // Venda antiga não chega aqui (LATE_PURCHASE em webhooks.js): nunca trocar a data por "agora", a Meta a contaria como compra de hoje.
   return {
-    event_name: 'Purchase', event_time: Math.floor(ts / 1000), event_id: `${sale.platform}-${sale.order_id}`,
+    event_name: 'Purchase', event_time: Math.floor(Math.min(sale.ts, now) / 1000), event_id: `${sale.platform}-${sale.order_id}`,
     action_source: web ? 'website' : 'other', ...(web && { event_source_url: click.url }), user_data,
     custom_data: { currency: sale.currency || site.currency, value: sale.gross, content_name: sale.product || undefined, order_id: sale.order_id },
   };

@@ -74,7 +74,7 @@ export const PARSERS = {
     const producer = (d.commissions || []).find(c => /producer/i.test(c.source || ''));
     return {
       order_id: str(p.transaction), status, method: method(p.payment?.type), gross, net: producer ? num(producer.value) : gross,
-      currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date),
+      currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date), paid_at: time(p.approved_date),
       utm: packed(o.sck) || packed(o.src) || utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, rid: ridOf(o.xcod),
     };
   },
@@ -86,7 +86,7 @@ export const PARSERS = {
     const gross = num(c.charge_amount) / 100;
     return {
       order_id: str(b.order_id), status, method: method(b.payment_method), gross, net: c.my_commission != null ? num(c.my_commission) / 100 : gross,
-      currency: str(c.currency || 'BRL', 3), product: str(b.Product?.product_name), ts: time(b.created_at),
+      currency: str(c.currency || 'BRL', 3), product: str(b.Product?.product_name), ts: time(b.created_at), paid_at: time(b.approved_date),
       utm: utm({ source: t.utm_source || t.src, medium: t.utm_medium, campaign: t.utm_campaign || (ridOf(t.sck) ? '' : t.sck), content: t.utm_content, term: t.utm_term }),
       email: b.Customer?.email, phone: b.Customer?.mobile, name: b.Customer?.full_name, rid: ridOf(t.rid) || ridOf(t.sck),
     };
@@ -324,6 +324,9 @@ export async function matchSale(site, s) {
 
 export const MATCH_PT = { rid: 'Clique (rid)', email: 'Lead (e-mail ou telefone)', utm: 'UTM', none: 'Sem origem' };
 
+/** Compra aprovada há mais que isso não vai à Meta nem ao GA4 (a Meta recusa eventos com mais de 7 dias). */
+export const LATE_PURCHASE = 3 * 864e5;
+
 /** Grava a venda normalizada, casa com o clique e enfileira a compra para Meta e GA4. */
 export async function ingestSale(site, platform, s, now = Date.now()) {
   if (!s.order_id) { await log(site.id, platform, s, false, 'Pedido sem identificador'); return { ok: false, message: 'Pedido sem identificador' }; }
@@ -353,8 +356,12 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
       AND abs(gross - ?) < 0.01 LIMIT 1`, [site.id, s.order_id, platform, s.gross]);
     // A compra já foi marcada à mão no quadro (coluna com Purchase) nos últimos 7 dias: o Purchase dela já saiu.
     const byCrm = !twin && pii && recentPurchase(await findContact(site.id, { emailHash: hashEmail(s.email), phoneHash: hashPhone(s.phone) }), now, 'crm');
+    // Compra que só chega agora, dias depois de aprovada (ex.: PURCHASE_COMPLETE da Hotmart no fim da garantia, de venda
+    // feita antes do webhook existir): não é conversão nova. Enviada, a Meta a contaria hoje e daria o crédito a um anúncio de hoje.
+    const paidAt = s.paid_at ?? ts, late = now - paidAt > LATE_PURCHASE;
     let sent = false;
-    if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
+    if (late) await log(site.id, platform, s, true, `Aprovada em ${localDate(paidAt, site.timezone)}, chegou ${Math.floor((now - paidAt) / 864e5)} dias depois: gravada, mas não enviada à Meta nem ao GA4`);
+    else if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
     else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
     else if (metaReady(site)) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, name: s.name, click: m.click }, now);
@@ -368,7 +375,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
       }
       else await log(site.id, platform, s, false, 'Conversions API: compra sem e-mail, telefone nem clique, não enviada');
     }
-    const g = !twin && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
+    const g = !twin && !late && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
     if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
     if (pii) await saleToCrm(site, { ...sale, utm: u }, m.click, now, { sent }); // comprador no CRM, coluna de ganho
   }
