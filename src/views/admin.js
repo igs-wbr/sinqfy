@@ -32,6 +32,7 @@ ${ctx.user.role === 'admin' ? html`<section class="card"><h2>Excluir site</h2><p
 </div></div>`);
 }
 
+export const NEW_CLIENT = '__new';
 export function sitesPage(ctx, rows, err) {
   return layout(ctx, 'Sites', html`${pageHead('Agência · Sites', raw('Seus <em>sites</em>'), 'Cada site tem seu próprio snippet, webhooks e contas de anúncio.')}
 ${notice(err, true)}
@@ -41,6 +42,9 @@ ${notice(err, true)}
 <label class="f">Id<span>Usado no snippet: letras, números, ponto, hífen.</span><input name="id" required pattern="[A-Za-z0-9][A-Za-z0-9._\\-]{0,63}" placeholder="meu-produto"></label>
 <label class="f">Fuso horário${tzSelect(ctx.defaultTz)}</label>
 <label class="f">Moeda<input name="currency" value="BRL" pattern="[A-Za-z]{3}" maxlength="3" required></label>
+<div class="client-pick stack"><label class="f">Cliente<span>Sites do mesmo cliente (um por funil ou produto) ficam juntos no seletor e ganham a visão somada.</span><select name="client">
+<option value="">Sem cliente</option>${ctx.clients?.length ? html`<optgroup label="Cliente existente">${ctx.clients.map(c => html`<option value="${c}">${c}</option>`)}</optgroup>` : ''}<option value="${NEW_CLIENT}">+ Novo cliente</option></select></label>
+<label class="f new-client">Nome do novo cliente<input name="client_new" maxlength="80" placeholder="Ex.: Jean"></label></div>
 <div><button class="primary">Criar site</button></div></form></section>`);
 }
 

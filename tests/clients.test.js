@@ -57,7 +57,8 @@ test('gasto de cada campanha vai para o site do funil; visão do cliente soma se
   assert.match(kv(page.text, 'paid'), /^2$/, 'pedido repetido conta uma vez');
   assert.match(kv(page.text, 'spend'), /400/);
   assert.match(page.text, /Funis do cliente/);
-  assert.match(page.text, /href="\/sites\/~jean"[^>]*>Jean \(todos\)/, 'seletor mostra o cliente');
+  assert.match(page.text, /<details class="sub" open><summary>Jean<span class="chev">[\s\S]*?href="\/sites\/~jean" class="on"[^>]*>Todos os funis<\/a>[\s\S]*?>AHSD<\/a>[\s\S]*?>BLACK<\/a><\/details>/, 'cliente é um submenu com a visão somada e os sites');
+  assert.match(page.text, /<details class="sub"><summary>Outra cliente[\s\S]*?>OUTRO<\/a><\/details>/, 'cliente com um site só: submenu sem visão somada');
   assert.match(page.text, /href="\/sites\/~jean\/campaigns/);
   assert.doesNotMatch(page.text, /href="\/sites\/~jean\/(events|integrations|settings)/, 'menu só com as telas que somam');
   assert.match(kv((await req('/sites/black', { cookie: admin })).text, 'spend'), /100/, 'painel da Black tem o gasto da campanha dela');
@@ -68,4 +69,15 @@ test('gasto de cada campanha vai para o site do funil; visão do cliente soma se
   assert.equal((await req('/sites/~jean/orders', { cookie: admin })).status, 200);
   for (const p of ['/events', '/integrations', '/settings']) assert.equal((await req('/sites/~jean' + p, { cookie: admin })).status, 404, p);
   assert.equal((await req('/sites/~outra-cliente', { cookie: admin })).status, 404, 'cliente com um site só não tem visão somada');
+});
+
+test('novo site entra num cliente existente ou num novo', async () => {
+  assert.match((await req('/sites', { cookie: admin })).text, /<optgroup label="Cliente existente"><option value="Jean">Jean<\/option><option value="Outra cliente">/);
+  const make = form => req('/sites', { cookie: admin, form: { name: form.id, timezone: 'America/Sao_Paulo', currency: 'BRL', ...form } });
+  assert.equal((await make({ id: 'jean3', client: 'Jean' })).status, 303);
+  assert.equal((await make({ id: 'novo1', client: '__new', client_new: ' Agentise ' })).status, 303);
+  assert.equal((await make({ id: 'novo2', client: '__new', client_new: '' })).status, 400);
+  assert.equal((await make({ id: 'novo3', client: 'Inventado' })).status, 400);
+  assert.equal((await make({ id: 'solto' })).status, 303);
+  assert.deepEqual(['jean3', 'novo1', 'solto'].map(id => DB.sites.get(id).client), ['Jean', 'Agentise', '']);
 });

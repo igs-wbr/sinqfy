@@ -87,7 +87,8 @@ async function sitesView(r, err) {
     const [t, sl] = await Promise.all([totals(s.id, range), salesTotals(s, range)]);
     return { ...s, visitors: t.visitors, net: sl.net };
   }));
-  send(r, err ? 400 : 200, V.sitesPage(ctx(r, { tab: 'sites', defaultTz: DEFAULT_TZ }), rows, err));
+  const clients = [...new Set((await allowedSites(r.user)).map(s => s.client).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  send(r, err ? 400 : 200, V.sitesPage(ctx(r, { tab: 'sites', defaultTz: DEFAULT_TZ, clients }), rows, err));
 }
 route('GET', '/sites', { admin: true }, r => sitesView(r));
 route('POST', '/sites', { admin: true }, async r => {
@@ -96,7 +97,11 @@ route('POST', '/sites', { admin: true }, async r => {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) return sitesView(r, 'Id inválido: use letras, números, ponto ou hífen.');
   if (await db.get('SELECT 1 FROM sites WHERE id=? UNION ALL SELECT 1 FROM deleted_sites WHERE id=?', [id, id])) return sitesView(r, 'Esse id não está disponível. Escolha outro.');
   if (!name || !TIMEZONES.has(tz) || !/^[A-Z]{3}$/.test(cur)) return sitesView(r, 'Preencha nome, fuso horário e moeda válidos.');
-  await db.run('INSERT INTO sites(id, name, timezone, currency, created, webhook_token, agency_id) VALUES (?,?,?,?,?,?,?)', [id, name, tz, cur, Date.now(), newToken(), r.user.agency_id]);
+  // Cliente: um dos que já existem na agência ou um novo (src/clients.js).
+  const pick = f.get('client') || '', client = (pick === V.NEW_CLIENT ? f.get('client_new') || '' : pick).trim().slice(0, 80);
+  if (pick === V.NEW_CLIENT && !client) return sitesView(r, 'Dê um nome ao novo cliente.');
+  if (pick && pick !== V.NEW_CLIENT && !(await allowedSites(r.user)).some(s => s.client === pick)) return sitesView(r, 'Cliente não encontrado.');
+  await db.run('INSERT INTO sites(id, name, timezone, currency, created, webhook_token, agency_id, client) VALUES (?,?,?,?,?,?,?,?)', [id, name, tz, cur, Date.now(), newToken(), r.user.agency_id, client]);
   await loadSites();
   redirect(r, `/sites/${encodeURIComponent(id)}/setup`);
 });

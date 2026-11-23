@@ -24,13 +24,13 @@ export function clientView(key, visible) {
   const list = visible.filter(s => s.client && clientKey(s.client) === key);
   if (list.length < 2) return null;
   const [a] = list;
-  return { id: '~' + key, ids: list.map(s => s.id), members: list, name: `${a.client} (todos)`, client: a.client, agency_id: a.agency_id,
+  return { id: '~' + key, ids: list.map(s => s.id), members: list, name: `${a.client} (todos os funis)`, client: a.client, agency_id: a.agency_id,
     timezone: a.timezone, currency: a.currency, tax_rate: a.tax_rate, modules: a.modules }; // ponytail: imposto do 1º site; por site se os impostos divergirem
 }
 
-/** Clientes com dois ou mais sites entre os visíveis: [{ key, name }] para o seletor. */
-export function clientsOf(visible) {
-  const by = new Map();
-  for (const s of visible) if (s.client) { const k = clientKey(s.client); by.set(k, [...(by.get(k) || []), s]); }
-  return [...by].filter(([, l]) => l.length > 1).map(([key, l]) => ({ key, name: `${l[0].client} (todos)` }));
+/** Seletor de sites: clientes (com os sites de cada um) e, depois, os sites sem cliente. `all`: liga a visão somada (dois sites ou mais). */
+export function groupsOf(visible) {
+  const by = new Map(), loose = [];
+  for (const s of visible) if (s.client) { const k = clientKey(s.client); (by.get(k) || by.set(k, { key: k, name: s.client, sites: [] }).get(k)).sites.push(s); } else loose.push(s);
+  return { clients: [...by.values()].map(c => ({ ...c, all: c.sites.length > 1 })).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')), loose };
 }
