@@ -3,7 +3,7 @@ import { RANGES } from '../time.js';
 import { iconSvg } from './icons.js';
 import { NO_LOGIN } from '../auth.js';
 import { enabled } from '../modules.js';
-import { clientsOf } from '../clients.js';
+import { groupsOf } from '../clients.js';
 
 // ---------- template com escape automático ----------
 class Raw { constructor(s) { this.s = s; } }
@@ -88,6 +88,11 @@ main{max-width:1240px;margin:0 auto;padding:32px 32px 80px}
 .menu[open] summary .chev{transform:rotate(90deg)}.chev{transition:transform .3s var(--spring);opacity:.8}
 .menu>div{display:grid;gap:2px;margin-top:6px;padding:4px;border-radius:8px;background:var(--surface);border:1px solid var(--line);max-height:50vh;overflow:auto}
 .menu>div a{display:flex;align-items:center;min-height:36px;padding:0 10px;border-radius:8px;text-decoration:none;font-size:14px}.menu>div a:hover{background:var(--side-hover)}
+.client-pick:not(:has(option[value="__new"]:checked)) .new-client{display:none}
+.menu .sub>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;background:none;box-shadow:none}
+.menu .sub>summary:hover{background:var(--surface2)}
+.menu .sub>summary .chev{display:inline-flex;transform:none;transition:transform var(--d2) var(--ease)}.menu .sub[open]>summary .chev{transform:rotate(90deg)}
+.menu .sub>a{padding-left:24px;color:var(--muted)}.menu>div a.on{color:var(--ink);font-weight:600;background:var(--surface2)}
 .collapse{display:none;position:fixed;top:24px;left:calc(var(--sw) - 14px);z-index:45;width:28px;height:28px;padding:0;place-items:center;border-radius:50%;border:1px solid var(--line2);background:var(--surface);color:var(--muted);box-shadow:0 1px 2px rgba(0,0,0,.08);cursor:pointer;transition:left .32s var(--ease)}
 .collapse::before{content:"";position:absolute;inset:-8px}.js .collapse{display:grid}.collapse .ic{transition:transform .4s var(--spring)}[data-side=mini] .collapse .ic{transform:rotate(180deg)}
 .theme{display:none}.js .theme{display:flex}
@@ -560,6 +565,15 @@ function tabbar(ctx, href, groups) {
   return html`<nav class="tabbar" aria-label="Navegação rápida">${tabs.map(([p, t, ic]) => html`<a href="${href(p)}"${on(ctx.tab === p)}><span class="ti">${icon(ic, 20)}</span>${t}</a>`)}<label for="nav-t"${inTabs ? '' : raw(' class="on"')}><span class="ti">${icon('menu', 20)}</span>Menu</label></nav>`;
 }
 
+// Seletor de sites: cada cliente é um submenu com a visão somada (dois sites ou mais) e os sites dele; o do site aberto já vem aberto.
+function sitePicker(ctx) {
+  const { clients, loose } = groupsOf(ctx.sites || []), cur = ctx.site?.id;
+  const link = (href, text, here) => html`<a href="${href}"${here ? raw(' class="on" aria-current="page"') : ''}>${text}</a>`;
+  const siteLink = s => link(`/sites/${encodeURIComponent(s.id)}`, s.name, s.id === cur);
+  return html`${clients.map(c => html`<details class="sub"${c.sites.some(s => s.id === cur) || cur === '~' + c.key ? raw(' open') : ''}><summary>${c.name}<span class="chev">${icon('chevron-right', 14)}</span></summary>
+${c.all ? link(`/sites/~${c.key}`, 'Todos os funis', cur === '~' + c.key) : ''}${c.sites.map(siteLink)}</details>`)}${loose.map(siteLink)}`;
+}
+
 function sidebar(ctx) {
   const { user, site } = ctx;
   const keep = new URLSearchParams([...(ctx.q || [])].filter(([k]) => ['range', 'from', 'to', 'compare'].includes(k))).toString();
@@ -572,7 +586,7 @@ function sidebar(ctx) {
 <aside class="side" id="side" aria-label="Barra lateral">
 <label for="nav-t" class="side-x" title="Fechar menu">${icon('x', 22)}</label>
 ${brand('/')}
-${site ? html`<details class="menu"><summary class="it" title="Trocar de site">${icon('layers')}<span class="t">${site.name}</span><span class="chev">${icon('chevron-right', 16)}</span></summary><div>${clientsOf(ctx.sites || []).map(c => html`<a href="/sites/~${c.key}">${c.name}</a>`)}${(ctx.sites || []).map(s => html`<a href="/sites/${encodeURIComponent(s.id)}">${s.name}</a>`)}${user?.role === 'admin' ? html`<a href="/sites">+ Novo site</a>` : ''}</div></details>
+${site ? html`<details class="menu"><summary class="it" title="Trocar de site">${icon('layers')}<span class="t">${site.name}</span><span class="chev">${icon('chevron-right', 16)}</span></summary><div>${sitePicker(ctx)}${user?.role === 'admin' ? html`<a href="/sites">+ Novo site</a>` : ''}</div></details>
 <nav class="sec" aria-label="Seções do site">${groups.map(g => html`<p class="glabel">${g.label}</p>${g.items.map(([p, t, ic, badge]) => item(href(p), t, ic, ctx.tab === p, badge))}`)}</nav>` : ''}
 ${site ? '' : html`<nav aria-label="Agência">${adminItems(ctx)}</nav>`}
 </aside><label for="nav-t" class="scrim" aria-hidden="true"></label>${site ? tabbar(ctx, href, groups) : ''}
