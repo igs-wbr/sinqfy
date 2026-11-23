@@ -34,4 +34,4 @@ As regras completas estão no [CLAUDE.md](CLAUDE.md). As principais:
 4. Rode `npm test` e preencha o modelo do PR.
 5. Mensagens de commit no imperativo, em português: `Corrige o total do funil sem visitas`.
 
-Ao enviar um PR, você concorda que a sua contribuição será publicada sob a [licença MIT](LICENSE) do projeto.
+Ao enviar um PR, você concorda que a sua contribuição será publicada sob a [licença do projeto](LICENSE) (FCL-1.0-MIT) e autoriza o autor do Trackify a distribuí-la também sob outras licenças, para que o projeto possa mudar de licença no futuro sem pedir de novo a cada contribuidor.

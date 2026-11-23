@@ -209,6 +209,8 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS checkout_clicks(site TEXT NOT NULL, rid TEXT NOT NULL, ts BIGINT NOT NULL, ip_enc TEXT, city TEXT, region TEXT, PRIMARY KEY(site, rid));
     -- Sites do mesmo cliente (um por funil ou produto) e o trecho do nome das campanhas cujo gasto é deste site (src/clients.js).
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS client TEXT NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS spend_rule TEXT NOT NULL DEFAULT '';
+    -- Dados da instalação (src/license.js): chave do Pro e início do teste grátis.
+    CREATE TABLE IF NOT EXISTS install(k TEXT PRIMARY KEY, v TEXT NOT NULL);
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

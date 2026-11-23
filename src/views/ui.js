@@ -89,6 +89,11 @@ main{max-width:1240px;margin:0 auto;padding:32px 32px 80px}
 .menu>div{display:grid;gap:2px;margin-top:6px;padding:4px;border-radius:8px;background:var(--surface);border:1px solid var(--line);max-height:50vh;overflow:auto}
 .menu>div a{display:flex;align-items:center;min-height:36px;padding:0 10px;border-radius:8px;text-decoration:none;font-size:14px}.menu>div a:hover{background:var(--side-hover)}
 .client-pick:not(:has(option[value="__new"]:checked)) .new-client{display:none}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:stretch}.plans>.card{display:flex;flex-direction:column;gap:12px}
+.plans .price{font-size:40px;font-weight:700;line-height:1}.plans .price small{font-size:13px;font-weight:400;color:var(--muted);margin-left:6px}
+.plans ul{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:8px;flex:1}.plans li::before{content:"✓";color:var(--ok);font-weight:700;margin-right:10px}
+.plans .pro{background:var(--ink);color:var(--bg);border-color:var(--ink)}.plans .pro .muted,.plans .pro .price small{color:color-mix(in srgb,var(--bg) 65%,transparent)}
+.plans form{display:grid;gap:8px}.plans .pro button,.plans .pro .btn{width:100%;justify-content:center}
 .menu .sub>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;background:none;box-shadow:none}
 .menu .sub>summary:hover{background:var(--surface2)}
 .menu .sub>summary .chev{display:inline-flex;transform:none;transition:transform var(--d2) var(--ease)}.menu .sub[open]>summary .chev{transform:rotate(90deg)}
@@ -541,7 +546,7 @@ const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels'
 
 const item = (href, text, ic, cur, badge) => html`<a class="it${cur ? ' on' : ''}" href="${href}"${cur ? raw(' aria-current="page"') : ''}>${icon(ic)}<span class="t">${text}</span>${badge ? html`<span class="cnt"><i></i>${badge}</span>` : ''}</a>`;
 
-const adminItems = ({ user, tab }) => html`${user?.role === 'admin' ? html`${item('/sites', 'Sites', 'globe', tab === 'sites')}${item('/team', 'Equipe', 'users', tab === 'team')}` : ''}${user?.platform ? item('/agencies', 'Agências', 'layers', tab === 'agencies') : ''}`;
+const adminItems = ({ user, tab }) => html`${user?.role === 'admin' ? html`${item('/sites', 'Sites', 'globe', tab === 'sites')}${item('/team', 'Equipe', 'users', tab === 'team')}` : ''}${user?.platform ? html`${item('/agencies', 'Agências', 'layers', tab === 'agencies')}${item('/plano', 'Plano', 'circle-dollar-sign', tab === 'plano')}` : ''}`;
 
 // Menu do perfil (canto superior direito): conta, administração da agência, tema e sair.
 function profile(ctx) {

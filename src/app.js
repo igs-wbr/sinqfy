@@ -6,8 +6,9 @@ import { ready, refreshSites, sites, env } from './db.js';
 import { routes, readBody, send, redirect, clientIp, edgeInfo, HttpError } from './http.js';
 import { ctx, currentUser, canView, canEdit, allowedSites } from './auth.js';
 import { clientView } from './clients.js';
+import { planOf, locked, freeSiteId } from './license.js';
 import { record } from './tracking/ingest.js';
-import { messagePage } from './views/admin.js';
+import { messagePage, lockedPage } from './views/admin.js';
 import { enabled } from './modules.js';
 import './routes/auth.js';
 import './routes/admin.js';
@@ -73,12 +74,15 @@ async function handle(r) {
         r.site = rt.o.client && rt.o.site === 'view' ? clientView(r.params.id.slice(1), await allowedSites(r.user)) : null;
         if (!r.site) throw new HttpError(404, 'Site não encontrado.');
         r.canEdit = false;
+        if (!(await planOf()).pro) return send(r, 402, lockedPage(ctx(r), r.site, sites.get(await freeSiteId()))); // vários sites: só no Pro
         return await rt.fn(r);
       }
       r.site = sites.get(r.params.id);
       if (!r.site || !await canView(r.user, r.site.id)) throw new HttpError(404, 'Site não encontrado.');
       r.canEdit = await canEdit(r.user, r.site.id);
       if (rt.o.site === 'edit' && !r.canEdit) throw new HttpError(403, 'Você não tem permissão para alterar este site.');
+      // Grátis: só o primeiro site abre no painel; configurações e exclusão ficam livres para dar para voltar a 1 site.
+      if (!rt.o.free && await locked(await planOf(), r.site)) return send(r, 402, lockedPage(ctx(r), r.site, sites.get(await freeSiteId())));
       if (rt.o.module && !enabled(r.site, rt.o.module)) throw new HttpError(404, 'Este recurso está desligado. Ligue em Configurações, Recursos.');
     }
     return await rt.fn(r);

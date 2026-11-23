@@ -107,3 +107,33 @@ ${notice(err, true)}${inviteLink ? notice(html`Agência <b>${agency}</b> criada.
 <label class="f">Nome da agência<input name="name" required maxlength="80"></label><label class="f">E-mail do dono<input name="email" type="email" required></label></div>
 <div><button class="primary">Criar e gerar convite</button></div></form></section></div>`);
 }
+
+// ---------- plano (ADR 0022) ----------
+const FREE_FEATURES = ['1 site (funil)', 'Rastreamento sem cookies de terceiros', 'Conversions API da Meta e GA4', 'Webhooks de vendas (Hotmart, Kiwify, Eduzz e outros)',
+  'Campanhas, funis, caminhos e atribuição', 'CRM, contatos e WhatsApp', 'Recuperação de venda e públicos', 'Painel no celular', 'Todos os recursos incluídos'];
+const PRO_FEATURES = ['Tudo do Grátis, mais:', 'Sites ilimitados', 'Visão somada por cliente e comparação de funis', 'Use em até 2 instalações', 'Atualizações por 12 meses, uso para sempre', '7 dias grátis, depois pague uma vez'];
+const day = ts => new Date(Number(ts)).toLocaleDateString('pt-BR');
+
+export function planPage(ctx, plan, { price, buyUrl, sites, free, msg, err }) {
+  const status = plan.license ? html`Plano <b>Pro</b>${plan.license.to ? html`, licenciado para <b>${plan.license.to}</b>` : ''}${plan.license.updates ? html`. Atualizações até ${day(plan.license.updates)}` : ''}.`
+    : plan.trial ? html`Teste do <b>Pro</b> até ${day(plan.trialEnds)}. Depois disso, o painel volta a abrir só o primeiro site (${free?.name || '-'}), e os outros continuam coletando.`
+      : html`Plano <b>Grátis</b>: o painel abre 1 site (${free?.name || '-'}). ${sites > 1 ? `Os outros ${sites - 1} continuam coletando visitas e vendas, só o painel deles fica bloqueado.` : ''}`;
+  return layout(ctx, 'Plano', html`${pageHead('Instalação · Plano', raw('Pague <em>uma vez</em>'), status)}
+${notice(msg)}${notice(err, true)}
+<div class="plans">
+<section class="card"><h2>Grátis</h2><p class="price">R$ 0<small>para sempre</small></p><p class="muted">Tudo o que você precisa para um funil.</p>
+<ul>${FREE_FEATURES.map(f => html`<li>${f}</li>`)}</ul></section>
+<section class="card pro"><h2>Pro</h2><p class="price">${price}<small>pagamento único</small></p><p class="muted">Para quem opera vários funis, produtos ou clientes.</p>
+<ul>${PRO_FEATURES.map(f => html`<li>${f}</li>`)}</ul>
+${plan.license ? '' : html`<form method="post" action="/plano"><input type="hidden" name="action" value="trial"><button${plan.trialUsed ? raw(' disabled') : ''}>${plan.trialUsed ? (plan.trial ? 'Teste em andamento' : 'Teste já usado') : 'Teste grátis por 7 dias'}</button></form>
+${buyUrl ? html`<a class="btn primary" href="${buyUrl}" target="_blank" rel="noopener">Comprar licença</a>` : ''}`}</section></div>
+<section class="card" style="margin-top:16px"><h2>${plan.license ? 'Trocar a chave' : 'Já tenho uma chave'}</h2><form method="post" action="/plano" class="stack" style="margin-top:12px;max-width:none"><input type="hidden" name="action" value="key">
+<label class="f">Chave de licença<span>Cole a chave recebida na compra. Ela é validada aqui mesmo, sem depender de internet.</span><textarea name="key" rows="3" required spellcheck="false" autocomplete="off"></textarea></label>
+<div><button class="primary">Ativar</button></div></form></section>`);
+}
+
+/** Site além do primeiro no plano Grátis: o painel fica bloqueado, a coleta e os envios seguem. */
+export function lockedPage(ctx, site, free) {
+  return layout(ctx, `${site.name} · Plano Pro`, html`${pageHead(`${site.name}`, raw('Este site precisa do <em>Pro</em>'), html`No plano Grátis, o painel abre só o primeiro site da instalação (${free?.name || '-'}). Este site continua coletando visitas e vendas e enviando eventos à Meta: nada se perde.`)}
+${ctx.user?.platform ? html`<a class="btn primary" href="/plano">Ver o plano Pro</a>` : html`<p class="muted">Peça ao dono da instalação para ativar o plano Pro.</p>`}`);
+}
