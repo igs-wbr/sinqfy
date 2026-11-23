@@ -90,7 +90,7 @@ test('assinaturas: Hotmart (hottok), Shopify, WooCommerce e Stripe', async () =>
   assert.equal((await post('hotmart', hot)).status, 401);
   assert.equal((await post('hotmart', hot, { 'x-hotmart-hottok': 'HOTTOK1' })).status, 200);
 
-  const shop = JSON.stringify({ id: 9001, financial_status: 'paid', total_price: '150.00', currency: 'BRL', email: 's@h.com', created_at: '2026-11-14T10:00:00-03:00',
+  const shop = JSON.stringify({ id: 9001, financial_status: 'paid', total_price: '150.00', currency: 'BRL', email: 's@h.com', created_at: new Date(Date.now() - 3600e3).toISOString(),
     landing_site: '/?utm_source=FB&utm_campaign=Shop%7C77&fbclid=IwAR-shop', client_details: { user_agent: CHROME }, line_items: [{ title: 'Tênis' }] });
   assert.equal((await post('shopify', shop, { 'x-shopify-hmac-sha256': 'errado' })).status, 401);
   assert.equal((await post('shopify', shop, { 'x-shopify-hmac-sha256': createHmac('sha256', 'shp').update(shop).digest('base64') })).status, 200);

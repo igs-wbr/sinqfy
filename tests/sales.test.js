@@ -106,6 +106,14 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   assert.ok(!JSON.stringify(capiBodies).includes('Comprador@'), 'e-mail só em hash');
   assert.ok(graphCalls.at(-1).pathname.endsWith('/555001/events'));
   assert.ok((await S.lastWebhooks('loja')).some(l => l.message.includes('Conversions API')));
+
+  // PURCHASE_COMPLETE (fim da garantia) de venda aprovada antes do webhook: grava, mas não vira compra de hoje na Meta.
+  const old = Date.now() - 8 * 864e5;
+  await hook('hotmart', { ...hotmart('HPOLD'), event: 'PURCHASE_COMPLETE', data: { ...hotmart('HPOLD').data, purchase: { ...hotmart('HPOLD').data.purchase, order_date: old, approved_date: old } } });
+  assert.equal((await sale('HPOLD')).status, 'paid');
+  await D.dispatch({ now: Date.now() + D.PURCHASE_HOLD });
+  assert.equal(capiBodies.length, 1, 'venda antiga não é enviada');
+  assert.ok(!(await db.get("SELECT 1 FROM deliveries WHERE event_id='hotmart-HPOLD'")));
 });
 
 test('Meta: sincroniza contas, entidades e gasto (com paginação) e registra erros', async () => {
