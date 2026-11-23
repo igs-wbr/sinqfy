@@ -3,6 +3,7 @@
 <p align="center">Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.</p>
 
 <p align="center">
+<a href="https://github.com/igs-wbr/trackify/releases/tag/v1.0.0"><img alt="Versão 1.0.0" src="https://img.shields.io/badge/vers%C3%A3o-1.0.0-0E58DB"></a>
 <a href="LICENSE"><img alt="Licença FCL-1.0-MIT (Fair Source)" src="https://img.shields.io/badge/licen%C3%A7a-FCL--1.0--MIT-0E58DB"></a>
 <img alt="Node 24" src="https://img.shields.io/badge/node-24.x-171717">
 <img alt="PostgreSQL" src="https://img.shields.io/badge/banco-PostgreSQL-171717">
@@ -16,6 +17,8 @@
 - **Envio server-side:** Conversions API da Meta e Measurement Protocol do GA4, com fila e reenvio.
 - **Relacionamento:** CRM em quadro, contatos com dados pessoais cifrados e conversas do WhatsApp ligadas ao anúncio.
 - **Agências:** vários clientes na mesma instalação, cada um com a sua equipe e os seus sites.
+- **Clientes com vários funis:** um site por produto, domínio ou faixa de preço, agrupados por cliente no seletor. A visão "Todos os funis" soma tudo sem contar duas vezes o mesmo pedido e compara faturamento, gasto, ROAS e lucro de cada funil; o gasto da conta de anúncios vai para o site de cada campanha ([ADR 0021](docs/adr/0021-cliente-com-varios-sites.md)).
+- **Purchase de qualidade:** order bump e upsell viram uma compra só, o Purchase leva o clique, o IP do checkout e o endereço do comprador em hash, e venda que chega dias depois de aprovada não vira compra de hoje na Meta.
 
 ### Recursos que cada site liga quando quiser
 
@@ -77,16 +80,19 @@ src/
   tracking/ sales/    ingestão e métricas de tráfego · webhooks e métricas de vendas
   ads/meta.js         sync de campanhas e gastos da Meta
   crm.js whatsapp.js  CRM e WhatsApp
+  clients.js          cliente com vários sites (visão somada e gasto por funil)
+  license.js          plano Grátis ou Pro (chave assinada, validada offline)
   routes/ views/      rotas por área · páginas e design system (views/ui.js)
 edge/                 Worker da Cloudflare (cookies primários)
 deploy/               docker-compose, backup e dados de demonstração
+scripts/              emissão de chaves do Pro (só o autor, com a chave privada)
 public/               snippet s.js, fontes, favicon, manifest e marca (brand/)
 docs/                 especificação, deploy, integrações, design system e ADRs
 ```
 
 ## Privacidade e segurança
 
-- **Visitantes:** id em hash com salt diário, apagado no dia seguinte. IP, e-mail e telefone nunca são gravados ([ADR 0002](docs/adr/0002-sem-cookies-salt-diario.md)).
+- **Visitantes:** id em hash com salt diário, apagado no dia seguinte. E-mail e telefone nunca são gravados em claro ([ADR 0002](docs/adr/0002-sem-cookies-salt-diario.md)). O IP só existe na fila de envio até sair para a Meta e, o do clique no checkout, cifrado por no máximo 7 dias ([ADR 0020](docs/adr/0020-ip-do-checkout-no-purchase.md)).
 - **Contatos do CRM:** nome, e-mail e telefone cifrados com AES-256-GCM (`DATA_KEY`), com hash ao lado ([ADR 0013](docs/adr/0013-dados-pessoais-criptografados.md)).
 - **Login:** cookie HttpOnly e SameSite, senhas em scrypt e bloqueio após 10 tentativas.
 - **Requisições:** POST de outra origem recusado, CSP estrita com nonce e HTML sempre escapado.
@@ -96,6 +102,10 @@ Achou uma falha? Veja [SECURITY.md](SECURITY.md) antes de abrir uma issue.
 ## Contribuir
 
 Issues e pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBUTING.md) e o [código de conduta](CODE_OF_CONDUCT.md).
+
+## Versões
+
+O que mudou em cada versão está no [CHANGELOG](CHANGELOG.md) e nos [releases](https://github.com/igs-wbr/trackify/releases).
 
 ## Criador
 
