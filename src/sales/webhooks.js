@@ -396,7 +396,9 @@ export async function handleWebhook(token, platform, raw, now = Date.now(), req 
   let s;
   try { s = platform === 'custom' ? parseCustom(body || {}, jsonOr(site.custom_map, null)) : PARSERS[platform](body || {}); }
   catch { await log(site.id, platform, null, false, 'Payload em formato inesperado'); return 400; }
-  if (!s) { await log(site.id, platform, null, true, 'Evento ignorado (não é venda)'); return 200; }
+  // O nome do evento no log mostra o que a plataforma está mandando à toa (ex.: abandono de carrinho, troca de plano).
+  const kind = String(body?.event || body?.type || body?.order_status || body?.status || '').replace(/[^\w.-]/g, '').slice(0, 60);
+  if (!s) { await log(site.id, platform, null, true, `Evento ignorado (não é venda)${kind ? `: ${kind}` : ''}`); return 200; }
   return (await ingestSale(site, platform, s, now)).ok ? 200 : 400;
 }
 
