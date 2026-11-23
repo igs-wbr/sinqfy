@@ -1,0 +1,37 @@
+# Changelog
+
+Mudanças de cada versão do Trackify. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
+
+## [1.0.0] - 2026-11-23
+
+Primeira versão estável, em produção desde 17/11/2026.
+
+### Vendas e anúncios
+- Resumo com faturamento líquido e bruto, gastos, ROAS, lucro, ROI, CPA, ticket médio, reembolsos e chargeback, comparando com o período anterior.
+- Webhooks da Hotmart, Kiwify, Eduzz, Shopify, WooCommerce e Stripe, formato genérico, mapa de campos personalizado e Google Sheets, com assinatura conferida.
+- Campanhas, conjuntos e anúncios da Meta (somente leitura) cruzados com as vendas pela UTM, com funil e gargalo por campanha.
+- Pedidos, vendas por forma de pagamento, origem por campanha e fonte, produtos e plataformas.
+
+### Envio server-side
+- Conversions API da Meta e Measurement Protocol do GA4, com fila, reenvio e diagnóstico por evento.
+- PageView, InitiateCheckout, Lead e Purchase; order bump e upsell do mesmo comprador viram uma compra só, com o valor somado.
+- Purchase com o clique do anúncio (fbc, fbp, user agent), o IP do checkout e cidade, UF e CEP do comprador, sempre em hash.
+- Venda aprovada há mais de 3 dias (ex.: "Compra completa" da Hotmart no fim da garantia) é gravada, mas não vai à Meta nem ao GA4 como compra de hoje.
+
+### Tráfego
+- Visão geral, tempo real, eventos, funis, caminhos e atribuição por sequência de anúncios, com visitante anônimo e cookies primários pelo subdomínio `t.` (Worker da Cloudflare).
+
+### Relacionamento
+- CRM em quadro, contatos com dados pessoais cifrados, evento offline por coluna e conversas do WhatsApp ligadas ao anúncio.
+- Recursos por site: recuperação de venda pendente, públicos para remarketing, retenção de vídeo, robô por palavra-chave e checkout com Pix.
+
+### Agências e clientes
+- Várias agências na mesma instalação, cada uma com equipe, papéis e sites próprios.
+- Cliente com vários sites (um por funil): seletor agrupado por cliente, visão "Todos os funis" sem pedido duplicado, comparação dos funis e gasto da conta dividido pelo nome da campanha.
+- Painel instalável no celular (PWA) e link público de tráfego somente leitura.
+
+### Licença e planos
+- Licença Fair Core 1.0 com MIT futura (FCL-1.0-MIT): uso livre, sem revenda concorrente; cada versão vira MIT dois anos depois.
+- Plano Grátis com 1 site e todos os recursos; Pro por pagamento único (R$ 97) com sites ilimitados, até 2 instalações, 12 meses de atualizações e 7 dias de teste. Chave assinada e validada offline.
+
+[1.0.0]: https://github.com/igs-wbr/trackify/releases/tag/v1.0.0

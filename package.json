@@ -1,5 +1,6 @@
 {
   "name": "trackify",
+  "version": "1.0.0",
   "private": true,
   "description": "Vendas, tráfego e campanhas da Meta num painel só, sem cookies de terceiros.",
   "license": "SEE LICENSE IN LICENSE",
