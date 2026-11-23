@@ -30,7 +30,7 @@ Ordem: parte 1 antes do [guia da Oracle](deploy-oracle.md); parte 2 durante ele;
 O túnel é uma ligação que **sai** do servidor para a Cloudflare. Por isso o servidor não precisa de nenhuma porta aberta.
 
 1. Abra **one.dash.cloudflare.com** (Zero Trust). Na primeira vez, escolha um nome de equipe e o plano **Free**.
-2. **Networks** → **Tunnels** → **Create a tunnel** → **Cloudflared** → nome `trackify` → **Save tunnel**.
+2. **Networks** → **Tunnels** → **Create a tunnel** → **Cloudflared** → nome `sinqfy` → **Save tunnel**.
 3. Em "Choose your environment", escolha **Docker**. Aparece um comando com `--token eyJ...`. **Copie só o valor depois de `--token`**: é o `TUNNEL_TOKEN` do `.env` ([guia da Oracle, parte 7](deploy-oracle.md#parte-7-as-configurações-env)). Clique **Next**.
 4. Em **Public Hostname**:
 
@@ -43,7 +43,7 @@ O túnel é uma ligação que **sai** do servidor para a Cloudflare. Por isso o 
 
 5. **Save**. A Cloudflare cria o DNS de `app` sozinha.
 
-**Deu certo quando:** depois do `docker compose up` no servidor, o túnel aparece como **Healthy** e `https://app.seudominio.com.br` abre o login do Trackify.
+**Deu certo quando:** depois do `docker compose up` no servidor, o túnel aparece como **Healthy** e `https://app.seudominio.com.br` abre o login do Sinqfy.
 
 ## Parte 3: Worker da borda (`t.seudominio`)
 
@@ -122,16 +122,16 @@ Para agência com vários clientes na mesma VPS: cada cliente tem o próprio `t.
    CF_SAAS_TARGET=edge.seudominio.com.br
    ```
    e reinicie: `docker compose up -d app`.
-6. Não use a rota coringa `*/*`: na sua zona ela faria o Worker responder também pelo painel e pelos outros sites do domínio. Ao cadastrar o domínio de um cliente, o Trackify cria a rota só dele (`t.cliente.com.br/*`) e apaga quando o domínio sai. O Worker se chama `trackify`; se tiver outro nome, ponha `CF_WORKER=nome` no `.env`.
+6. Não use a rota coringa `*/*`: na sua zona ela faria o Worker responder também pelo painel e pelos outros sites do domínio. Ao cadastrar o domínio de um cliente, o Sinqfy cria a rota só dele (`t.cliente.com.br/*`) e apaga quando o domínio sai. O Worker se chama `trackify`; se tiver outro nome, ponha `CF_WORKER=nome` no `.env`.
 
-**Cada cliente novo:** crie a agência dele em **Agências** (equipe e sites isolados), o site e, em **Primeiros passos**, o domínio. O cliente cria, no DNS dele, um CNAME `t` → `edge.seudominio.com.br` com proxy **desligado** (nuvem cinza). O Trackify registra o domínio e a rota na Cloudflare e confere DNS e certificado sozinho a cada 5 minutos. Depois, o snippet do site dele usa `https://t.dominiodele/s.js`, e o checkout e a Meta dele são configurados no site dele, como em qualquer outro.
+**Cada cliente novo:** crie a agência dele em **Agências** (equipe e sites isolados), o site e, em **Primeiros passos**, o domínio. O cliente cria, no DNS dele, um CNAME `t` → `edge.seudominio.com.br` com proxy **desligado** (nuvem cinza). O Sinqfy registra o domínio e a rota na Cloudflare e confere DNS e certificado sozinho a cada 5 minutos. Depois, o snippet do site dele usa `https://t.dominiodele/s.js`, e o checkout e a Meta dele são configurados no site dele, como em qualquer outro.
 
-Sem o passo 5, o Trackify mostra ao cliente o mesmo CNAME e você faz à mão: **Custom Hostnames** → **Add Custom Hostname** e, em **Workers Routes**, a rota `t.dominiodocliente/*` para o Worker `trackify`.
+Sem o passo 5, o Sinqfy mostra ao cliente o mesmo CNAME e você faz à mão: **Custom Hostnames** → **Add Custom Hostname** e, em **Workers Routes**, a rota `t.dominiodocliente/*` para o Worker `trackify`.
 
 ## Parte 5: R2 para o backup
 
-1. Painel da Cloudflare → **R2** → **Create bucket** → nome `trackify-backups`.
-2. **R2** → **Manage R2 API Tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `trackify-backups`.
+1. Painel da Cloudflare → **R2** → **Create bucket** → nome `sinqfy-backups`.
+2. **R2** → **Manage R2 API Tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `sinqfy-backups`.
 3. Guarde o **Access Key ID**, o **Secret Access Key** e o **Account ID** (aparece na página do R2). Eles vão no `rclone config` do [guia da Oracle, parte 10](deploy-oracle.md#parte-10-backup-diário-no-r2).
 
 ## Domínio em outra conta da Cloudflare

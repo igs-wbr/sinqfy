@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Trackify: o guia completo</title>
+<title>Sinqfy: o guia completo</title>
 <style>
 @font-face { font-family: Figtree; src: url(../../public/fonts/figtree.woff2) format("woff2"); font-weight: 300 900; }
 @font-face { font-family: Bricolage; src: url(../../public/fonts/bricolage-grotesque.woff2) format("woff2"); font-weight: 200 800; }
@@ -16,7 +16,7 @@
 }
 
 @page { size: A4; margin: 15mm 16mm 17mm;
-  @bottom-left { content: "Trackify · o guia completo"; font: 400 8.5pt Figtree; color: #85858B; }
+  @bottom-left { content: "Sinqfy · o guia completo"; font: 400 8.5pt Figtree; color: #85858B; }
   @bottom-right { content: counter(page); font: 600 8.5pt Figtree; color: #0E58DB; } }
 @page cover { margin: 0; @bottom-left { content: none } @bottom-right { content: none } }
 @page dark { margin: 0; @bottom-left { content: none } @bottom-right { content: none } }
@@ -113,14 +113,14 @@ svg text { font-family: Figtree, sans-serif; }
 <!-- ============ CAPA ============ -->
 <section class="cover">
   <svg class="logo" viewBox="0 0 236 56" color="#EDEDED"><g transform="scale(.875)"><rect width="64" height="64" rx="14" fill="#0E58DB"/><g fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 46L24 36" stroke-dasharray="0.01 7"/><path d="M24 36L33 42L46 23"/><circle cx="47" cy="21" r="5.5" fill="#FFFFFF" stroke="none"/></g></g><g transform="translate(72 -2)"><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V34a6 6 0 0 0 6 6M2 20H12"/><path d="M20 40V29a9 9 0 0 1 9-9h2"/><circle cx="47" cy="30" r="10"/><path d="M57 20V40"/><path d="M80.07 22.93A10 10 0 1 0 80.07 37.07"/><path d="M88 12V40M100 20L88 32M93.5 27L101 40"/><path d="M109 20V40"/><path d="M123 40V19a8 8 0 0 1 8-8h2M117 20H130"/><path d="M139 20L149.67 40M159 20L145 50"/></g><circle cx="109" cy="12" r="3.2" fill="currentColor"/></g></svg>
-  <h1>O guia completo da <em>Trackify</em></h1>
+  <h1>O guia completo da <em>Sinqfy</em></h1>
   <p class="sub">Rastreamento server-side, vendas casadas com o clique e o lucro real de cada anúncio. Para que serve cada tela, como conectar tudo e como o dado anda do anúncio até a Meta.</p>
   <svg class="art" viewBox="0 0 800 260" preserveAspectRatio="none">
     <path d="M-10 230 C 90 225, 130 200, 190 205 S 300 150, 360 165" fill="none" stroke="#353538" stroke-width="5" stroke-linecap="round" stroke-dasharray="0.01 16"/>
     <path d="M360 165 C 430 182, 470 120, 540 112 S 660 60, 742 44" fill="none" stroke="#0E58DB" stroke-width="6" stroke-linecap="round"/>
     <circle cx="748" cy="42" r="14" fill="#0E58DB"/><circle cx="748" cy="42" r="26" fill="none" stroke="#0E58DB" stroke-opacity=".35" stroke-width="2"/>
   </svg>
-  <div class="by"><div><b>Iegos Weber</b>Criador da Trackify · @iegos_</div><div>Edição de novembro de 2026</div></div>
+  <div class="by"><div><b>Iegos Weber</b>Criador da Sinqfy · @iegos_</div><div>Edição de novembro de 2026</div></div>
 </section>
 
 <!-- ============ SUMÁRIO ============ -->
@@ -128,7 +128,7 @@ svg text { font-family: Figtree, sans-serif; }
   <div class="kicker"><span class="trail"></span></div>
   <h1>Sumário</h1>
   <ol class="toc">
-    <li><span class="n">01</span><div><b>O que é a Trackify</b><span class="d">O problema que ela resolve e o que você ganha com ela</span></div></li>
+    <li><span class="n">01</span><div><b>O que é a Sinqfy</b><span class="d">O problema que ela resolve e o que você ganha com ela</span></div></li>
     <li><span class="n">02</span><div><b>Como funciona o rastreamento</b><span class="d">O caminho do dado, do anúncio até a venda voltar para a Meta, em diagrama</span></div></li>
     <li><span class="n">03</span><div><b>UTMs sem mistério</b><span class="d">O que é uma UTM, as cinco que existem, o campo de cada uma e o modelo pronto para a Meta</span></div></li>
     <li><span class="n">04</span><div><b>rid, cookies e Conversions API</b><span class="d">Como a venda é ligada ao clique e chega à Meta uma vez só</span></div></li>
@@ -136,17 +136,17 @@ svg text { font-family: Figtree, sans-serif; }
     <li><span class="n">06</span><div><b>Como conectar tudo</b><span class="d">Script, domínio de rastreamento, Meta Ads, Conversions API, plataformas de venda, GA4 e WhatsApp</span></div></li>
     <li><span class="n">07</span><div><b>Clientes em outra conta da Cloudflare</b><span class="d">Para onde apontar e o passo a passo para agências</span></div></li>
     <li><span class="n">08</span><div><b>Métricas e glossário</b><span class="d">Como cada número é calculado e as palavras que aparecem no painel</span></div></li>
-    <li><span class="n">09</span><div><b>Privacidade e segurança</b><span class="d">O que a Trackify guarda, o que nunca guarda e como fica a LGPD</span></div></li>
-    <li><span class="n">10</span><div><b>Sobre o criador</b><span class="d">Quem fez a Trackify e como falar comigo</span></div></li>
+    <li><span class="n">09</span><div><b>Privacidade e segurança</b><span class="d">O que a Sinqfy guarda, o que nunca guarda e como fica a LGPD</span></div></li>
+    <li><span class="n">10</span><div><b>Sobre o criador</b><span class="d">Quem fez a Sinqfy e como falar comigo</span></div></li>
   </ol>
   <div class="note" style="margin-top:8mm"><b>Como ler este guia.</b> Se você vai só usar o painel, leia os capítulos 1, 2, 3 e 5. Se vai instalar e conectar, siga o capítulo 6 com o painel aberto ao lado. O capítulo 7 é para agências que atendem clientes com domínio em outra conta da Cloudflare.</div>
 </section>
 
 <!-- ============ 1. O QUE É ============ -->
 <section class="chapter">
-  <div class="kicker"><span class="n">1</span>O que é a Trackify<span class="trail"></span></div>
+  <div class="kicker"><span class="n">1</span>O que é a Sinqfy<span class="trail"></span></div>
   <h1>Saber, de verdade, <em>qual anúncio vendeu</em></h1>
-  <p class="lead">A Trackify junta num painel só quem visitou o seu site, quem comprou e quanto você gastou em anúncios na Meta. Depois devolve as vendas para a Meta pelo servidor, para os anúncios otimizarem com dado real.</p>
+  <p class="lead">A Sinqfy junta num painel só quem visitou o seu site, quem comprou e quanto você gastou em anúncios na Meta. Depois devolve as vendas para a Meta pelo servidor, para os anúncios otimizarem com dado real.</p>
 
   <h2>O problema</h2>
   <p>O pixel do navegador perde cada vez mais informação: bloqueadores de anúncio, o Safari apagando cookies em poucos dias, o navegador do Instagram, o comprador que clica hoje e compra daqui a uma semana. O resultado é conhecido de quem anuncia:</p>
@@ -156,7 +156,7 @@ svg text { font-family: Figtree, sans-serif; }
     <li>O order bump e o upsell viram compras separadas e a campanha parece melhor do que é.</li>
   </ul>
 
-  <h2>O que a Trackify faz</h2>
+  <h2>O que a Sinqfy faz</h2>
   <div class="grid2">
     <div class="card"><h3>Rastreia no seu domínio</h3><p>O script roda em <code>t.seudominio.com.br</code>, num servidor da Cloudflare. O cookie é do seu domínio e reconhece a pessoa por até 400 dias, inclusive no iPhone.</p></div>
     <div class="card"><h3>Casa a venda com o clique</h3><p>O id do visitante vai no link do checkout e volta no webhook da plataforma. A venda fica ligada à campanha, ao conjunto e ao anúncio certos.</p></div>
@@ -210,7 +210,7 @@ svg text { font-family: Figtree, sans-serif; }
 
       <rect x="266" y="250" width="168" height="74" rx="12" fill="#141415"/>
       <circle cx="286" cy="270" r="11" fill="#0E58DB"/><text x="286" y="274.5" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">5</text>
-      <text x="304" y="274" font-weight="700" fill="#fff">Painel Trackify</text>
+      <text x="304" y="274" font-weight="700" fill="#fff">Painel Sinqfy</text>
       <text x="278" y="296" fill="#A1A1A6" font-size="11">Servidor + banco: casa a</text><text x="278" y="311" fill="#A1A1A6" font-size="11">venda com o clique pelo rid</text>
 
       <rect x="508" y="250" width="168" height="74" rx="12" fill="#fff" stroke="#D8D8DC"/>
@@ -236,22 +236,22 @@ svg text { font-family: Figtree, sans-serif; }
     <text x="40" y="374" font-size="11.5" font-weight="700" fill="#0E58DB">Resultado</text>
     <text x="40" y="393" font-size="11" fill="#171717">Cada venda ligada ao anúncio que trouxe a pessoa, e a Meta recebendo a compra uma vez só, pelo servidor.</text>
   </svg>
-  <figcaption>Figura 1. O fluxo completo do rastreamento na Trackify.</figcaption>
+  <figcaption>Figura 1. O fluxo completo do rastreamento na Sinqfy.</figcaption>
   </figure>
 
   <ol class="steps">
     <li><strong>Anúncio.</strong> A pessoa clica no anúncio. O link leva as UTMs, que funcionam como o RG da campanha, do conjunto e do anúncio (capítulo 3).</li>
-    <li><strong>Site.</strong> O site tem uma linha de script da Trackify. Ela registra a visita e cada ação importante: lead, clique em comprar, vídeo assistido.</li>
+    <li><strong>Site.</strong> O site tem uma linha de script da Sinqfy. Ela registra a visita e cada ação importante: lead, clique em comprar, vídeo assistido.</li>
     <li><strong>Borda.</strong> O script fala com <code>t.seudominio</code>, um Worker da Cloudflare. Ele grava pelo servidor os cookies <code>_rid</code>, <code>_fbp</code> e <code>_fbc</code> no seu domínio e repassa o evento ao painel com uma senha só dele (o <code>EDGE_SECRET</code>).</li>
     <li><strong>Checkout.</strong> Ao clicar em comprar, o script copia as UTMs e põe o id da pessoa (<code>rid</code>) no link do checkout.</li>
-    <li><strong>Webhook.</strong> A plataforma de venda avisa a Trackify a cada mudança no pedido: gerado, pago, reembolsado. A Trackify liga a venda ao clique pelo rid.</li>
+    <li><strong>Webhook.</strong> A plataforma de venda avisa a Sinqfy a cada mudança no pedido: gerado, pago, reembolsado. A Sinqfy liga a venda ao clique pelo rid.</li>
     <li><strong>Devolução.</strong> A compra entra na fila e segue para a Meta (Conversions API) e o GA4 pelo servidor, sem depender do navegador nem de bloqueador.</li>
   </ol>
 </section>
 
 <section>
   <h2>Por que um subdomínio <code>t.</code> no seu domínio</h2>
-  <p>Cookie criado por JavaScript dura 7 dias no Safari, e às vezes só 24 horas. Cookie criado pelo servidor do próprio domínio do site dura até 400 dias. Por isso o rastreamento roda em <code>t.seudominio.com.br</code>, que é parte do seu domínio, e não num endereço da Trackify.</p>
+  <p>Cookie criado por JavaScript dura 7 dias no Safari, e às vezes só 24 horas. Cookie criado pelo servidor do próprio domínio do site dura até 400 dias. Por isso o rastreamento roda em <code>t.seudominio.com.br</code>, que é parte do seu domínio, e não num endereço da Sinqfy.</p>
   <div class="grid3">
     <div class="card"><h3><code>_rid</code></h3><p>O id do visitante. É o que liga visitas de dias diferentes e a venda ao clique.</p></div>
     <div class="card"><h3><code>_fbp</code></h3><p>O id de navegador que a Meta usa. Melhora a qualidade da correspondência dos eventos.</p></div>
@@ -269,7 +269,7 @@ svg text { font-family: Figtree, sans-serif; }
   </table>
 
   <h2>Uma compra só por checkout</h2>
-  <p>Quem compra o produto principal, o order bump e o upsell fez <strong>uma</strong> compra. A Trackify segura o Purchase por 15 minutos na fila e soma no mesmo evento tudo o que a mesma pessoa comprar nesse tempo. A Meta recebe uma conversão com o valor total, em vez de três conversões separadas.</p>
+  <p>Quem compra o produto principal, o order bump e o upsell fez <strong>uma</strong> compra. A Sinqfy segura o Purchase por 15 minutos na fila e soma no mesmo evento tudo o que a mesma pessoa comprar nesse tempo. A Meta recebe uma conversão com o valor total, em vez de três conversões separadas.</p>
   <div class="card">
     <table style="margin:0">
       <tr><th>Pedido</th><th>Valor</th><th>O que vai para a Meta</th></tr>
@@ -292,7 +292,7 @@ svg text { font-family: Figtree, sans-serif; }
 
   <h2>As cinco UTMs e o campo de cada uma</h2>
   <table>
-    <tr><th>UTM</th><th>Responde</th><th>Na Trackify, guarde</th><th>Exemplo</th></tr>
+    <tr><th>UTM</th><th>Responde</th><th>Na Sinqfy, guarde</th><th>Exemplo</th></tr>
     <tr><td><code>utm_source</code></td><td class="wrap">De onde veio</td><td class="wrap">A origem do tráfego</td><td class="wrap"><code>FB</code>, <code>google</code>, <code>instagram</code></td></tr>
     <tr><td><code>utm_campaign</code></td><td class="wrap">Qual campanha</td><td class="wrap">Nome e id da <strong>campanha</strong></td><td class="wrap"><code>{{campaign.name}}|{{campaign.id}}</code></td></tr>
     <tr><td><code>utm_medium</code></td><td class="wrap">Qual público ou meio</td><td class="wrap">Nome e id do <strong>conjunto de anúncios</strong></td><td class="wrap"><code>{{adset.name}}|{{adset.id}}</code></td></tr>
@@ -303,14 +303,14 @@ svg text { font-family: Figtree, sans-serif; }
   <h2>O modelo pronto para a Meta</h2>
   <p>No Gerenciador de Anúncios, em cada anúncio, abra <strong>Rastreamento → Parâmetros de URL</strong> e cole a linha abaixo. A Meta troca cada <code>{{...}}</code> pelo valor real na hora do clique.</p>
   <pre><b>utm_source</b>=FB&amp;<b>utm_campaign</b>={{campaign.name}}|{{campaign.id}}&amp;<b>utm_medium</b>={{adset.name}}|{{adset.id}}&amp;<b>utm_content</b>={{ad.name}}|{{ad.id}}&amp;<b>utm_term</b>={{placement}}</pre>
-  <div class="note"><b>Por que o id depois da barra.</b> Nomes mudam: você renomeia a campanha, duplica o conjunto, corrige um criativo. O id nunca muda. A Trackify usa o número depois do último <code>|</code> para ligar cada venda à campanha, ao conjunto e ao anúncio certos, e cruzar com o gasto que vem da Meta. Sem o id, a venda cai em "sem campanha".</div>
+  <div class="note"><b>Por que o id depois da barra.</b> Nomes mudam: você renomeia a campanha, duplica o conjunto, corrige um criativo. O id nunca muda. A Sinqfy usa o número depois do último <code>|</code> para ligar cada venda à campanha, ao conjunto e ao anúncio certos, e cruzar com o gasto que vem da Meta. Sem o id, a venda cai em "sem campanha".</div>
 
   <h2>Regras que evitam dor de cabeça</h2>
   <ul>
     <li>Use sempre o modelo inteiro, com as cinco UTMs, em todos os anúncios.</li>
     <li>Não troque a ordem dos campos: <code>utm_medium</code> é o conjunto e <code>utm_content</code> é o anúncio.</li>
     <li>Para tráfego orgânico (bio, stories, e-mail), use UTMs simples sem id: <code>utm_source=instagram&amp;utm_medium=bio&amp;utm_campaign=lancamento</code>.</li>
-    <li>O script da Trackify repassa as UTMs da página para o link do checkout sozinho. Na Hotmart, copia também <code>utm_source</code> para <code>src</code> e <code>utm_campaign</code> para <code>sck</code>, que são os campos que ela devolve.</li>
+    <li>O script da Sinqfy repassa as UTMs da página para o link do checkout sozinho. Na Hotmart, copia também <code>utm_source</code> para <code>src</code> e <code>utm_campaign</code> para <code>sck</code>, que são os campos que ela devolve.</li>
   </ul>
 </section>
 
@@ -318,7 +318,7 @@ svg text { font-family: Figtree, sans-serif; }
 <section class="chapter">
   <div class="kicker"><span class="n">4</span>rid, cookies e Conversions API<span class="trail"></span></div>
   <h1>Como a venda <em>encontra o clique</em></h1>
-  <p class="lead">A plataforma de venda não sabe de qual anúncio a pessoa veio. A Trackify resolve isso levando um id no link do checkout e lendo esse id de volta no webhook.</p>
+  <p class="lead">A plataforma de venda não sabe de qual anúncio a pessoa veio. A Sinqfy resolve isso levando um id no link do checkout e lendo esse id de volta no webhook.</p>
 
   <h2>A ordem do casamento</h2>
   <table>
@@ -448,7 +448,7 @@ svg text { font-family: Figtree, sans-serif; }
   <figure><img src="img/integracoes.png"><figcaption>Integrações. Cada cartão abre só a configuração dele.</figcaption></figure>
 
   <div class="grid2">
-    <div class="card"><h3>Meta Ads: gasto e campanhas</h3><p><span class="tag">lê da Meta</span></p><p>Importa campanhas, conjuntos, anúncios, status, orçamento e gasto diário a cada 5 minutos (90 dias na primeira vez). Precisa do id da conta (<code>act_...</code>) e de um token com a permissão <code>ads_read</code>, de preferência de um usuário do sistema no Business Manager. Somente leitura: a Trackify nunca altera anúncios.</p></div>
+    <div class="card"><h3>Meta Ads: gasto e campanhas</h3><p><span class="tag">lê da Meta</span></p><p>Importa campanhas, conjuntos, anúncios, status, orçamento e gasto diário a cada 5 minutos (90 dias na primeira vez). Precisa do id da conta (<code>act_...</code>) e de um token com a permissão <code>ads_read</code>, de preferência de um usuário do sistema no Business Manager. Somente leitura: a Sinqfy nunca altera anúncios.</p></div>
     <div class="card"><h3>Meta Pixel: Conversions API</h3><p><span class="tag blue">envia para a Meta</span></p><p>Envia os eventos do site e as vendas pelo servidor. Precisa do id do pixel (conjunto de dados) e do token da Conversions API, gerado no Gerenciador de Eventos. O código de teste opcional faz os eventos aparecerem só na aba Testar eventos.</p></div>
   </div>
 </section>
@@ -458,7 +458,7 @@ svg text { font-family: Figtree, sans-serif; }
   <p>Em <strong>Integrações → Plataformas de venda</strong> há uma URL de webhook para cada plataforma. Cadastre a URL na plataforma com os eventos de compra aprovada, pendente, reembolso e chargeback. O token na URL identifica o site; a URL de uma plataforma não serve para outra.</p>
   <table>
     <tr><th>Plataforma</th><th>Onde cadastrar</th><th>Assinatura</th></tr>
-    <tr><td>Hotmart</td><td class="wrap">Ferramentas → Webhook (versão 2.0)</td><td class="wrap">Hottok, conferido pela Trackify</td></tr>
+    <tr><td>Hotmart</td><td class="wrap">Ferramentas → Webhook (versão 2.0)</td><td class="wrap">Hottok, conferido pela Sinqfy</td></tr>
     <tr><td>Kiwify</td><td class="wrap">Apps → Webhooks</td><td class="wrap">Token na URL</td></tr>
     <tr><td>Eduzz</td><td class="wrap">Webhook novo ou legado</td><td class="wrap">Token na URL</td></tr>
     <tr><td>Shopify</td><td class="wrap">Configurações → Notificações → Webhooks</td><td class="wrap">Segredo do webhook</td></tr>
@@ -469,7 +469,7 @@ svg text { font-family: Figtree, sans-serif; }
   <h3>Webhook personalizado (exemplo: OnProfit)</h3>
   <p>Para qualquer checkout que mande JSON, diga onde está cada campo. Caminhos com ponto, como <code>customer.email</code> ou <code>product.name</code>. Teste com um exemplo antes de salvar.</p>
   <table>
-    <tr><th>Campo da Trackify</th><th>Na OnProfit (payload V2)</th></tr>
+    <tr><th>Campo da Sinqfy</th><th>Na OnProfit (payload V2)</th></tr>
     <tr><td>Id do pedido</td><td><code>id</code></td></tr>
     <tr><td>Status</td><td class="wrap"><code>status</code> (Aprovada: <code>paid,authorized</code>; Pendente: <code>waiting</code>; Reembolsada: <code>refunded</code>)</td></tr>
     <tr><td>Valor pago</td><td class="wrap"><code>price</code>, em centavos. Não use <code>transactions.0.amount</code>: no Pix com order bump ele traz o total do pagamento em cada pedido</td></tr>
@@ -524,7 +524,7 @@ svg text { font-family: Figtree, sans-serif; }
     <text x="510" y="122" font-size="11" fill="#A1A1A6">do cliente; grava _rid</text>
     <text x="510" y="138" font-size="11" fill="#A1A1A6">em cliente.com.br</text>
     <rect x="306" y="176" width="360" height="86" rx="10" fill="#19191B" stroke="#353538"/>
-    <text x="320" y="200" font-size="12" font-weight="700" fill="#fff">Painel Trackify (VPS)</text>
+    <text x="320" y="200" font-size="12" font-weight="700" fill="#fff">Painel Sinqfy (VPS)</text>
     <text x="320" y="220" font-size="11" fill="#A1A1A6">um site por cliente, com o seu snippet, webhooks,</text>
     <text x="320" y="236" font-size="11" fill="#A1A1A6">Meta e GA4. Agências e equipes separadas.</text>
     <path d="M222 205 H300" stroke="#0E58DB" stroke-width="2" fill="none" marker-end="url(#b)"/>
@@ -545,10 +545,10 @@ svg text { font-family: Figtree, sans-serif; }
 
   <h2>Para cada cliente novo</h2>
   <ol class="steps">
-    <li>Crie o site do cliente na Trackify (ou uma agência separada para ele, com a equipe dele).</li>
-    <li>Em <strong>Primeiros passos</strong>, informe o domínio do cliente. A Trackify registra <code>t.cliente.com.br</code> no Cloudflare for SaaS sozinha.</li>
+    <li>Crie o site do cliente na Sinqfy (ou uma agência separada para ele, com a equipe dele).</li>
+    <li>Em <strong>Primeiros passos</strong>, informe o domínio do cliente. A Sinqfy registra <code>t.cliente.com.br</code> no Cloudflare for SaaS sozinha.</li>
     <li>O cliente cria no DNS dele: <strong>CNAME</strong> <code>t</code> → <code>edge.seudominio.com.br</code>, <strong>proxy desligado</strong>. Se o DNS dele também é Cloudflare, a nuvem tem de ficar cinza; laranja dá o erro 1014.</li>
-    <li>A Trackify confere DNS e certificado a cada 5 minutos. Em geral fica pronto em menos de 15 minutos.</li>
+    <li>A Sinqfy confere DNS e certificado a cada 5 minutos. Em geral fica pronto em menos de 15 minutos.</li>
     <li>Cole no site do cliente o snippet com <code>src="https://t.cliente.com.br/s.js"</code> e siga os demais passos.</li>
   </ol>
   <div class="note warn"><b>Alternativa sem SaaS.</b> Se o cliente der acesso à conta Cloudflare dele, dá para publicar uma cópia do Worker lá, em <code>t.cliente.com.br</code>, com <code>ORIGIN</code> apontando para o seu painel e o mesmo <code>EDGE_SECRET</code>. Funciona, mas cada cliente vira um Worker para manter. O Cloudflare for SaaS centraliza tudo na sua conta.</div>
@@ -591,7 +591,7 @@ svg text { font-family: Figtree, sans-serif; }
   <div class="kicker"><span class="n">9</span>Privacidade e segurança<span class="trail"></span></div>
   <h1>Dado útil, <em>sem guardar o que não deve</em></h1>
   <ul>
-    <li>A Trackify <strong>não guarda IP, e-mail nem telefone</strong> de visitante.</li>
+    <li>A Sinqfy <strong>não guarda IP, e-mail nem telefone</strong> de visitante.</li>
     <li>Nome, e-mail e telefone de contatos e compradores ficam <strong>cifrados</strong>. Quem roubar o banco não lê nada sem a chave <code>DATA_KEY</code>, que fica fora do banco.</li>
     <li>Para a Meta, e-mail e telefone vão <strong>só em hash</strong> SHA-256.</li>
     <li>IP e navegador existem só enquanto o envio para a Meta está pendente, e saem do banco depois.</li>
@@ -613,8 +613,8 @@ svg text { font-family: Figtree, sans-serif; }
 <section class="creator">
   <div class="kicker" style="color:#8DB4F5"><span class="n">10</span>Sobre o criador<span class="trail" style="border-color:#353538"></span></div>
   <h1>Feita por <em style="color:#8DB4F5">Iegos Weber</em></h1>
-  <p>A Trackify nasceu de uma pergunta simples que todo anunciante faz e quase nenhuma ferramenta responde direito: qual anúncio vendeu de verdade, e quanto sobrou no fim do mês?</p>
-  <p>Ela foi pensada, desenhada e construída por mim, Iegos Weber, para juntar rastreamento server-side, vendas casadas com o clique e o lucro real num painel só, rápido e honesto com os números. Se você tem uma dúvida, uma ideia ou quer usar a Trackify na sua operação ou agência, fale comigo.</p>
+  <p>A Sinqfy nasceu de uma pergunta simples que todo anunciante faz e quase nenhuma ferramenta responde direito: qual anúncio vendeu de verdade, e quanto sobrou no fim do mês?</p>
+  <p>Ela foi pensada, desenhada e construída por mim, Iegos Weber, para juntar rastreamento server-side, vendas casadas com o clique e o lucro real num painel só, rápido e honesto com os números. Se você tem uma dúvida, uma ideia ou quer usar a Sinqfy na sua operação ou agência, fale comigo.</p>
   <div class="contact">
     <div><small>Instagram</small><strong>@iegos_</strong></div>
     <div><small>E-mail</small><strong>iegosweber@gmail.com</strong></div>
@@ -624,7 +624,7 @@ svg text { font-family: Figtree, sans-serif; }
     <path d="M450 52 C 530 64, 600 30, 760 20" fill="none" stroke="#0E58DB" stroke-width="6" stroke-linecap="round"/>
     <circle cx="766" cy="19" r="12" fill="#0E58DB"/>
   </svg>
-  <p class="foot">Trackify · o guia completo · edição de novembro de 2026. Telas da loja de demonstração; os números são fictícios.</p>
+  <p class="foot">Sinqfy · o guia completo · edição de novembro de 2026. Telas da loja de demonstração; os números são fictícios.</p>
 </section>
 
 </body>

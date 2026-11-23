@@ -1,4 +1,4 @@
-# Especificação: Trackify
+# Especificação: Sinqfy
 
 ## Objetivo
 

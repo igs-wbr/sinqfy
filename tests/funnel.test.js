@@ -11,9 +11,9 @@ test('funil: página e checkout pelo script, compra pelo webhook, impressão e c
   const by = Object.fromEntries(st.map(s => [s.k, s]));
   assert.deepEqual(st.map(s => s.k), ['imp', 'click', 'visit', 'engage', 'checkout', 'buy']);
   assert.equal(by.click.v, 1200, 'clique no link, não todos os cliques');
-  assert.deepEqual([by.visit.v, by.visit.src, by.visit.alt], [900, 'trackify', 600], 'visita do script; a Meta fica como comparação');
-  assert.deepEqual([by.checkout.v, by.checkout.src], [25, 'trackify']);
-  assert.deepEqual([by.buy.v, by.buy.src, by.buy.alt], [7, 'trackify', 9], 'compra confirmada pelo webhook');
+  assert.deepEqual([by.visit.v, by.visit.src, by.visit.alt], [900, 'sinqfy', 600], 'visita do script; a Meta fica como comparação');
+  assert.deepEqual([by.checkout.v, by.checkout.src], [25, 'sinqfy']);
+  assert.deepEqual([by.buy.v, by.buy.src, by.buy.alt], [7, 'sinqfy', 9], 'compra confirmada pelo webhook');
   assert.equal(by.buy.cost, 1000 / 7, 'custo por compra');
 });
 

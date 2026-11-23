@@ -41,7 +41,7 @@ route('POST', '/sites/:id/setup', { site: 'edit' }, async r => {
     const host = normalizeHost(f.get('host'));
     if (!HOST_RE.test(host) || publicSuffix(host)) return view(r, null, 'Use o domínio do seu site com t. na frente, por exemplo t.seudominio.com.br');
     // Mensagem neutra: não confirma que outra agência usa o domínio. Conflito real é resolvido pelo dono da plataforma.
-    if ([...sites.values()].some(s => s.edge_host === host && s.id !== site.id)) return view(r, null, 'Não foi possível cadastrar esse domínio. Fale com o suporte do Trackify.');
+    if ([...sites.values()].some(s => s.edge_host === host && s.id !== site.id)) return view(r, null, 'Não foi possível cadastrar esse domínio. Fale com o suporte do Sinqfy.');
     const used = [...sites.values()].filter(s => s.agency_id === site.agency_id && s.edge_host && s.id !== site.id).length;
     if (used >= 50) return view(r, null, 'Limite de 50 domínios por agência. Fale com o suporte para aumentar.');
     await addHost(site, host);

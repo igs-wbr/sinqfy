@@ -1,4 +1,4 @@
-# Worker da borda do Trackify: script, eventos, links de WhatsApp e, se quiser, o painel no mesmo endereço.
+# Worker da borda do Sinqfy: script, eventos, links de WhatsApp e, se quiser, o painel no mesmo endereço.
 # Deploy automático: .github/workflows/deploy-edge.yml (a cada push na main que mexe em edge/).
 # Deploy manual, na pasta edge/: npx wrangler deploy --var ORIGIN:https://app.seudominio.com.br
 # Segredo (o mesmo EDGE_SECRET do painel), uma vez só: npx wrangler secret put EDGE_SECRET

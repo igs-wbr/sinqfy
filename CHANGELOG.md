@@ -1,6 +1,15 @@
 # Changelog
 
-Mudanças de cada versão do Trackify. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
+Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
+
+## [1.1.0] - 2026-11-23
+
+### Mudou
+- O produto agora se chama **Sinqfy**. Logotipo novo no mesmo desenho do anterior (símbolo, azul e traço iguais, letras novas), em todas as variações, no painel, no app instalável e na documentação. Arquivos da marca renomeados para `sinqfy-*`.
+- O repositório passou a ser `igs-wbr/sinqfy` (o endereço antigo redireciona).
+
+### Mantido de propósito
+- Nada muda nos sites que já rastreiam: `data-rastro`, `window.rastro`, o cookie `_rid` e os cabeçalhos da borda continuam iguais, e o Worker da Cloudflare segue com o nome `trackify` (as rotas dos domínios dos clientes apontam para ele). Detalhes no ADR 0023.
 
 ## [1.0.0] - 2026-11-23
 
@@ -34,4 +43,5 @@ Primeira versão estável, em produção desde 17/11/2026.
 - Licença Fair Core 1.0 com MIT futura (FCL-1.0-MIT): uso livre, sem revenda concorrente; cada versão vira MIT dois anos depois.
 - Plano Grátis com 1 site e todos os recursos; Pro por pagamento único (R$ 97) com sites ilimitados, até 2 instalações, 12 meses de atualizações e 7 dias de teste. Chave assinada e validada offline.
 
-[1.0.0]: https://github.com/igs-wbr/trackify/releases/tag/v1.0.0
+[1.1.0]: https://github.com/igs-wbr/sinqfy/releases/tag/v1.1.0
+[1.0.0]: https://github.com/igs-wbr/sinqfy/releases/tag/v1.0.0

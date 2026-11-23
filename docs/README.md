@@ -1,4 +1,4 @@
-# Documentação do Trackify
+# Documentação do Sinqfy
 
 ## Comece por aqui
 

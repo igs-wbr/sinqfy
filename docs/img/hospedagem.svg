@@ -45,7 +45,7 @@
     <text x="658" y="180" font-weight="600">cloudflared</text>
     <text x="658" y="196" fill="#525252">a ponta do túnel dentro da VPS</text>
     <rect x="642" y="216" width="266" height="46" rx="10" fill="#fff" stroke="#B9CDF3"/>
-    <text x="658" y="236" font-weight="600">app (o Trackify)</text>
+    <text x="658" y="236" font-weight="600">app (o Sinqfy)</text>
     <text x="658" y="252" fill="#525252">painel, webhooks, envios a cada 5 s</text>
     <rect x="642" y="272" width="266" height="46" rx="10" fill="#fff" stroke="#B9CDF3"/>
     <text x="658" y="292" font-weight="600">postgres</text>

@@ -44,7 +44,7 @@ export const cleanUtm = v => {
 const utm = o => ({ source: str(cleanUtm(o.source)), medium: str(cleanUtm(o.medium)), campaign: str(cleanUtm(o.campaign)), content: str(cleanUtm(o.content)), term: str(cleanUtm(o.term)) });
 /**
  * `sck` de rastreadores anteriores com tudo junto: "origem|meio|campanha|anúncio|conjunto" (nomes ou ids da Meta).
- * Separador é o "|" sem espaço em volta; o " | " de dentro dos nomes fica. Vira o padrão da Trackify: conjunto em
+ * Separador é o "|" sem espaço em volta; o " | " de dentro dos nomes fica. Vira o padrão da Sinqfy: conjunto em
  * utm_medium e anúncio em utm_content.
  */
 const packed = v => {

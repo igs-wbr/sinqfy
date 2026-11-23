@@ -57,7 +57,7 @@ function funnelsTable(ctx, rows, m) {
 <td>${m(t.net)}</td><td>${m(t.spend)}</td><td>${sx(t.roas)}</td><td class="${t.profit < 0 ? 'neg' : t.profit > 0 ? 'pos' : ''}">${m(t.profit)}</td><td>${num(t.paid)}</td><td>${t.ticket == null ? '-' : m(t.ticket)}</td></tr>`)}</tbody></table></div></section>`;
 }
 
-const SRC = { trackify: 'Trackify', meta: 'Meta' };
+const SRC = { sinqfy: 'Sinqfy', meta: 'Meta' };
 // O que costuma causar a perda em cada etapa (texto do aviso de gargalo).
 const CAUSE = {
   click: 'O anúncio é visto e pouco clicado: teste outro criativo, gancho ou público.',
@@ -66,7 +66,7 @@ const CAUSE = {
   checkout: 'A página não leva ao checkout: oferta, preço, prova social ou o botão de compra.',
   buy: 'O checkout perde gente: meio de pagamento, preço final, frete ou confiança. Vale ligar a recuperação de venda pendente.',
 };
-const WHY = { trackify: 'script na página, sem bloqueio de navegador', meta: 'estimativa da Meta' };
+const WHY = { sinqfy: 'script na página, sem bloqueio de navegador', meta: 'estimativa da Meta' };
 /** Faixa do funil (SVG 100 por etapa, 100 de altura): plana em cada coluna e curva suave na passagem para a próxima. */
 function flowPath(hs) {
   const top = h => (50 - h / 2).toFixed(2), bot = h => (50 + h / 2).toFixed(2), n = hs.length;
@@ -83,7 +83,7 @@ function adFunnel(ctx, fn, m) {
   const metas = (fn.options || []).filter(r => r.platform === 'meta');
   const g = st.find(s => s.gargalo), gi = st.indexOf(g), compared = all.some(s => s.before != null);
   const when = fn.prev ? `${brDate(fn.prev.from)} a ${brDate(fn.prev.to)}` : '';
-  const why = s => s.k === 'buy' && s.src === 'trackify' ? 'venda confirmada pela plataforma' : WHY[s.src];
+  const why = s => s.k === 'buy' && s.src === 'sinqfy' ? 'venda confirmada pela plataforma' : WHY[s.src];
   const hs = st.map(s => first ? Math.max(1.5, 92 * s.v / first) : 1.5), d = flowPath(hs), W = st.length * 100;
   const tip = s => [s.t, `${num(s.v)} ${s.d.toLowerCase()}`, `Fonte: ${SRC[s.src]} (${why(s)})`,
     ...(s.alt != null && s.alt !== s.v ? [`${SRC[s.altSrc]} registrou ${num(s.alt)}`] : []),
@@ -218,7 +218,7 @@ rastro('compra', { plano: 'pro' }, 97.90)`}</code></pre></section>`],
 <div class="platforms" style="margin-top:12px">${Object.entries(PLATFORMS).filter(([k]) => k !== 'custom' && k !== 'sheets').map(([k, t]) => html`<div class="platform"><div class="row between"><span class="lbl">${t}</span>${SIGNED[k] ? html`<span class="tag ${secrets[k] ? 'ok' : 'warn'}">${secrets[k] ? 'assinatura conferida' : 'sem assinatura'}</span>` : ''}</div><pre><code>${originUrl}/hooks/${hookToken(s, k)}/${k}</code></pre></div>`)}</div>
 <form method="post" action="${act('plataformas')}" class="row" style="margin-top:12px"><input type="hidden" name="action" value="rotate"><button class="danger">Gerar novo token</button><span class="muted">as URLs antigas param de funcionar</span></form></section>
 <section class="card"><h2>Segredos de assinatura</h2><form method="post" action="${act('plataformas')}" class="stack" style="margin-top:10px;max-width:none"><input type="hidden" name="action" value="secrets">
-<p class="muted" style="margin:0">Com o segredo, o Trackify recusa webhooks sem a assinatura da plataforma. Cada plataforma tem a sua URL, então a de uma não serve para outra. Campo vazio mantém o atual; digite <code>-</code> para apagar.</p>
+<p class="muted" style="margin:0">Com o segredo, o Sinqfy recusa webhooks sem a assinatura da plataforma. Cada plataforma tem a sua URL, então a de uma não serve para outra. Campo vazio mantém o atual; digite <code>-</code> para apagar.</p>
 <div class="fields">${Object.entries(SIGNED).map(([k, t]) => html`<label class="f">${PLATFORMS[k]}<span>${t}</span><input name="secret_${k}" type="password" autocomplete="off" placeholder="${secrets[k] ? '•••••• (configurado)' : 'não configurado'}"></label>`)}</div>
 <div><button>Salvar segredos</button></div></form></section>
 <section class="card"><h2>Últimos webhooks</h2>${d.logs.length ? html`<div class="tw"><table class="data txt"><thead><tr><th>Quando</th><th>Plataforma</th><th>Pedido</th><th>Resultado</th></tr></thead><tbody>${d.logs.map(l => html`<tr><td style="text-align:left">${time(l.ts)}</td><td>${PLATFORMS[l.platform] ?? l.platform}</td><td><code>${l.order_id || '-'}</code></td><td class="${l.ok ? '' : 'neg'}" style="white-space:normal">${l.message}</td></tr>`)}</tbody></table></div>` : html`<p class="empty">Nenhum webhook recebido ainda.</p>`}</section>`],

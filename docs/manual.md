@@ -1,19 +1,19 @@
-# Manual do Trackify
+# Manual do Sinqfy
 
 O que o sistema faz, para que serve cada tela e o que significa cada palavra do painel. Para colocar no ar e conectar tudo pela primeira vez, siga o [guia do iniciante](guia-iniciante.md).
 
 ## Em uma frase
 
-O Trackify junta, num painel só, **quem visitou o seu site**, **quem comprou** e **quanto você gastou em anúncios na Meta**, e devolve as vendas para a Meta pelo servidor, para os anúncios otimizarem com dado real.
+O Sinqfy junta, num painel só, **quem visitou o seu site**, **quem comprou** e **quanto você gastou em anúncios na Meta**, e devolve as vendas para a Meta pelo servidor, para os anúncios otimizarem com dado real.
 
 ![Como o dado anda: anúncio, site, subdomínio t., painel, checkout e a volta para a Meta](img/fluxo-dos-dados.svg)
 
 1. A pessoa clica no anúncio. O link leva as UTMs (o "RG" da campanha, do conjunto e do anúncio).
-2. O site tem o **script** do Trackify, que registra a visita e cada ação importante.
+2. O site tem o **script** do Sinqfy, que registra a visita e cada ação importante.
 3. O script roda no subdomínio `t.` do seu domínio, na Cloudflare. Lá é gravado um cookie que reconhece a pessoa por até 400 dias, inclusive no iPhone.
 4. Ao clicar em comprar, o script põe o id da pessoa (`rid`) no link do checkout.
-5. A plataforma de venda (Hotmart, Kiwify, Eduzz, Shopify...) avisa o Trackify a cada mudança no pedido, por **webhook**.
-6. O Trackify liga a venda ao clique e manda a compra para a Meta e o GA4 pelo servidor, sem depender do navegador nem de bloqueador de anúncio.
+5. A plataforma de venda (Hotmart, Kiwify, Eduzz, Shopify...) avisa o Sinqfy a cada mudança no pedido, por **webhook**.
+6. O Sinqfy liga a venda ao clique e manda a compra para a Meta e o GA4 pelo servidor, sem depender do navegador nem de bloqueador de anúncio.
 
 ## Palavras que aparecem no painel
 
@@ -25,8 +25,8 @@ O Trackify junta, num painel só, **quem visitou o seu site**, **quem comprou** 
 | **Evento** | Qualquer coisa registrada: página vista, lead, clique em comprar, vídeo assistido |
 | **UTM** | Parâmetros no link do anúncio (`utm_campaign`, `utm_medium`, `utm_content`) que dizem de onde a pessoa veio |
 | **rid** | O id do visitante que vai no link do checkout e volta no webhook. É o que liga a venda ao clique |
-| **Webhook** | Aviso automático que a plataforma de venda manda para o Trackify ("o pedido 123 foi pago") |
-| **Pixel** | O conjunto de dados da Meta que recebe os eventos. No Trackify você usa o ID dele |
+| **Webhook** | Aviso automático que a plataforma de venda manda para o Sinqfy ("o pedido 123 foi pago") |
+| **Pixel** | O conjunto de dados da Meta que recebe os eventos. No Sinqfy você usa o ID dele |
 | **Conversions API (CAPI)** | O jeito de mandar eventos para a Meta pelo servidor, sem depender do navegador |
 | **ROAS** | Faturamento dividido pelo gasto. ROAS 3 = cada R$ 1 em anúncio voltou R$ 3 |
 | **Compras (Meta) e ROAS (Meta)** | O que a própria Meta diz que vendeu. Comparar com as vendas reais mostra se ela atribui a mais |
@@ -117,7 +117,7 @@ Usando sozinho no próprio computador, dá para tirar a tela de login com `LOGIN
 
 ## Privacidade, em linguagem simples
 
-- O Trackify **não guarda IP, e-mail nem telefone** de visitante.
+- O Sinqfy **não guarda IP, e-mail nem telefone** de visitante.
 - Nome, e-mail e telefone de **contatos e compradores** ficam cifrados. Quem roubar o banco não lê nada sem a chave `DATA_KEY`, que fica fora do banco.
 - Para a Meta, e-mail e telefone vão **só em hash** (um código que não dá para desfazer).
 - Com `data-consent="required"` no script, nada de cookie ou dado pessoal sai antes do aceite no banner.

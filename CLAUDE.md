@@ -1,6 +1,6 @@
-# Trackify: guia para agentes
+# Sinqfy: guia para agentes
 
-Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 6 concluídas, painel no design system Trackify, moldura grafite e azul só como acento). Produção: Docker com PostgreSQL em qualquer VPS ([onde hospedar](docs/hospedagem.md); exemplo com a Oracle em [deploy-oracle](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); provedores (Oracle, Cloudflare, Vercel) são exemplos, nunca dependência no código; localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
+Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto multi-cliente do [plano v2](docs/plano-v2/plano.html) (etapas 0 a 6 concluídas, painel no design system Sinqfy, moldura grafite e azul só como acento). Produção: Docker com PostgreSQL em qualquer VPS ([onde hospedar](docs/hospedagem.md); exemplo com a Oracle em [deploy-oracle](docs/deploy-oracle.md), [ADR 0010](docs/adr/0010-postgres-na-oracle.md)); provedores (Oracle, Cloudflare, Vercel) são exemplos, nunca dependência no código; localmente, `npm start` com o Postgres do Docker. Única dependência: `pg`. Não há envio de e-mail ([ADR 0008](docs/adr/0008-sem-email.md)). Interface em PT-BR.
 
 ## Comandos
 - `npm start`: servidor em `HOST:PORT` (padrão `127.0.0.1:8080`), Postgres local (`127.0.0.1:55432`) se `DATABASE_URL` estiver vazio, tarefas a cada 5 min.
@@ -25,9 +25,10 @@ Analytics de vendas, tráfego e campanhas da Meta, em evolução para o produto 
 - `src/routes/`: um arquivo por área; cada um registra as suas rotas com `route()`.
 - `src/views/`: `ui.js` concentra o design system e os componentes; os demais arquivos são as páginas.
 - `public/`: servido pela CDN na Vercel. `sw.js` (service worker: só estáticos e `offline.html`, nunca páginas com dados), `manifest.webmanifest` e `icons/` fazem o painel abrir como web app no celular. O snippet `s.js` (< 3,25 KB) é minificado à mão e servido aos sites pelo Worker.
-- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0023`), fluxo com skills.
+- `docs/`: SPEC, deploy, integrações, design system, ADRs (próximo: `0024`), fluxo com skills.
 
 ## Regras
+- Nome do produto: **Sinqfy** ([ADR 0023](docs/adr/0023-nome-sinqfy.md)). Não renomeie o que está no ar: Worker `trackify`, `data-rastro`, `window.rastro`, `_rid`, cabeçalhos `x-rastro-*`, usuário `rastro` do banco.
 - Toda consulta é `await db.…`; consultas independentes vão em `Promise.all`/`awaitAll`.
 - Escritas que precisam ser atômicas usam `db.batch([[sql, args], …])`.
 - SQL de Postgres: datas em ms são `BIGINT`, sem recursos do SQLite. Em `ON CONFLICT … DO UPDATE`, qualifique as colunas da tabela (`sales.method`). Mudança de schema é aditiva (`ADD COLUMN IF NOT EXISTS`) no fim de `migrate()`.

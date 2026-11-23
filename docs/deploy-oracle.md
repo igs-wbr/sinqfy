@@ -1,6 +1,6 @@
-# Servidor na Oracle: o Trackify no ar 24 horas, de graça
+# Servidor na Oracle: o Sinqfy no ar 24 horas, de graça
 
-Passo a passo para quem nunca mexeu com servidor, usando a **Oracle Cloud** como exemplo de VPS gratuita. O Trackify roda em **qualquer VPS com Docker** (Hetzner, DigitalOcean, Contabo, Hostinger, Magalu Cloud...): nesses provedores, troque as partes 1 e 2 pela criação da máquina no painel deles e siga daqui da parte 3 em diante. Comparação e alternativas em [Onde hospedar](hospedagem.md).
+Passo a passo para quem nunca mexeu com servidor, usando a **Oracle Cloud** como exemplo de VPS gratuita. O Sinqfy roda em **qualquer VPS com Docker** (Hetzner, DigitalOcean, Contabo, Hostinger, Magalu Cloud...): nesses provedores, troque as partes 1 e 2 pela criação da máquina no painel deles e siga daqui da parte 3 em diante. Comparação e alternativas em [Onde hospedar](hospedagem.md).
 
 No fim você terá o painel em `https://app.seudominio.com.br`, o banco de dados na mesma máquina, nenhuma porta aberta na internet e backup todo dia.
 
@@ -23,7 +23,7 @@ A Oracle tem dois tipos de recurso: os **Always Free** (grátis para sempre, den
 | **Free Tier** (como toda conta começa) | 30 dias com US$ 300 de crédito para testar qualquer coisa. Depois, só o que é Always Free continua; o resto é **desligado e apagado** | Nenhum: sem upgrade, o cartão não é cobrado |
 | **Pay As You Go** (depois do upgrade) | O Always Free continua grátis. Tudo o que passar dos limites é **cobrado no cartão** | Existe, se você criar algo fora do Always Free |
 
-**Vale fazer o upgrade?** Na conta Free Tier, a Oracle pode **recuperar (desligar) máquinas gratuitas paradas**: as que, por 7 dias, usam menos de 20% de processador, rede e memória. O Trackify usa pouco e pode cair nessa regra. Na Pay As You Go isso não acontece. Recomendamos o upgrade **só depois** de criar a máquina e com o alerta de orçamento ligado (abaixo).
+**Vale fazer o upgrade?** Na conta Free Tier, a Oracle pode **recuperar (desligar) máquinas gratuitas paradas**: as que, por 7 dias, usam menos de 20% de processador, rede e memória. O Sinqfy usa pouco e pode cair nessa regra. Na Pay As You Go isso não acontece. Recomendamos o upgrade **só depois** de criar a máquina e com o alerta de orçamento ligado (abaixo).
 
 **Os limites gratuitos que este guia usa** (confira a lista oficial "Always Free Resources" na documentação da Oracle, porque ela muda):
 
@@ -36,11 +36,11 @@ A Oracle tem dois tipos de recurso: os **Always Free** (grátis para sempre, den
 
 **Nunca escolha** (custa dinheiro):
 
-- Máquinas **AMD** ou **Intel** (`VM.Standard.E4`, `E5`, `Standard3`...) ou com **GPU**. A única AMD grátis é a `VM.Standard.E2.1.Micro`, fraca demais para o Trackify.
+- Máquinas **AMD** ou **Intel** (`VM.Standard.E4`, `E5`, `Standard3`...) ou com **GPU**. A única AMD grátis é a `VM.Standard.E2.1.Micro`, fraca demais para o Sinqfy.
 - Mais de **4 OCPUs** ou **24 GB** somando todas as máquinas Ampere.
 - Disco de boot ou volumes que passem de **200 GB** no total.
 - Imagens do **Marketplace** com licença paga, ou **Windows**.
-- Banco gerenciado, Load Balancer acima do gratuito, Kubernetes (OKE), "Dedicated" ou "Bare Metal": o Trackify não precisa de nada disso.
+- Banco gerenciado, Load Balancer acima do gratuito, Kubernetes (OKE), "Dedicated" ou "Bare Metal": o Sinqfy não precisa de nada disso.
 
 **Antes de criar a máquina:**
 
@@ -66,7 +66,7 @@ A Oracle tem dois tipos de recurso: os **Always Free** (grátis para sempre, den
 
    | Campo | O que pôr | Observação |
    |---|---|---|
-   | **Name** | `trackify` | Só um nome |
+   | **Name** | `sinqfy` | Só um nome |
    | **Compartment** | o que já vem (o raiz da conta) | Não precisa criar outro |
    | **Placement** | o que já vem (AD-1) | São Paulo e Vinhedo têm um só |
    | **Security** (Shielded instance) | deixe desligado | Não existe para Ampere |
@@ -105,7 +105,7 @@ icacls C:\Users\SEU_USUARIO\Downloads\ssh-key.key /inheritance:r
 icacls C:\Users\SEU_USUARIO\Downloads\ssh-key.key /grant:r "$($env:USERNAME):(R)"
 ```
 
-Deu certo quando o terminal mostra `ubuntu@trackify:~$`. A partir daqui, os comandos são digitados **dentro da máquina**.
+Deu certo quando o terminal mostra `ubuntu@sinqfy:~$`. A partir daqui, os comandos são digitados **dentro da máquina**.
 
 ## Parte 4: preparar a máquina
 
@@ -121,11 +121,11 @@ O `exit` é para sair e entrar de novo (Parte 3), e o seu usuário passar a usar
 
 O Docker já vem configurado para ligar sozinho quando a máquina liga.
 
-## Parte 5: baixar o Trackify
+## Parte 5: baixar o Sinqfy
 
 ```bash
-git clone https://github.com/igs-wbr/trackify.git
-cd trackify/deploy
+git clone https://github.com/igs-wbr/sinqfy.git
+cd sinqfy/deploy
 ```
 
 Se o repositório for **privado**, o Git pede usuário e senha. A senha **não** é a do GitHub: crie um token em GitHub → Settings → Developer settings → **Personal access tokens** → **Fine-grained tokens**, só com permissão de leitura (**Contents: Read-only**) nesse repositório, e cole o token como senha.
@@ -178,7 +178,7 @@ docker compose up -d --build
 docker compose logs -f app
 ```
 
-A primeira vez demora alguns minutos. Espere aparecer **"Trackify rodando"** e saia do log com **Ctrl+C** (o sistema continua rodando).
+A primeira vez demora alguns minutos. Espere aparecer **"Sinqfy rodando"** e saia do log com **Ctrl+C** (o sistema continua rodando).
 
 **Deu certo quando:** `https://app.seudominio.com.br` abre a tela de login e você entra com o `ADMIN_EMAIL` e a `ADMIN_PASSWORD`.
 
@@ -190,7 +190,7 @@ Cada parte (banco, painel e túnel) está configurada para **reiniciar sozinha**
 sudo reboot
 ```
 
-Espere 2 minutos, abra o painel no navegador. Ele deve voltar sozinho. Para conferir pela máquina: `cd ~/trackify/deploy && docker compose ps` mostra os três como `running`.
+Espere 2 minutos, abra o painel no navegador. Ele deve voltar sozinho. Para conferir pela máquina: `cd ~/sinqfy/deploy && docker compose ps` mostra os três como `running`.
 
 Para ser avisado se o painel cair, cadastre `https://app.seudominio.com.br/login` num monitor gratuito de disponibilidade (UptimeRobot, Better Stack ou parecido), checando a cada 5 minutos.
 
@@ -208,26 +208,26 @@ O banco é copiado todo dia, cifrado, para o R2 da Cloudflare (grátis até 10 G
    ```
    Crie dois "remotes":
    - `r2`: tipo **s3**, provider **Cloudflare**, as chaves do token do R2, endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`.
-   - `r2crypt`: tipo **crypt**, apontando para `r2:trackify-backups`, com uma senha forte **guardada fora da máquina**.
+   - `r2crypt`: tipo **crypt**, apontando para `r2:sinqfy-backups`, com uma senha forte **guardada fora da máquina**.
 3. Teste e agende para as 4h da manhã:
    ```bash
-   chmod +x ~/trackify/deploy/backup.sh && ~/trackify/deploy/backup.sh
-   (crontab -l 2>/dev/null; echo "0 4 * * * $HOME/trackify/deploy/backup.sh") | crontab -
+   chmod +x ~/sinqfy/deploy/backup.sh && ~/sinqfy/deploy/backup.sh
+   (crontab -l 2>/dev/null; echo "0 4 * * * $HOME/sinqfy/deploy/backup.sh") | crontab -
    ```
 
-**Restaurar um backup:** `rclone copy r2crypt:trackify-AAAA-MM-DD.sql.gz .` e depois `gunzip -c trackify-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
+**Restaurar um backup:** `rclone copy r2crypt:sinqfy-AAAA-MM-DD.sql.gz .` e depois `gunzip -c sinqfy-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
 
 ## Atualizar para a versão nova
 
 ```bash
-cd ~/trackify && git pull && cd deploy && docker compose up -d --build app
+cd ~/sinqfy && git pull && cd deploy && docker compose up -d --build app
 ```
 
 Os dados ficam; só o painel é trocado. Mudanças no banco são aplicadas sozinhas na subida.
 
 ## Comandos úteis
 
-| Para | Comando (dentro de `~/trackify/deploy`) |
+| Para | Comando (dentro de `~/sinqfy/deploy`) |
 |---|---|
 | Ver se está tudo rodando | `docker compose ps` |
 | Ver o log do painel | `docker compose logs -f --tail 100 app` |
@@ -245,7 +245,7 @@ Os dados ficam; só o painel é trocado. Mudanças no banco são aplicadas sozin
 | Esqueci a senha do painel | Rode o comando abaixo da tabela, com o seu e-mail e a senha nova. Nunca apague o volume do banco para "recomeçar" |
 | Máquina sumiu ou parou | Veja se a conta virou Pay As You Go (Parte 1); máquinas gratuitas paradas podem ser recuperadas pela Oracle |
 
-Trocar a senha de um usuário (dentro de `~/trackify/deploy`; troque o e-mail e a senha):
+Trocar a senha de um usuário (dentro de `~/sinqfy/deploy`; troque o e-mail e a senha):
 
 ```bash
 docker compose exec app node --input-type=module -e "import { db, hashPassword, ready } from './src/db.js'; await ready; const r = await db.run('UPDATE users SET pass=? WHERE lower(email)=lower(?)', [hashPassword('SENHA_NOVA'), 'voce@exemplo.com']); console.log('usuários alterados:', r.rowCount); process.exit(0)"

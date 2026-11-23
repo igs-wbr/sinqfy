@@ -1,6 +1,6 @@
 # Do computador para a VPS: o que falta para rodar em produção
 
-Hoje o Trackify roda **neste computador**, no Docker, com túneis rápidos da Cloudflare (`*.trycloudflare.com`). Serve para testar, mas não para valer:
+Hoje o Sinqfy roda **neste computador**, no Docker, com túneis rápidos da Cloudflare (`*.trycloudflare.com`). Serve para testar, mas não para valer:
 
 - o painel sai do ar quando o computador desliga ou o Docker para;
 - o endereço do túnel muda a cada reinício, e aí o Worker, os webhooks e o script param de achar o painel;

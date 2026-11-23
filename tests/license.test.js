@@ -20,7 +20,7 @@ test('chave: assinatura confere, adulterada ou de outra chave não', () => {
   assert.equal(L.verifyWith(publicKey, `${Buffer.from(JSON.stringify({ plan: 'pro', to: 'Outra' })).toString('base64url')}.${sig}`), null, 'payload trocado');
   assert.equal(L.verifyWith(publicKey, make({ plan: 'free' })), null, 'só chave Pro');
   assert.equal(L.verifyWith(publicKey, make({ plan: 'pro' }, generateKeyPairSync('ed25519').privateKey)), null, 'outra chave privada');
-  assert.equal(L.verifyKey(key), null, 'chave de teste não vale na chave pública do Trackify');
+  assert.equal(L.verifyKey(key), null, 'chave de teste não vale na chave pública do Sinqfy');
   for (const bad of ['', 'x', 'a.b', null]) assert.equal(L.verifyKey(bad), null);
 });
 

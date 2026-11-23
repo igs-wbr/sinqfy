@@ -1,6 +1,6 @@
 # Componentes de terceiros
 
-O código do Trackify está sob a Fair Core License 1.0 com MIT futura ([LICENSE](LICENSE)). Os itens abaixo vêm de terceiros e seguem as próprias licenças.
+O código do Sinqfy está sob a Fair Core License 1.0 com MIT futura ([LICENSE](LICENSE)). Os itens abaixo vêm de terceiros e seguem as próprias licenças.
 
 | Componente | Onde | Licença |
 |---|---|---|

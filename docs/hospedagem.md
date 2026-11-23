@@ -1,6 +1,6 @@
-# Onde hospedar o Trackify
+# Onde hospedar o Sinqfy
 
-O Trackify não depende de um provedor. Ele precisa de três coisas, e cada uma pode vir de onde você preferir:
+O Sinqfy não depende de um provedor. Ele precisa de três coisas, e cada uma pode vir de onde você preferir:
 
 | Peça | O que é | Exemplos (os guias usam os marcados) |
 |---|---|---|
@@ -40,9 +40,9 @@ Escolha em `COMPOSE_PROFILES`, no `deploy/.env` ([modelo](../deploy/.env.example
 
 1. Crie a máquina no provedor (Ubuntu 24.04), com acesso por chave SSH. Exemplo detalhado: [Oracle](deploy-oracle.md).
 2. Instale o Docker: `curl -fsSL https://get.docker.com | sudo sh` e `sudo usermod -aG docker $USER` (saia e entre de novo).
-3. Baixe o projeto: `git clone https://github.com/igs-wbr/trackify.git && cd trackify/deploy`.
+3. Baixe o projeto: `git clone https://github.com/igs-wbr/sinqfy.git && cd sinqfy/deploy`.
 4. `cp .env.example .env` e preencha (o que é cada variável: [guia da Oracle, parte 7](deploy-oracle.md#parte-7-as-configurações-env)).
-5. `docker compose up -d --build` e espere "Trackify rodando" em `docker compose logs -f app`.
+5. `docker compose up -d --build` e espere "Sinqfy rodando" em `docker compose logs -f app`.
 6. Backup: `deploy/backup.sh` com o rclone apontando para qualquer armazenamento compatível com S3 (Cloudflare R2, Backblaze B2, AWS S3, Wasabi), em `BACKUP_REMOTE`.
 
 ## E a Vercel?

@@ -1,4 +1,4 @@
-# Trackify em qualquer VPS com Docker (Oracle, Hetzner, DigitalOcean, Contabo, Hostinger, Magalu, AWS, a sua máquina...).
+# Sinqfy em qualquer VPS com Docker (Oracle, Hetzner, DigitalOcean, Contabo, Hostinger, Magalu, AWS, a sua máquina...).
 # Uso: na pasta deploy/, `docker compose up -d --build` (variáveis em deploy/.env; veja docs/hospedagem.md).
 #
 # Como o painel chega à internet: escolha UM jeito em COMPOSE_PROFILES no .env.

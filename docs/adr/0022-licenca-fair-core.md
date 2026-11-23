@@ -7,7 +7,7 @@ Aceito.
 2026-11-23
 
 ## Contexto
-O Trackify vai ser distribuído para cada cliente instalar no próprio servidor (self-hosted), com código à vista, uma versão gratuita completa e uma licença paga uma vez, no modelo do Maestri. A licença MIT, adotada em 15/11 com o repositório ainda privado, deixaria qualquer pessoa revender o produto e liberar os recursos pagos, que já existem no código (vários sites, visão por cliente). Open core de verdade exigiria tirar esses recursos para um módulo fechado, e a separação por agência e por site está em quase toda consulta.
+O Sinqfy vai ser distribuído para cada cliente instalar no próprio servidor (self-hosted), com código à vista, uma versão gratuita completa e uma licença paga uma vez, no modelo do Maestri. A licença MIT, adotada em 15/11 com o repositório ainda privado, deixaria qualquer pessoa revender o produto e liberar os recursos pagos, que já existem no código (vários sites, visão por cliente). Open core de verdade exigiria tirar esses recursos para um módulo fechado, e a separação por agência e por site está em quase toda consulta.
 
 ## Decisão
 - **Licença: Fair Core License 1.0 com MIT futura (FCL-1.0-MIT)**, texto de fcl.dev. Uso, alteração e redistribuição livres para qualquer fim que não seja concorrente; proibido contornar a chave de licença; cada versão vira MIT dois anos depois de publicada. Permissão adicional no fim do `LICENSE`: agência pode dar acesso aos próprios clientes. O autor é o único dono do código, então pode trocar a licença; contribuições futuras autorizam essa troca (`CONTRIBUTING.md`).
