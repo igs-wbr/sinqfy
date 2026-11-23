@@ -68,8 +68,10 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   if (click?.rid) user_data.external_id = [sha(click.rid)];
   if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador (nome e país sozinhos não bastam)
   // Nome e país só reforçam a correspondência: a Meta não casa ninguém só com eles.
-  addHashed(user_data, { ...names(name), country: code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : ''),
-    st: code2(click?.region), ct: city(click?.city) });
+  // Endereço do comprador (Hotmart: buyer.address) vale mais que o local do IP; cobre também a venda sem clique.
+  const a = sale.addr || {};
+  addHashed(user_data, { ...names(name), country: code2(a.country_iso) || code2(click?.country) || (d.startsWith('55') && d.length >= 12 ? 'br' : ''),
+    st: code2(a.state) || code2(click?.region), ct: city(a.city) || city(click?.city), zp: String(a.zipcode || '').replace(/\W/g, '').toLowerCase() });
   if (click?.ip) user_data.client_ip_address = click.ip; // do clique no checkout (ADR 0020)
   const web = !!(click?.ua && click?.url);
   if (web) user_data.client_user_agent = click.ua;
