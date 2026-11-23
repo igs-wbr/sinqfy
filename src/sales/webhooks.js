@@ -75,7 +75,7 @@ export const PARSERS = {
     return {
       order_id: str(p.transaction), status, method: method(p.payment?.type), gross, net: producer ? num(producer.value) : gross,
       currency: str(p.price?.currency_value || 'BRL', 3), product: str(d.product?.name), ts: time(p.order_date), paid_at: time(p.approved_date),
-      utm: packed(o.sck) || packed(o.src) || utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, rid: ridOf(o.xcod),
+      utm: packed(o.sck) || packed(o.src) || utm({ source: o.src, campaign: o.sck }), email: d.buyer?.email, phone: d.buyer?.checkout_phone, name: d.buyer?.name, addr: d.buyer?.address, rid: ridOf(o.xcod),
     };
   },
   // Kiwify: valores em centavos; UTMs completas em TrackingParameters.

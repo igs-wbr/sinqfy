@@ -107,6 +107,12 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   assert.ok(graphCalls.at(-1).pathname.endsWith('/555001/events'));
   assert.ok((await S.lastWebhooks('loja')).some(l => l.message.includes('Conversions API')));
 
+  // Endereço do comprador da Hotmart reforça a correspondência (em hash), mesmo sem clique.
+  const h = v => createHash('sha256').update(v).digest('hex');
+  const addr = W.PARSERS.hotmart({ ...hotmart('HPA'), data: { ...hotmart('HPA').data, buyer: { email: 'a@b.com', address: { city: 'São Paulo', state: 'SP', zipcode: '01310-100', country_iso: 'BR' } } } });
+  const ud = D.metaPurchase(DB.sites.get('loja'), { ...addr, platform: 'hotmart' }, { email: addr.email }).user_data;
+  assert.deepEqual([ud.ct[0], ud.st[0], ud.zp[0], ud.country[0]], [h('saopaulo'), h('sp'), h('01310100'), h('br')]);
+
   // PURCHASE_COMPLETE (fim da garantia) de venda aprovada antes do webhook: grava, mas não vira compra de hoje na Meta.
   const old = Date.now() - 8 * 864e5;
   await hook('hotmart', { ...hotmart('HPOLD'), event: 'PURCHASE_COMPLETE', data: { ...hotmart('HPOLD').data, purchase: { ...hotmart('HPOLD').data.purchase, order_date: old, approved_date: old } } });
