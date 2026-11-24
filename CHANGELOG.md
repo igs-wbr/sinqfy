@@ -11,6 +11,9 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 - Purchase na Meta: quando a venda não traz endereço e não há local do clique no checkout, a UF vai pelo DDD do celular brasileiro (em hash), o que melhora a qualidade da correspondência das compras sem clique.
 - Webhook personalizado: campos novos para o sobrenome (somado ao nome) e o país do comprador, como no webhook V2 da OnProfit (`customer.lastname`, `customer_address.country`). "Brasil" por extenso vira BR.
 
+### Documentação
+- ADR 0019 e guia: a espera do Purchase para somar order bump e upsell é de 5 minutos (era 15 na documentação). O ADR explica que um pedido do mesmo comprador que chega depois do envio perde só o valor na Meta, não a conversão nem a atribuição.
+
 ## [1.1.0] - 2026-11-23
 
 ### Mudou
