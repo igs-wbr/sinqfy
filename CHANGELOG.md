@@ -4,9 +4,19 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+## [1.2.0] - 2026-11-24
+
 ### Novo
-- Tráfego → Comportamento: até onde cada página é lida (25, 50, 75 e 100% da rolagem), tempo com a aba visível, mapa de cliques por celular e computador, links e botões mais clicados (captura automática, sem virar evento de conversão) e o retorno em 1, 7 e 30 dias dos visitantes com cookie. Tudo em somas por dia, página e aparelho, sem nada por visitante (ADR 0025). O snippet passa a ter até 4 KB.
+- Tráfego → Comportamento, uma tela nova com o que acontece dentro da página. Tudo fica em somas por dia, página e aparelho, sem nada por visitante (ADR 0025):
+  - **Rolagem:** quantas leituras chegam a 25, 50, 75 e 100% de cada página.
+  - **Tempo ativo:** só conta com a aba visível.
+  - **Mapa de cliques:** separado por celular e computador, com linhas de quantos chegam a cada quarto da página.
+  - **Links e botões mais clicados:** captura automática do texto e do destino, que não vira evento de conversão nem vai para Meta, GA4 ou Google Ads.
+  - **Retorno em 1, 7 e 30 dias:** só para visitantes com o cookie `_rid`, porque sem ele o id muda todo dia.
 - Google Ads em Integrações: compras aprovadas e eventos escolhidos vão ao Google Ads como conversões, pela Data Manager API, com `gclid`/`gbraid`/`wbraid` e e-mail e telefone em SHA-256. Order bump e upsell do mesmo comprador viram uma conversão só, como na Meta, e quem clicou em anúncio da Meta e do Google tem a compra enviada só para o último clique. Login por conta de serviço do Google Cloud, com a chave cifrada no banco (ADR 0024).
+
+### Mudou
+- O snippet `s.js` passa a ter até 4 KB (era 3,25 KB): 3913 bytes, ou 2105 com gzip (eram 1783). Tudo continua num arquivo só, sem mudança no Worker da borda.
 
 ### Melhorou
 - Purchase na Meta: quando a venda não traz endereço e não há local do clique no checkout, a UF vai pelo DDD do celular brasileiro (em hash), o que melhora a qualidade da correspondência das compras sem clique.
@@ -56,5 +66,7 @@ Primeira versão estável, em produção desde 17/11/2026.
 - Licença Fair Core 1.0 com MIT futura (FCL-1.0-MIT): uso livre, sem revenda concorrente; cada versão vira MIT dois anos depois.
 - Plano Grátis com 1 site e todos os recursos; Pro por pagamento único (R$ 97) com sites ilimitados, até 2 instalações, 12 meses de atualizações e 7 dias de teste. Chave assinada e validada offline.
 
+[Não lançado]: https://github.com/igs-wbr/sinqfy/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/igs-wbr/sinqfy/releases/tag/v1.2.0
 [1.1.0]: https://github.com/igs-wbr/sinqfy/releases/tag/v1.1.0
 [1.0.0]: https://github.com/igs-wbr/sinqfy/releases/tag/v1.0.0
