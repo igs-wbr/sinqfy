@@ -6,6 +6,13 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [1.3.2] - 2026-11-25
 
+### Novo
+- Hubla como plataforma de venda: webhook com os eventos de fatura (valor, líquido do vendedor, UTMs e o `rid` do link de pagamento), com o token conferido no cabeçalho.
+- Integrações → Plataformas de venda: as URLs dos webhooks viram uma lista com o logo de cada plataforma, que mostra só a escolhida.
+
+### Corrigido
+- O log de webhook não mostra mais "objectObject" quando o campo do evento é um objeto.
+
 ### Mudou
 - O Pro passa a custar R$ 45, em pagamento único e vitalício (era R$ 97).
 
