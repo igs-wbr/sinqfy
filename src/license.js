@@ -16,7 +16,7 @@ export const REDEEM_URL = 'https://painel.sinqfy.app/licenca';
 export const DOWNLOAD_URL = 'https://github.com/igs-wbr/sinqfy/releases/latest/download/sinqfy.zip';
 export const INSTALL_CMD = 'curl -fsSL https://github.com/igs-wbr/sinqfy/releases/latest/download/instalar.sh | bash';
 
-// Revogação sem servidor de ativação (ADR 0025): a lista viaja com cada versão nova.
+// Revogação sem servidor de ativação (ADR 0026): a lista viaja com cada versão nova.
 // Pedidos reembolsados ou contestados, na instalação que vende: SELECT order_id FROM license_orders WHERE status <> 'paid'
 const REVOKED_ORDERS = new Set([]);
 // Emissoras vazadas (id do certificado): todas as chaves assinadas por elas deixam de valer.

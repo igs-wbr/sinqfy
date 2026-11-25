@@ -1,5 +1,5 @@
 name: Pacote
-# Cada tag vX.Y.Z vira uma versão no GitHub com o pacote pronto para instalar (ADR 0025):
+# Cada tag vX.Y.Z vira uma versão no GitHub com o pacote pronto para instalar (ADR 0026):
 #   sinqfy.zip (download pelo site), sinqfy.tar.gz (usado pelo instalador) e instalar.sh.
 # Links fixos para a versão mais recente: https://github.com/igs-wbr/sinqfy/releases/latest/download/<arquivo>
 on:

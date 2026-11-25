@@ -213,7 +213,20 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS install(k TEXT PRIMARY KEY, v TEXT NOT NULL);
     -- Google Ads pela Data Manager API (ADR 0024): conta que recebe, MCC opcional, chave da conta de serviço e evento → ação de conversão.
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS gads_customer TEXT, ADD COLUMN IF NOT EXISTS gads_login TEXT, ADD COLUMN IF NOT EXISTS gads_key TEXT, ADD COLUMN IF NOT EXISTS gads_actions TEXT;
-    -- Pedidos do Pro pagos na Hubla (ADR 0025, só na instalação que vende): e-mails em índice cego, chave cifrada com a DATA_KEY.
+    -- Comportamento (ADR 0025): somas por dia, página e aparelho (m = celular, d = computador); nada por visitante.
+    -- Leituras: views (páginas que mandaram o beacon de saída), tempo com a aba visível e quantas chegaram a 25/50/75/100% da rolagem.
+    CREATE TABLE IF NOT EXISTS page_reads(site TEXT NOT NULL, date TEXT NOT NULL, path TEXT NOT NULL, device TEXT NOT NULL, views BIGINT NOT NULL DEFAULT 0,
+      active_ms BIGINT NOT NULL DEFAULT 0, d25 BIGINT NOT NULL DEFAULT 0, d50 BIGINT NOT NULL DEFAULT 0, d75 BIGINT NOT NULL DEFAULT 0, d100 BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY(site, date, path, device));
+    -- Mapa de cliques numa grade de 20 x 50 (x em 5% da largura da tela, y em 2% da altura do documento).
+    CREATE TABLE IF NOT EXISTS click_cells(site TEXT NOT NULL, date TEXT NOT NULL, path TEXT NOT NULL, device TEXT NOT NULL, x SMALLINT NOT NULL, y SMALLINT NOT NULL,
+      n BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(site, date, path, device, x, y));
+    -- Captura automática: links e botões sem data-rastro, pelo seletor curto, texto e destino (sem query string). Não vira evento.
+    CREATE TABLE IF NOT EXISTS click_targets(site TEXT NOT NULL, date TEXT NOT NULL, path TEXT NOT NULL, device TEXT NOT NULL, sel TEXT NOT NULL, label TEXT NOT NULL,
+      dest TEXT NOT NULL, n BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(site, date, path, device, sel, label, dest));
+    -- Retenção D1/D7/D30: primeira visita de cada _rid.
+    CREATE INDEX IF NOT EXISTS events_site_rid ON events(site, visitor, date) WHERE rid IS NOT NULL;
+    -- Pedidos do Pro pagos na Hubla (ADR 0026, só na instalação que vende): e-mails em índice cego, chave cifrada com a DATA_KEY.
     CREATE TABLE IF NOT EXISTS license_orders(id TEXT PRIMARY KEY, order_id TEXT NOT NULL DEFAULT '', emails TEXT NOT NULL DEFAULT '', license TEXT, status TEXT NOT NULL, created BIGINT NOT NULL, updated BIGINT NOT NULL);
     CREATE INDEX IF NOT EXISTS license_orders_order ON license_orders(order_id);
   `);

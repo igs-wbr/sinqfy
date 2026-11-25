@@ -1,7 +1,7 @@
 // Páginas de tráfego: visão geral, tempo real, eventos, funis, caminhos, atribuição.
 import { PLATFORMS, STATUSES } from '../sales/webhooks.js';
-import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK } from '../tracking/stats.js';
-import { html, raw, icon, brDate, delta, ratio, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs } from './ui.js';
+import { FILTERS, ATTR_DIMS, OTHER, IN_APP, VISIT_LOOKBACK, DEVICES } from '../tracking/stats.js';
+import { html, raw, icon, brDate, delta, ratio, layout, pageHead, toolbar, kpi, list, tabs, chart, notice, num, pct, dur, money, countryName, SCREEN, hiddenInputs, link, on } from './ui.js';
 
 export function label(col, k) {
   if (col === 'referrer') return k || 'Direto';
@@ -248,4 +248,38 @@ ${!a ? notice(raw('Nenhum evento personalizado no período. Marque um botão com
 ${kpi('conv-r', 'Taxa de conversão', a.visitors ? a.converters / a.visitors : null, null, pct)}${kpi('conv-rev', 'Receita', a.revenue, null, m)}</div>
 <div class="grid">${tabs('Primeiro clique', [[ATTR_DIMS[dim], list(ctx, a.first, dim, { head: ATTR_DIMS[dim], cols, filter: false, ...L })]])}
 ${tabs('Último clique', [[ATTR_DIMS[dim], list(ctx, a.last, dim, { head: ATTR_DIMS[dim], cols, filter: false, ...L })]])}</div>`}`);
+}
+
+// ---------- comportamento (ADR 0025) ----------
+const share = (a, b) => b ? a / b : null;
+const DEPTHS = [['d25', '25%'], ['d50', '50%'], ['d75', '75%'], ['d100', '100%']];
+/** Grade 20 x 50 do mapa de cliques; as linhas tracejadas mostram quantas leituras chegaram a cada quarto da página. */
+function heatmap(cells, device, reads) {
+  const max = Math.max(1, ...cells.map(c => c.n)), total = cells.reduce((s, c) => s + c.n, 0);
+  return html`<figure class="heat ${device === 'm' ? 'phone' : 'desk'}" role="img" aria-label="Mapa de calor com ${num(total)} cliques; a lista ao lado traz os elementos mais clicados">
+${cells.map(c => html`<i style="left:${c.x * 5}%;top:${c.y * 2}%;opacity:${(0.15 + 0.85 * c.n / max).toFixed(2)}" title="${num(c.n)} cliques"></i>`)}
+${reads?.views ? DEPTHS.slice(0, 3).map(([k, t], i) => html`<hr style="top:${(i + 1) * 25}%"><span class="q" style="top:${(i + 1) * 25}%">${pct(share(reads[k], reads.views))} chegam a ${t}</span>`) : ''}</figure>`;
+}
+export function behaviorPage(ctx, p, d) {
+  const t = d.total || {}, reads = d.pages.find(x => x.k === d.path), r7 = d.retention.days.find(x => x.d === 7);
+  const avg = x => x.views ? x.ms / x.views / 1000 : null, q = ctx.q;
+  const pageRows = d.pages.length ? html`<div class="tw"><table class="list mcards"><thead><tr><th scope="col">Página</th><th scope="col">Leituras</th><th scope="col">Tempo ativo</th>${DEPTHS.map(([, h]) => html`<th scope="col">${h}</th>`)}</tr></thead><tbody>${d.pages.map(x => html`<tr${x.k === d.path ? raw(' class="on"') : ''}>
+<td class="c-main"><span class="bar-bg" style="width:${(x.views / d.pages[0].views * 100).toFixed(1)}%"></span><a href="${link(q, { page: x.k, device: null })}" title="Ver o mapa de cliques de ${x.k}">${x.k}</a></td><td>${num(x.views)}</td><td>${dur(avg(x))}</td>${DEPTHS.map(([k]) => html`<td>${pct(share(x[k], x.views))}</td>`)}</tr>`)}</tbody></table></div>`
+    : html`<p class="empty">Nenhuma leitura no período. O snippet manda rolagem, tempo e cliques quando o visitante sai da página ou troca de aba.</p>`;
+  const devNav = html`<nav class="seg" aria-label="Aparelho">${Object.entries(DEVICES).map(([k, label]) => html`<a href="${link(q, { device: k, page: d.path })}"${on(d.device === k)}>${label} · ${num(d.devices.find(x => x.k === k)?.views || 0)}</a>`)}</nav>`;
+  const targets = d.targets.length ? html`<div class="tw"><table class="list mcards"><thead><tr><th scope="col">Elemento</th><th scope="col">Destino</th><th scope="col">Cliques</th></tr></thead><tbody>${d.targets.map(x => html`<tr>
+<td class="c-main"><span class="bar-bg" style="width:${(x.n / d.targets[0].n * 100).toFixed(1)}%"></span><span style="position:relative">${x.label || html`<code>${x.sel || '?'}</code>`}${x.label && x.sel ? html` <code class="muted">${x.sel}</code>` : ''}</span></td><td>${x.dest || '-'}</td><td>${num(x.n)}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="empty">Nenhum clique em link ou botão nesta página e aparelho.</p>`;
+  const ret = d.retention;
+  return layout(ctx, `Comportamento · ${ctx.site.name}`, html`${pageHead(`${ctx.site.name} · Comportamento`, raw('Até onde leem e <em>onde clicam</em>'), 'Rolagem, tempo com a aba aberta e cliques por página, somados sem guardar nada por visitante.')}
+${toolbar(ctx, p, {}, { compare: false })}
+<div class="kpis">${kpi('active', 'Tempo ativo por leitura', avg(t), null, dur)}${kpi('half', 'Chegam à metade', share(t.d50, t.views), null, pct)}${kpi('end', 'Chegam ao fim', share(t.d100, t.views), null, pct)}${kpi('back7', 'Voltam em até 7 dias', share(r7.back, r7.eligible), null, pct)}</div>
+<section class="card"><h2>Rolagem e tempo por página</h2><p class="muted">Leituras são as visualizações que mandaram o resumo de saída. Tempo ativo conta só com a aba visível. Clique numa página para ver o mapa de cliques.</p>${pageRows}</section>
+${d.path != null ? html`<section class="card" style="margin-top:16px"><div class="row between"><h2>Mapa de cliques · ${d.path}</h2>${devNav}</div>
+<p class="muted">Posição de cada clique: largura da tela e altura da página, sem imagem do site. Links e botões entram na lista pelo texto e destino, sem virar evento de conversão.</p>
+<div class="heatwrap">${heatmap(d.cells, d.device, reads)}<div>${targets}</div></div></section>` : ''}
+<section class="card" style="margin-top:16px"><h2>Retorno</h2>
+<p class="muted">Só conta visitantes com o cookie <code>_rid</code> (Worker da borda e, se o site pede, consentimento). Sem ele, o id do visitante muda todo dia e todo mundo pareceria novo. Base: ${num(ret.n)} primeiras visitas no período; cada prazo só conta quem já teve tempo de voltar.</p>
+${ret.n ? html`<div class="tw"><table class="list"><thead><tr><th scope="col">Voltaram em até</th><th scope="col">Visitantes</th><th scope="col">Base</th><th scope="col">Taxa</th></tr></thead><tbody>${ret.days.map(x => html`<tr><td>${x.d === 1 ? '1 dia' : `${x.d} dias`}</td><td>${num(x.back)}</td><td>${num(x.eligible)}</td><td>${x.eligible ? pct(x.back / x.eligible) : 'ainda cedo'}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="empty">Nenhuma primeira visita com <code>_rid</code> no período.</p>`}</section>`);
 }

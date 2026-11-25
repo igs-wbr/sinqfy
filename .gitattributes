@@ -1,7 +1,7 @@
 * text=auto eol=lf
 *.woff2 binary
 
-# Fora do pacote de instalação (git archive do release, ADR 0025)
+# Fora do pacote de instalação (git archive do release, ADR 0026)
 tests export-ignore
 .github export-ignore
 .claude export-ignore

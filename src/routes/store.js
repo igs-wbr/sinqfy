@@ -1,4 +1,4 @@
-// Venda do Pro pela Hubla (ADR 0025): o webhook avisa o pagamento, esta instalação assina a chave e o comprador a pega em /licenca.
+// Venda do Pro pela Hubla (ADR 0026): o webhook avisa o pagamento, esta instalação assina a chave e o comprador a pega em /licenca.
 // Só existe onde LICENSE_ISSUER_KEY, LICENSE_CERT e HUBLA_TOKEN estão definidos (a instalação de quem vende). Nas outras, as rotas dão 404.
 // A chave aqui é uma emissora certificada pela raiz, que fica só com o autor: se vazar, a próxima versão a revoga.
 import { createPrivateKey, timingSafeEqual } from 'node:crypto';

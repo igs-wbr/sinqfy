@@ -1,4 +1,4 @@
-// Venda do Pro pela Hubla (ADR 0025): webhook assina a chave, o comprador resgata com e-mail e pedido, reembolso bloqueia.
+// Venda do Pro pela Hubla (ADR 0026): webhook assina a chave, o comprador resgata com e-mail e pedido, reembolso bloqueia.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';

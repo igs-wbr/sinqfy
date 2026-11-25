@@ -256,3 +256,43 @@ export async function attribution(site, range, f, event, dim) {
     first: sorted(first), last: sorted(last),
   };
 }
+
+// ---------- comportamento (ADR 0025) ----------
+export const DEVICES = { m: 'Celular', d: 'Computador' };
+const READ_SUMS = 'SUM(views) views, SUM(active_ms) ms, SUM(d25) d25, SUM(d50) d50, SUM(d75) d75, SUM(d100) d100';
+/**
+ * Rolagem e tempo ativo por página, cliques da página escolhida (`path`, ou a mais lida) no aparelho `device`
+ * (ou o que mais leu a página) e retenção dos visitantes com _rid.
+ */
+export async function behavior(site, range, { path = null, device = null } = {}, now = Date.now()) {
+  const a = [site.id, range.from, range.to], w = 'site=? AND date BETWEEN ? AND ?';
+  const [pages, [tot], ret] = await Promise.all([
+    all(`SELECT path k, ${READ_SUMS} FROM page_reads WHERE ${w} GROUP BY path ORDER BY views DESC, path LIMIT 20`, a),
+    all(`SELECT ${READ_SUMS} FROM page_reads WHERE ${w}`, a),
+    retention(site, range, now)]);
+  path = path ?? pages[0]?.k ?? null;
+  let cells = [], targets = [], devices = [];
+  if (path != null) {
+    devices = await all(`SELECT device k, SUM(views) views FROM page_reads WHERE ${w} AND path=? GROUP BY device`, [...a, path]);
+    if (!Object.hasOwn(DEVICES, device || '')) device = devices.sort((x, y) => y.views - x.views || (y.k === 'm') - (x.k === 'm'))[0]?.k || 'm'; // empate: celular
+    [cells, targets] = await Promise.all([
+      all(`SELECT x, y, SUM(n) n FROM click_cells WHERE ${w} AND path=? AND device=? GROUP BY x, y`, [...a, path, device]),
+      all(`SELECT sel, label, dest, SUM(n) n FROM click_targets WHERE ${w} AND path=? AND device=? GROUP BY sel, label, dest ORDER BY n DESC, label LIMIT 15`, [...a, path, device])]);
+  }
+  return { pages, total: tot, path, device, devices, cells, targets, retention: ret };
+}
+
+export const RETURN_DAYS = [1, 7, 30];
+/**
+ * Quem teve a primeira visita no período e voltou em até 1, 7 e 30 dias. Só visitantes com o cookie _rid:
+ * sem ele o id muda todo dia (ADR 0002) e todo mundo pareceria novo. Só entra na conta de cada prazo quem já teve tempo de voltar.
+ */
+export async function retention(site, range, now = Date.now()) {
+  const today = localDate(now, site.timezone);
+  const [r] = await all(`WITH f AS (SELECT visitor, MIN(date) d0 FROM events WHERE site=? AND rid IS NOT NULL GROUP BY visitor HAVING MIN(date) BETWEEN ? AND ?),
+    g AS (SELECT f.visitor, f.d0::date d0, MIN(e.date::date - f.d0::date) gap FROM f LEFT JOIN events e ON e.site=? AND e.rid IS NOT NULL AND e.visitor=f.visitor AND e.date>f.d0
+      GROUP BY f.visitor, f.d0)
+    SELECT COUNT(*) n, ${RETURN_DAYS.map(d => `COUNT(*) FILTER (WHERE d0 <= ?::date - ${d}) e${d}, COUNT(*) FILTER (WHERE d0 <= ?::date - ${d} AND gap <= ${d}) r${d}`)} FROM g`,
+  [site.id, range.from, range.to, site.id, ...RETURN_DAYS.flatMap(() => [today, today])]);
+  return { n: Number(r.n), days: RETURN_DAYS.map(d => ({ d, eligible: Number(r['e' + d]), back: Number(r['r' + d]) })) };
+}

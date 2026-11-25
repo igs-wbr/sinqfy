@@ -1,7 +1,7 @@
 // Emite chaves do plano Pro (ADR 0022). Só o autor roda: a chave privada nunca entra no repositório.
 //   node scripts/license.mjs issue --to "Agência X" --order HP123     imprime a chave para enviar ao comprador
 //   node scripts/license.mjs check <chave>                             confere uma chave
-//   node scripts/license.mjs issuer --id h1                            cria uma emissora para a instalação que vende (ADR 0025)
+//   node scripts/license.mjs issuer --id h1                            cria uma emissora para a instalação que vende (ADR 0026)
 //                                                                      e imprime LICENSE_ISSUER_KEY e LICENSE_CERT para o .env dela
 // Chave privada: LICENSE_PRIVATE_KEY_FILE ou ~/.sinqfy/license_private.pem (Ed25519, PKCS#8).
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto';

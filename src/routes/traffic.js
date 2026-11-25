@@ -78,3 +78,10 @@ route('GET', '/sites/:id/attribution', { site: 'view' }, async r => {
   const [c, a, seq] = await Promise.all([siteCtx(r, '/attribution'), event ? S.attribution(r.site.id, p, f, event, dim) : null, adSequences(r.site, p)]);
   send(r, 200, V.attributionPage(c, p, f, names, event, dim, a, seq));
 });
+
+// Comportamento (ADR 0025): rolagem, tempo ativo, mapa de cliques e retenção.
+route('GET', '/sites/:id/behavior', { site: 'view' }, async r => {
+  const p = period(r.q, r.site.timezone), page = r.q.get('page');
+  const [c, d] = await Promise.all([siteCtx(r, '/behavior'), S.behavior(r.site, p, { path: page ? page.slice(0, 512) : null, device: r.q.get('device') })]);
+  send(r, 200, V.behaviorPage(c, p, d));
+});

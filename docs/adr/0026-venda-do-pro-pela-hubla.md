@@ -1,4 +1,4 @@
-# ADR 0025: Venda do Pro pela Hubla com entrega automática da chave
+# ADR 0026: Venda do Pro pela Hubla com entrega automática da chave
 
 ## Status
 Aceito.
