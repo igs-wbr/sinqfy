@@ -1,5 +1,5 @@
 #!/bin/bash
-# Backup diário do Postgres, cifrado, para qualquer armazenamento do rclone (R2, Backblaze B2, S3...). Agende no crontab da VM: 0 4 * * * /home/ubuntu/sinqfy/deploy/backup.sh
+# Backup diário do Postgres, cifrado, para qualquer armazenamento do rclone (R2, Backblaze B2, S3...). Agende no crontab da VM: 0 4 * * * bash /home/ubuntu/sinqfy/deploy/backup.sh
 # Requer o rclone com um remoto cifrado (tipo crypt), indicado em BACKUP_REMOTE no .env (padrão r2crypt:; veja docs/deploy-oracle.md).
 # O dump tem tokens da Meta e do GA4 e hashes de senha: nunca envie sem cifra.
 set -euo pipefail

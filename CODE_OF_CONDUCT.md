@@ -14,4 +14,4 @@ Esperamos de todas as pessoas que participam (issues, pull requests, discussões
 
 Comportamentos fora destas regras podem levar à remoção de comentários, commits e issues, e ao bloqueio temporário ou permanente no projeto.
 
-Relate casos para [iegosweber@gmail.com](mailto:iegosweber@gmail.com). Todo relato é tratado com sigilo.
+Relate casos para [contato@sinqfy.app](mailto:contato@sinqfy.app). Todo relato é tratado com sigilo.

@@ -113,7 +113,7 @@ O que mudou em cada versão está no [CHANGELOG](CHANGELOG.md) e nos [releases](
 
 - Instagram: [@iegos_](https://instagram.com/iegos_)
 - GitHub: [@igs-wbr](https://github.com/igs-wbr)
-- E-mail: [iegosweber@gmail.com](mailto:iegosweber@gmail.com)
+- E-mail: [contato@sinqfy.app](mailto:contato@sinqfy.app)
 
 ## Planos
 

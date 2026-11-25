@@ -9,7 +9,7 @@ globalThis.fetch = async (url, opts) => {
   const u = new URL(String(url));
   if (u.host !== 'graph.facebook.com') return realFetch(url, opts);
   const json = o => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json' } });
-  const p = u.pathname.replace(/^\/v[\d.]+\/act_77777/, ''), day = new Date().toISOString().slice(0, 10);
+  const p = u.pathname.replace(/^\/v[\d.]+\/act_77777/, ''), day = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // dia no fuso do site (como a Meta devolve), não em UTC: das 21h à meia-noite eles diferem
   if (p === '') return json({ name: 'CA Jean', currency: 'BRL' });
   if (p === '/campaigns') return json({ data: [{ id: 'cb', name: 'SPEC | VENDAS | BLACK997 | CBO', effective_status: 'ACTIVE' }, { id: 'ce', name: 'SPEC | VENDAS | ESCALA 01', effective_status: 'ACTIVE' }] });
   if (p === '/adsets') return json({ data: [{ id: 'sb', name: 'BK01', campaign_id: 'cb', effective_status: 'ACTIVE' }, { id: 'se', name: 'E01', campaign_id: 'ce', effective_status: 'ACTIVE' }] });
