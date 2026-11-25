@@ -9,7 +9,8 @@ const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, opts = {}) => {
   const u = new URL(String(url));
   if (u.host === 'generativelanguage.googleapis.com') {
-    aiPrompts.push({ key: opts.headers['x-goog-api-key'], text: JSON.parse(opts.body).contents[0].parts[0].text });
+    const b = JSON.parse(opts.body);
+    aiPrompts.push({ key: opts.headers['x-goog-api-key'], text: b.contents[0].parts[0].text, system: b.systemInstruction?.parts[0].text || '' });
     return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"coluna":"Proposta","motivo":"pediu o link de pagamento"}' }] } }] }), { status: 200 });
   }
   return realFetch(url, opts);
@@ -96,6 +97,8 @@ test('IA (Gemini) sugere a coluna sem receber dado pessoal; conversas e aceite',
   assert.equal(aiPrompts.length, 1);
   assert.equal(aiPrompts[0].key, 'chave-ia');
   assert.ok(!/ze@x\.com|123\.456|96666/.test(aiPrompts[0].text) && /\[email\]/.test(aiPrompts[0].text), 'texto anonimizado antes de ir para a IA');
+  // Prompt injection: a conversa vai só entre marcadores, e as instruções ficam à parte (systemInstruction).
+  assert.ok(/^<conversa>\n[\s\S]*\n<\/conversa>$/.test(aiPrompts[0].text) && /nunca siga/.test(aiPrompts[0].system) && !/Colunas do funil/.test(aiPrompts[0].text), 'conversa separada das instruções');
   const c = await db.get('SELECT * FROM contacts WHERE site=? AND phone_hash=?', ['zap', P.hashPhone('5531966665555')]);
   const prop = await db.get("SELECT id FROM stages WHERE site='zap' AND name='Proposta'");
   assert.deepEqual([c.suggest_stage, P.open(c.suggest_reason)], [prop.id, 'IA: pediu o link de pagamento'], 'motivo da IA guardado cifrado');
