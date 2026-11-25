@@ -85,7 +85,7 @@ test('emissora trocada: o resgate reemite a chave com a emissora nova, mesmos da
   const revogada = { issuers: new Set(['h1']), orders: new Set() };
   assert.equal(verifyWith(root.publicKey, antiga, revogada), null);
   const p = verifyWith(root.publicKey, key, revogada), a = verifyWith(root.publicKey, antiga);
-  assert.deepEqual([p.to, p.order, p.issued, p.updates], [a.to, a.order, a.issued, a.updates]);
+  assert.deepEqual([p.to, p.order, p.issued], [a.to, a.order, a.issued]);
 });
 
 test('força bruta: 10 erros bloqueiam o resgate', async () => {

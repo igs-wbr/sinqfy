@@ -1,4 +1,4 @@
-// Plano da instalação (ADR 0022): Grátis com 1 site e todos os recursos; Pro, por pagamento único, com sites ilimitados.
+// Plano da instalação (ADR 0022): Grátis com 1 site e todos os recursos; Pro vitalício, por pagamento único, com sites ilimitados.
 // A chave do Pro é assinada pelo autor (Ed25519) e validada offline com a chave pública abaixo. Pela licença (FCL-1.0-MIT),
 // mover, desligar ou contornar esta checagem não é permitido.
 import { createPublicKey, sign, verify } from 'node:crypto';
@@ -35,11 +35,11 @@ export const certify = (rootPriv, issuerPub, id) =>
 
 /** Assina uma chave Pro. Com cert, priv é a emissora e a chave leva o certificado: "corpo.assinatura.cert.assinatura_cert". */
 export function issueWith(priv, { to = '', order = '' } = {}, now = Date.now(), cert = '') {
-  const key = signPart(priv, b64({ plan: 'pro', to: String(to).slice(0, 80), order: String(order).slice(0, 60), issued: now, updates: now + 365 * 864e5 }));
+  const key = signPart(priv, b64({ plan: 'pro', to: String(to).slice(0, 80), order: String(order).slice(0, 60), issued: now }));
   return cert ? `${key}.${cert}` : key;
 }
 
-/** Chave assinada pela raiz ou por uma emissora certificada por ela. Retorna o payload ({ plan, to, order, issued, updates }) ou null. */
+/** Chave assinada pela raiz ou por uma emissora certificada por ela. Retorna o payload ({ plan, to, order, issued }) ou null. Chaves antigas trazem também updates, que não limita nada (Pro vitalício). */
 export function verifyWith(root, key, { orders = REVOKED_ORDERS, issuers = REVOKED_ISSUERS } = {}) {
   const [body, sig, cbody, csig, extra] = String(key || '').trim().split('.');
   if (!body || !sig || !cbody !== !csig || extra !== undefined) return null;
