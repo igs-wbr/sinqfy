@@ -53,6 +53,6 @@ export function edgeInfo(h) {
   }
   const ok = (v, re) => re.test(v || '') ? v : null;
   return { rid: ok(h['x-rastro-rid'], ID_RE), fbp: ok(h['x-rastro-fbp'], FB_RE), fbc: ok(h['x-rastro-fbc'], FB_RE), ip: String(h['x-rastro-ip'] || '').slice(0, 64) || null,
-    city: dec(h['x-rastro-city']).slice(0, 80), region: dec(h['x-rastro-region']).slice(0, 8) };
+    city: dec(h['x-rastro-city']).slice(0, 80), region: dec(h['x-rastro-region']).slice(0, 8), net: dec(h['x-rastro-net']).slice(0, 120) };
 }
 

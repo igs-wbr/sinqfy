@@ -4,6 +4,9 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+### Corrigido
+- Visitas de robôs que fingem ser navegador não entram mais nos números: a borda informa a rede de origem (nome do ASN, sem gravar IP) e a coleta descarta datacenters (Amazon, Google, Microsoft, Meta, DigitalOcean, OVH e outros), como o verificador de links da Meta e as varreduras de domínio novo. Também cai a visita de celular com tela de computador. Redes do iCloud Private Relay (Akamai, Cloudflare, Fastly) continuam contando.
+
 ## [1.3.3] - 2026-11-25
 
 ### Novo

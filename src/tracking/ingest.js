@@ -9,6 +9,18 @@ import { adKey, cleanUtm } from '../sales/webhooks.js';
 import { enabled } from '../modules.js';
 
 export const BOT_RE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python|java\/|go-http|axios|node-fetch|okhttp|preview|monitor|scan|phantom|puppeteer|playwright|selenium/i;
+/**
+ * Redes de datacenter (nome do ASN que a Cloudflare informa): pessoa navega pela operadora, não por servidor. Pega robôs que fingem
+ * ser navegador, como o verificador de links da Meta e varreduras de domínio novo. Ficam de fora Akamai, Cloudflare, Fastly e Apple,
+ * por onde passa o iCloud Private Relay de usuários reais.
+ * ponytail: lista de nomes; trocar por lista de ASNs se aparecer falso positivo.
+ */
+export const HOSTING_RE = /amazon|\baws\b|google|microsoft|azure|facebook|meta platforms|digitalocean|\bovh|hetzner|linode|oracle|alibaba|tencent|huawei cloud|contabo|vultr|choopa|leaseweb|m247|datacamp|scaleway|hostinger|ionos|godaddy|hivelocity|psychz|zenlayer|colocrossing|cogent|bytedance|data ?cent(er|re)|hosting/i;
+/**
+ * Celular com tela de computador (largura de tela, não de janela): não existe, é robô trocando o user agent.
+ * O contrário (computador com tela de celular) existe: é a "versão para computador" do Chrome no Android. Por isso não entra.
+ */
+export const fakeScreen = (ua, w) => w >= 992 && /iPhone|Android.+Mobile/.test(ua);
 const UTM = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 
 // Um salt aleatório por dia UTC; os anteriores são apagados, então hashes antigos não podem ser recalculados.
@@ -78,6 +90,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
   const site = typeof e?.s === 'string' && sites.get(e.s);
   if (!site) return 400;
   if (!ua || BOT_RE.test(ua)) return 202; // bots são descartados em silêncio
+  if ((edge?.net && HOSTING_RE.test(edge.net)) || fakeScreen(ua, Number(e.w))) return 202; // robô fingindo navegador (datacenter ou tela impossível)
   let url;
   try { url = new URL(e.u); } catch { return 400; }
   if (!allowedHost(site, url.hostname)) return 403; // beacon de um domínio que não é do site

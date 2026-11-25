@@ -79,6 +79,12 @@ test('beacon: grava cookies no domínio do cliente e repassa à origem com o seg
   assert.equal(o.url, 'https://app.rastro.dev/e');
   assert.deepEqual([o.init.headers['x-edge-secret'], o.init.headers['x-rastro-rid'], o.init.headers['x-rastro-ip'], o.init.headers['cf-ipcountry']], ['s3gredo', 'RidAntigo123', '203.0.113.5', 'BR']);
   assert.equal(o.init.headers['x-rastro-fbc'], c._fbc);
+  // Rede de origem (ASN) vai para a origem descartar robôs de datacenter.
+  calls.length = 0;
+  const req = beacon({ s: 'site', u: 'https://www.cliente.com.br/' });
+  Object.defineProperty(req, 'cf', { value: { asOrganization: 'Amazon.com, Inc.' } });
+  await run(req);
+  assert.equal(decodeURIComponent(calls[0].init.headers['x-rastro-net']), 'Amazon.com, Inc.');
 });
 
 test('cookie malformado de outro sistema não derruba o beacon', async () => {
