@@ -1,6 +1,7 @@
 // Páginas administrativas: configurações do site, sites, equipe, conta, login e convite.
 import { html, raw, MARK, layout, pageHead, notice, num, money, ROLES } from './ui.js';
 import { MODULES, chosen } from '../modules.js';
+import { DOWNLOAD_URL, INSTALL_CMD } from '../license.js';
 
 const TIMEZONES = ['UTC', ...Intl.supportedValuesOf('timeZone').filter(t => t !== 'UTC')];
 const tzSelect = cur => html`<select name="timezone">${TIMEZONES.map(t => html`<option${t === cur ? raw(' selected') : ''}>${t}</option>`)}</select>`;
@@ -85,6 +86,18 @@ export function loginPage(ctx, { next = '', email = '', err } = {}) {
 <label class="f">Senha<input type="password" name="password" required autocomplete="current-password"></label><div><button class="primary">Entrar</button></div></form>`), { bare: true });
 }
 
+/** Resgate da chave do Pro depois da compra na Hubla (src/routes/store.js). */
+export function redeemPage(ctx, { email = '', order = '', key, err } = {}) {
+  return layout(ctx, 'Sua licença', authCard(key ? html`<h1>Sua <em>chave</em></h1><p class="sub" style="margin-bottom:16px">Copie a chave inteira e cole no seu Sinqfy, em Instalação, Plano, no campo "Já tenho uma chave". Guarde uma cópia: você pode voltar aqui quando quiser.</p>
+<textarea rows="6" readonly spellcheck="false" autofocus aria-label="Chave de licença">${key}</textarea>
+<h2 style="margin-top:24px">Ainda não instalou?</h2><p class="sub" style="margin:8px 0">No seu servidor Linux, rode o comando abaixo: ele instala tudo e mostra o endereço e a senha do painel.</p>
+<textarea rows="2" readonly spellcheck="false" aria-label="Comando de instalação">${INSTALL_CMD}</textarea>
+<p class="sub" style="margin-top:8px">Prefere instalar à mão? <a href="${DOWNLOAD_URL}">Baixe o pacote (.zip)</a>.</p>`
+    : html`<h1>Pegue sua <em>licença</em></h1><p class="sub" style="margin-bottom:16px">Use o e-mail da compra e o número do pedido que a Hubla mandou na confirmação.</p>${notice(err, true)}
+<form method="post" action="/licenca" class="stack"><label class="f">E-mail da compra<input type="email" name="email" value="${email}" required autocomplete="email" autofocus></label>
+<label class="f">Número do pedido<input name="order" value="${order}" required autocomplete="off" spellcheck="false"></label><div><button class="primary">Ver minha chave</button></div></form>`), { bare: true });
+}
+
 export function invitePage(ctx, user, err) {
   return layout(ctx, 'Definir senha', authCard(user ? html`<h1>Bem-<em>vindo</em></h1><p class="sub" style="margin-bottom:16px">Defina uma senha para ${user.email}.</p>${notice(err, true)}
 <form method="post" class="stack"><label class="f">Senha (mín. 8)<input type="password" name="password" required minlength="8" autocomplete="new-password" autofocus></label>
@@ -114,7 +127,7 @@ const FREE_FEATURES = ['1 site (funil)', 'Rastreamento sem cookies de terceiros'
 const PRO_FEATURES = ['Tudo do Grátis, mais:', 'Sites ilimitados', 'Visão somada por cliente e comparação de funis', 'Use em até 2 instalações', 'Atualizações por 12 meses, uso para sempre', '7 dias grátis, depois pague uma vez'];
 const day = ts => new Date(Number(ts)).toLocaleDateString('pt-BR');
 
-export function planPage(ctx, plan, { price, buyUrl, sites, free, msg, err }) {
+export function planPage(ctx, plan, { price, buyUrl, redeemUrl, sites, free, msg, err }) {
   const status = plan.license ? html`Plano <b>Pro</b>${plan.license.to ? html`, licenciado para <b>${plan.license.to}</b>` : ''}${plan.license.updates ? html`. Atualizações até ${day(plan.license.updates)}` : ''}.`
     : plan.trial ? html`Teste do <b>Pro</b> até ${day(plan.trialEnds)}. Depois disso, o painel volta a abrir só o primeiro site (${free?.name || '-'}), e os outros continuam coletando.`
       : html`Plano <b>Grátis</b>: o painel abre 1 site (${free?.name || '-'}). ${sites > 1 ? `Os outros ${sites - 1} continuam coletando visitas e vendas, só o painel deles fica bloqueado.` : ''}`;
@@ -128,7 +141,7 @@ ${notice(msg)}${notice(err, true)}
 ${plan.license ? '' : html`<form method="post" action="/plano"><input type="hidden" name="action" value="trial"><button${plan.trialUsed ? raw(' disabled') : ''}>${plan.trialUsed ? (plan.trial ? 'Teste em andamento' : 'Teste já usado') : 'Teste grátis por 7 dias'}</button></form>
 ${buyUrl ? html`<a class="btn primary" href="${buyUrl}" target="_blank" rel="noopener">Comprar licença</a>` : ''}`}</section></div>
 <section class="card" style="margin-top:16px"><h2>${plan.license ? 'Trocar a chave' : 'Já tenho uma chave'}</h2><form method="post" action="/plano" class="stack" style="margin-top:12px;max-width:none"><input type="hidden" name="action" value="key">
-<label class="f">Chave de licença<span>Cole a chave recebida na compra. Ela é validada aqui mesmo, sem depender de internet.</span><textarea name="key" rows="3" required spellcheck="false" autocomplete="off"></textarea></label>
+<label class="f">Chave de licença<span>Cole a chave recebida na compra. Ela é validada aqui mesmo, sem depender de internet.${buyUrl ? html` Comprou e não tem a chave? Pegue em <a href="${redeemUrl}" target="_blank" rel="noopener">${redeemUrl.replace(/^https:\/\//, '')}</a>.` : ''}</span><textarea name="key" rows="3" required spellcheck="false" autocomplete="off"></textarea></label>
 <div><button class="primary">Ativar</button></div></form></section>`);
 }
 

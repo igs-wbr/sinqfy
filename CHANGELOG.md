@@ -4,6 +4,15 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+## [1.3.0] - 2026-11-25
+
+### Novo
+- **Instalação com um comando:** `curl -fsSL https://github.com/igs-wbr/sinqfy/releases/latest/download/instalar.sh | bash` instala o Docker se faltar, baixa a versão mais recente, gera as senhas e sobe o painel. Rodar de novo atualiza. Cada versão também sai como `sinqfy.zip` para baixar pelo site (ADR 0026).
+- **Compra do Pro pela Hubla:** depois de pagar, o comprador pega a chave em `/licenca` com o e-mail e o número do pedido. Reembolso e chargeback bloqueiam o resgate. O botão "Comprar licença" aparece no Plano.
+
+### Segurança
+- Chave do Pro emitida por uma chave emissora certificada, para trocar a emissora sem invalidar a chave de quem já comprou. Pedidos reembolsados e emissoras vazadas passam a ser revogados nas versões novas, sem servidor de ativação.
+
 ## [1.2.0] - 2026-11-24
 
 ### Novo

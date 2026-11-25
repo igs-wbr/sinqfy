@@ -20,6 +20,7 @@ import './routes/setup.js';
 import './routes/audiences.js';
 import './routes/recovery.js';
 import './routes/checkout.js';
+import './routes/store.js';
 
 // ---------- arquivos públicos (na Vercel a CDN serve public/ antes de chegar aqui) ----------
 const CORS = { 'access-control-allow-origin': '*' };

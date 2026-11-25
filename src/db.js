@@ -226,6 +226,9 @@ async function migrate() {
       dest TEXT NOT NULL, n BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(site, date, path, device, sel, label, dest));
     -- Retenção D1/D7/D30: primeira visita de cada _rid.
     CREATE INDEX IF NOT EXISTS events_site_rid ON events(site, visitor, date) WHERE rid IS NOT NULL;
+    -- Pedidos do Pro pagos na Hubla (ADR 0026, só na instalação que vende): e-mails em índice cego, chave cifrada com a DATA_KEY.
+    CREATE TABLE IF NOT EXISTS license_orders(id TEXT PRIMARY KEY, order_id TEXT NOT NULL DEFAULT '', emails TEXT NOT NULL DEFAULT '', license TEXT, status TEXT NOT NULL, created BIGINT NOT NULL, updated BIGINT NOT NULL);
+    CREATE INDEX IF NOT EXISTS license_orders_order ON license_orders(order_id);
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

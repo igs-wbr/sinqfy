@@ -205,10 +205,9 @@ svg text { font-family: Figtree, sans-serif; }
   <h2>Passo a passo em qualquer VPS</h2>
   <ol class="steps">
     <li><strong>Máquina.</strong> Crie a VPS com Ubuntu 24.04 e acesso por chave SSH.</li>
-    <li><strong>Docker.</strong> <code>curl -fsSL https://get.docker.com | sudo sh</code> e <code>sudo usermod -aG docker $USER</code>. Saia e entre de novo.</li>
-    <li><strong>Projeto.</strong> <code>git clone https://github.com/igs-wbr/sinqfy.git &amp;&amp; cd sinqfy/deploy</code>.</li>
-    <li><strong>Configuração.</strong> <code>cp .env.example .env</code> e preencha: senha do banco, chave dos dados pessoais (<code>DATA_KEY</code>), segredos e o jeito de publicar.</li>
-    <li><strong>Subir.</strong> <code>docker compose up -d --build</code> e espere "Sinqfy rodando" em <code>docker compose logs -f app</code>.</li>
+    <li><strong>Instalar.</strong> No servidor, rode <code>curl -fsSL https://github.com/igs-wbr/sinqfy/releases/latest/download/instalar.sh | bash</code>. Ele instala o Docker se faltar, baixa a versão mais recente, pergunta o e-mail do admin, o endereço do painel e o jeito de publicar, gera os segredos e sobe tudo. No fim, mostra o endereço e a senha.</li>
+    <li><strong>Atualizar.</strong> Rode o mesmo comando. A configuração e o banco ficam como estão.</li>
+    <li><strong>À mão, se preferir.</strong> Baixe o <a href="https://github.com/igs-wbr/sinqfy/releases/latest/download/sinqfy.zip">pacote .zip</a>, envie ao servidor, e na pasta <code>deploy</code> rode <code>cp .env.example .env</code>, preencha e rode <code>docker compose up -d --build</code>.</li>
     <li><strong>Backup.</strong> <code>deploy/backup.sh</code> faz um <code>pg_dump</code> cifrado e manda para qualquer armazenamento do rclone (R2, B2, S3, Object Storage).</li>
   </ol>
   <div class="note"><b>Guarde a DATA_KEY.</b> Ela cifra nome, e-mail e telefone dos contatos. Sem ela, nem você lê esses dados de novo. Guarde num gerenciador de senhas, fora do servidor.</div>

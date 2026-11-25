@@ -11,7 +11,7 @@ import { ROLES } from '../views/ui.js';
 import { removeHost } from '../cloudflare.js';
 import { MODULES, fromForm } from '../modules.js';
 import { clientSites } from '../clients.js';
-import { planOf, verifyKey, setInstall, freeSiteId, FREE_SITES, PRICE, BUY_URL } from '../license.js';
+import { planOf, verifyKey, setInstall, freeSiteId, FREE_SITES, PRICE, BUY_URL, REDEEM_URL } from '../license.js';
 import * as V from '../views/admin.js';
 
 const TIMEZONES = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
@@ -165,7 +165,7 @@ async function agenciesView(r, extra = {}) {
 async function planView(r, extra = {}) {
   platformOnly(r);
   const plan = await planOf();
-  send(r, extra.err ? 400 : 200, V.planPage(ctx(r, { tab: 'plano' }), plan, { price: PRICE, buyUrl: BUY_URL, sites: sites.size, free: sites.get(await freeSiteId()), ...extra }));
+  send(r, extra.err ? 400 : 200, V.planPage(ctx(r, { tab: 'plano' }), plan, { price: PRICE, buyUrl: BUY_URL, redeemUrl: REDEEM_URL, sites: sites.size, free: sites.get(await freeSiteId()), ...extra }));
 }
 route('GET', '/plano', {}, r => planView(r, { msg: { key: 'Licença Pro ativada.', trial: 'Teste do Pro ativado por 7 dias.' }[r.q.get('ok')] }));
 route('POST', '/plano', {}, async r => {
