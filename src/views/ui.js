@@ -455,12 +455,21 @@ function dark(){return h.dataset.theme?h.dataset.theme==='dark':mq.matches}
 function meta(){var m=d.querySelector('meta[name=theme-color]');if(m)m.content=dark()?'#0F0F10':'#F4F4F5'}
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function side(){var b=d.querySelector('.collapse');if(!b)return;var mini=h.dataset.side==='mini';b.setAttribute('aria-expanded',String(!mini));b.setAttribute('aria-label',mini?'Expandir menu':'Recolher menu')}
+// Gerador de UTM (Integrações > Rastreamento no site): mantém os parâmetros que o link já tem e troca os repetidos.
+function utm(g){var o=g.querySelector('#utm-out'),f=g.elements,u;try{u=new URL(f.url.value.trim())}catch(x){o.value='';return}
+if(!f.utm_source.value.trim()){o.value='';return}
+['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(function(k){var v=f[k].value.trim();if(v)u.searchParams.set(k,v)});
+g.querySelectorAll('.utm-row').forEach(function(r){var k=r.querySelector('[name=k]').value.trim(),v=r.querySelector('[name=v]').value.trim();if(k&&v)u.searchParams.set(k,v)});o.value=u.href}
+d.addEventListener('input',function(e){var g=e.target.closest&&e.target.closest('.utm-gen');if(g)utm(g)});
+d.addEventListener('submit',function(e){if(e.target.matches('.utm-gen'))e.preventDefault()});
 d.addEventListener('change',function(e){var p=e.target.closest&&e.target.closest('.pick');if(!p)return;if(p.querySelector('details'))p.querySelector('details').open=false;
 // A mesma loja nos outros seletores da página (URL do webhook e segredo), quando ela existe lá.
 d.querySelectorAll('.pick input[data-k="'+e.target.dataset.k+'"]').forEach(function(x){x.checked=true})});
 if(innerWidth<600)d.querySelectorAll('details.filters').forEach(function(x){x.open=false});side();if(mq.addEventListener)mq.addEventListener('change',meta);
 d.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;
-if(b.dataset.act==='copy'){var i=d.getElementById(b.dataset.for);if(i){i.select();try{navigator.clipboard.writeText(i.value)}catch(x){d.execCommand('copy')}b.textContent='Código copiado'}return}
+if(b.dataset.act==='copy'){var i=d.getElementById(b.dataset.for);if(i){i.select();try{navigator.clipboard.writeText(i.value).catch(function(){d.execCommand('copy')})}catch(x){d.execCommand('copy')}b.textContent=b.dataset.done||'Código copiado'}return}
+if(b.dataset.act==='utm-add'){var w=b.closest('.utm-extra'),r=w.querySelector('.utm-row').cloneNode(true);r.querySelectorAll('input').forEach(function(x){x.value=''});w.insertBefore(r,b.parentNode);return}
+if(b.dataset.act==='utm-del'){var g=b.closest('.utm-gen'),rows=g.querySelectorAll('.utm-row');if(rows.length>1)b.closest('.utm-row').remove();else b.closest('.utm-row').querySelectorAll('input').forEach(function(x){x.value=''});utm(g);return}
 if(b.dataset.act==='theme'){var t=dark()?'light':'dark';h.dataset.theme=t;save('rastro-theme',t);meta()}
 else if(b.dataset.act==='font'){if(h.dataset.font)delete h.dataset.font;else h.dataset.font='space';save('rastro-font',h.dataset.font||'')}
 else if(b.dataset.act==='side'){if(h.dataset.side==='mini')delete h.dataset.side;else h.dataset.side='mini';save('rastro-side',h.dataset.side||'open');side()}})})()`;

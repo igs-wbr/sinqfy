@@ -226,7 +226,18 @@ export function integrationsPage(ctx, originUrl, d, msg, err) {
 <p class="muted">Opções no <code>&lt;script&gt;</code>: <code>data-consent="required"</code> (nada de cookie nem envio a terceiros até o banner chamar <code>rastro('consent')</code>) e <code>data-pixel="mirror"</code> (repete cada evento no Pixel com o mesmo <code>eventID</code>; tire o <code>fbq('track','PageView')</code> do código base).</p></section>
 <section class="card"><h2>Template de UTM para a Meta</h2><p class="muted">No Ads Manager, em Parâmetros de URL.</p><pre><code>${UTM_TEMPLATE}</code></pre>
 <p class="muted">O id depois do <code>|</code> liga cada venda à campanha, ao conjunto e ao anúncio certos. O snippet repassa as UTMs da página para os links de checkout (para a Hotmart: <code>src</code> e <code>sck</code>).</p></section>
-<section class="card"><h2>Eventos de conversão</h2><pre><code>${`<button data-rastro="cadastro" data-rastro-plano="pro">Assinar</button>
+<section class="card"><h2>Gerar UTMs orgânicas</h2><p class="muted">Para links da bio, stories, e-mail ou grupo: cada clique chega ao painel com a origem certa. O link é montado aqui no navegador, nada é salvo.</p>
+<form class="stack utm-gen" style="margin-top:12px;max-width:none" autocomplete="off">
+<label class="f">Link da página<input name="url" type="url" placeholder="https://seusite.com" required></label>
+<div class="fields"><label class="f">utm_source (origem)<input name="utm_source" placeholder="instagram" required></label><label class="f">utm_medium (meio)<input name="utm_medium" placeholder="bio"></label>
+<label class="f">utm_campaign (campanha)<input name="utm_campaign" placeholder="perfil"></label><label class="f">utm_content (conteúdo)<input name="utm_content" placeholder="link-bio"></label>
+<label class="f">utm_term (termo)<input name="utm_term" placeholder="promo"></label></div>
+<details><summary class="muted">Parâmetros personalizados (xcod, sck…)</summary><div class="stack utm-extra" style="margin-top:10px;max-width:none">
+<div class="row utm-row"><input name="k" placeholder="Parâmetro (ex.: sck)" aria-label="Parâmetro"><input name="v" placeholder="Valor (ex.: bio)" aria-label="Valor"><button type="button" class="danger" data-act="utm-del" aria-label="Remover parâmetro">${icon('x', 16)}</button></div>
+<div><button type="button" data-act="utm-add">+ Adicionar parâmetro</button></div></div></details>
+<label class="f">Link gerado<input id="utm-out" readonly placeholder="preencha o link e a origem"></label>
+<div><button type="button" class="primary" data-act="copy" data-for="utm-out" data-done="Link copiado">Copiar link</button></div></form></section>
+<section class="card"><h2>Eventos de conversão</h2><p class="muted">Opcional. O snippet já registra sozinho visitas, cliques no checkout (InitiateCheckout) e formulários (Lead). Use isto para contar uma ação a mais com o nome que quiser: no botão ou link pelo atributo <code>data-rastro</code> (os <code>data-rastro-*</code> viram detalhes do evento e <code>data-rastro-revenue</code> o valor), ou pelo JavaScript com <code>rastro('nome', detalhes, valor)</code>. A venda de verdade vem do webhook da plataforma; isto não a substitui.</p><pre><code>${`<button data-rastro="cadastro" data-rastro-plano="pro">Assinar</button>
 <a data-rastro="compra" data-rastro-revenue="97.90" href="/checkout">Comprar</a>
 rastro('compra', { plano: 'pro' }, 97.90)`}</code></pre></section>`],
     ['plataformas', 'Plataformas de venda', 'link', 'Webhooks de Hotmart, Kiwify, Shopify, Stripe e outras.', lastHook ? st(!!lastHook.ok, `Último webhook: ${time(lastHook.ts)}`) : st(false, 'Nenhum webhook ainda'), html`
