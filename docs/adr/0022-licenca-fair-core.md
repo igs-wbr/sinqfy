@@ -13,7 +13,7 @@ O Sinqfy vai ser distribuído para cada cliente instalar no próprio servidor (s
 - **Licença: Fair Core License 1.0 com MIT futura (FCL-1.0-MIT)**, texto de fcl.dev. Uso, alteração e redistribuição livres para qualquer fim que não seja concorrente; proibido contornar a chave de licença; cada versão vira MIT dois anos depois de publicada. Permissão adicional no fim do `LICENSE`: agência pode dar acesso aos próprios clientes. O autor é o único dono do código, então pode trocar a licença; contribuições futuras autorizam essa troca (`CONTRIBUTING.md`).
 - **Planos, como o Maestri:**
   - Grátis, para sempre: 1 site (1 funil) e todos os recursos.
-  - Pro, R$ 97 em pagamento único: sites ilimitados (e com eles a visão por cliente), até 2 instalações, vitalício (atualizações e uso para sempre; até 25/11/2026 eram 12 meses de atualizações), 7 dias de teste grátis.
+  - Pro, R$ 45 em pagamento único (era R$ 97 até 25/11/2026): sites ilimitados (e com eles a visão por cliente), até 2 instalações, vitalício (atualizações e uso para sempre; até 25/11/2026 eram 12 meses de atualizações), 7 dias de teste grátis.
 - **Chave do Pro (`src/license.js`):** JSON assinado com Ed25519 pelo autor (`scripts/license.mjs`, chave privada fora do repositório) e validado offline com a chave pública embutida. Fica na tabela `install`, junto com o início do teste (uma vez por instalação). As 2 instalações valem pelos termos, sem servidor de ativação.
 - **Sem o Pro, nada se perde:** sites além do primeiro (o mais antigo) continuam coletando, recebendo webhooks e enviando à Meta; só o painel deles mostra a página do Pro. Configurações e exclusão do site ficam livres, para dar para voltar a 1 site. Sem o Pro, não dá para criar um segundo site.
 

@@ -8,9 +8,9 @@ import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open, metaEmail, metaPhone, sha } from '../pii.js';
 import { trackPending } from '../recovery.js';
 
-export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
+export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', hubla: 'Hubla', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
 /** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
-export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)' };
+export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)', hubla: 'Token do webhook (Integrações, Webhook)' };
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
 export const METHODS = { pix: 'Pix', card: 'Cartão', boleto: 'Boleto', other: 'Outros' };
 
@@ -171,6 +171,24 @@ export const PARSERS = {
       email: o.customer_details?.email || o.billing_details?.email, phone: o.customer_details?.phone || o.billing_details?.phone, name: o.customer_details?.name, rid: ridOf(o.client_reference_id || md.rid),
     };
   },
+  // Hubla (webhook 2.0, eventos invoice.*). O link pay.hub.la recebe o rid do snippet; UTMs e params ficam em paymentSession.
+  hubla(b) {
+    const inv = b.event?.invoice || {};
+    const status = { paid: 'paid', unpaid: 'pending', overdue: 'pending', canceled: 'refused', refunded: 'refunded', chargeback: 'chargeback' }[inv.status];
+    if (!String(b.type).startsWith('invoice.') || !status || !inv.id) return null;
+    const ps = inv.paymentSession || {}, p = ps.params || {}, q = qs(ps.url), u = ps.utm || {}, buyer = b.event.user || inv.payer || {};
+    const gross = inv.amount?.totalCents != null ? num(inv.amount.totalCents) / 100 : num(inv.amount?.total);
+    const seller = (inv.receivers || []).find(r => r.role === 'seller');
+    const sck = p.sck ?? p.SCK ?? q.get('sck');
+    return {
+      order_id: str(inv.parentInvoiceId || inv.id), status, method: method(inv.paymentMethod), gross, net: seller ? num(seller.totalCents) / 100 : gross,
+      currency: str(inv.currency || 'BRL', 3), product: str(b.event.product?.name), ts: time(inv.saleDate || inv.createdAt),
+      paid_at: time((inv.statusAt || []).find(x => x.status === 'paid')?.when),
+      utm: utm({ source: u.source || q.get('utm_source'), medium: u.medium || q.get('utm_medium'), campaign: u.campaign || q.get('utm_campaign') || (ridOf(sck) ? '' : sck), content: u.content || q.get('utm_content'), term: u.term || q.get('utm_term') }),
+      email: buyer.email, phone: buyer.phone, name: [buyer.firstName, buyer.lastName].filter(Boolean).join(' '), rid: ridOf(p.rid) || ridOf(q.get('rid')) || ridOf(sck),
+      fbclid: ps.cookies?.fbclid, ua: ps.userAgent,
+    };
+  },
 };
 
 // ---------- assinatura dos webhooks ----------
@@ -180,6 +198,7 @@ const hmac = (alg, key, data, enc) => createHmac(alg, key).update(data).digest(e
 export function verify(platform, secret, raw, h, now = Date.now()) {
   if (!secret) return null;
   if (platform === 'hotmart') return eq(h['x-hotmart-hottok'], secret) ? null : 'Hottok não confere';
+  if (platform === 'hubla') return eq(h['x-hubla-token'], secret) ? null : 'Token da Hubla não confere';
   if (platform === 'shopify') return eq(h['x-shopify-hmac-sha256'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura da Shopify não confere';
   if (platform === 'woocommerce') return eq(h['x-wc-webhook-signature'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura do WooCommerce não confere';
   if (platform === 'stripe') {
@@ -425,7 +444,7 @@ export async function handleWebhook(token, platform, raw, now = Date.now(), req 
   try { s = platform === 'custom' ? parseCustom(body || {}, jsonOr(site.custom_map, null)) : PARSERS[platform](body || {}); }
   catch { await log(site.id, platform, null, false, 'Payload em formato inesperado'); return 400; }
   // O nome do evento no log mostra o que a plataforma está mandando à toa (ex.: abandono de carrinho, troca de plano).
-  const kind = String(body?.event || body?.type || body?.order_status || body?.status || '').replace(/[^\w.-]/g, '').slice(0, 60);
+  const kind = String((typeof body?.event === 'string' && body.event) || body?.type || body?.order_status || body?.status || '').replace(/[^\w.-]/g, '').slice(0, 60);
   if (!s) { await log(site.id, platform, null, true, `Evento ignorado (não é venda)${kind ? `: ${kind}` : ''}`); return 200; }
   return (await ingestSale(site, platform, s, now)).ok ? 200 : 400;
 }

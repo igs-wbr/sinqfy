@@ -194,6 +194,18 @@ function rastroConfigurar() {
 // Seção de cada ação de Integrações (o POST volta para a âncora dela).
 export const INTEG_SECTION = { rotate: 'plataformas', secrets: 'plataformas', custom_map: 'custom', custom_preview: 'custom', meta_add: 'meta', meta_sync: 'meta', meta_remove: 'meta', capi: 'capi', meta_test: 'capi', ga4: 'ga4', gads: 'gads' };
 
+// Logo de cada loja: marca oficial quando há (icons.js), senão a inicial na cor da marca.
+const STORE_LOGO = { hotmart: ['H', '#F04E23'], kiwify: ['K', '#00B26B'], eduzz: ['E', '#FFBC00'], woocommerce: ['W', '#96588A'], hubla: ['H', 'var(--ink)'] };
+const storeLogo = k => Object.hasOwn(BRANDS, k) ? raw(brandSvg(k, 18)) : Object.hasOwn(STORE_LOGO, k)
+  ? html`<span class="mono" style="background:${STORE_LOGO[k][1]}">${STORE_LOGO[k][0]}</span>` : icon('plug', 18);
+const HOOK_KEYS = Object.keys(PLATFORMS).filter(k => k !== 'custom' && k !== 'sheets');
+/** Lista suspensa com o logo de cada loja; mostra só o painel da escolhida (rádio + :has, funciona sem JavaScript). */
+const picker = (id, keys, panel) => html`<div class="pick" style="margin-top:12px"><style>${raw(keys.map(k => `.pick:has(#pk-${id}-${k}:checked) [data-k=${k}]{display:flex}`).join(''))}</style>
+${keys.map((k, i) => html`<input type="radio" name="pk-${id}" id="pk-${id}-${k}" class="sr"${i ? '' : raw(' checked')}>`)}
+<details><summary aria-label="Escolher a loja">${keys.map(k => html`<span class="opt" data-k="${k}">${storeLogo(k)}${PLATFORMS[k]}</span>`)}<span class="chev">${icon('chevron-right', 16)}</span></summary>
+<div role="listbox">${keys.map(k => html`<label for="pk-${id}-${k}" class="opt">${storeLogo(k)}${PLATFORMS[k]}</label>`)}</div></details>
+${keys.map(k => html`<div class="pane" data-k="${k}">${panel(k)}</div>`)}</div>`;
+
 /** Integrações em grade de ícones: cada um abre só a sua configuração (âncora + :target, funciona sem JavaScript). */
 export function integrationsPage(ctx, originUrl, d, msg, err) {
   const s = ctx.site, base = `/sites/${encodeURIComponent(s.id)}/integrations`;
@@ -216,11 +228,11 @@ export function integrationsPage(ctx, originUrl, d, msg, err) {
 rastro('compra', { plano: 'pro' }, 97.90)`}</code></pre></section>`],
     ['plataformas', 'Plataformas de venda', 'link', 'Webhooks de Hotmart, Kiwify, Shopify, Stripe e outras.', lastHook ? st(!!lastHook.ok, `Último webhook: ${time(lastHook.ts)}`) : st(false, 'Nenhum webhook ainda'), html`
 <section class="card"><h2>URLs dos webhooks</h2><p class="muted">Cadastre a URL como webhook (eventos de compra, reembolso e chargeback) na plataforma. O token na URL identifica este site. A venda é ligada ao clique pelo <code>rid</code> que o snippet põe no link de checkout (Hotmart em <code>xcod</code>, Kiwify e OnProfit em <code>sck</code>, Stripe em <code>client_reference_id</code>).</p>
-<div class="platforms" style="margin-top:12px">${Object.entries(PLATFORMS).filter(([k]) => k !== 'custom' && k !== 'sheets').map(([k, t]) => html`<div class="platform"><div class="row between"><span class="lbl">${t}</span>${SIGNED[k] ? html`<span class="tag ${secrets[k] ? 'ok' : 'warn'}">${secrets[k] ? 'assinatura conferida' : 'sem assinatura'}</span>` : ''}</div><pre><code>${originUrl}/hooks/${hookToken(s, k)}/${k}</code></pre></div>`)}</div>
+${picker('hook', HOOK_KEYS, k => html`<div class="platform"><div class="row between"><span class="lbl">${PLATFORMS[k]}</span>${SIGNED[k] ? html`<span class="tag ${secrets[k] ? 'ok' : 'warn'}">${secrets[k] ? 'assinatura conferida' : 'sem assinatura'}</span>` : ''}</div><pre><code>${originUrl}/hooks/${hookToken(s, k)}/${k}</code></pre></div>`)}
 <form method="post" action="${act('plataformas')}" class="row" style="margin-top:12px"><input type="hidden" name="action" value="rotate"><button class="danger">Gerar novo token</button><span class="muted">as URLs antigas param de funcionar</span></form></section>
 <section class="card"><h2>Segredos de assinatura</h2><form method="post" action="${act('plataformas')}" class="stack" style="margin-top:10px;max-width:none"><input type="hidden" name="action" value="secrets">
 <p class="muted" style="margin:0">Com o segredo, o Sinqfy recusa webhooks sem a assinatura da plataforma. Cada plataforma tem a sua URL, então a de uma não serve para outra. Campo vazio mantém o atual; digite <code>-</code> para apagar.</p>
-<div class="fields">${Object.entries(SIGNED).map(([k, t]) => html`<label class="f">${PLATFORMS[k]}<span>${t}</span><input name="secret_${k}" type="password" autocomplete="off" placeholder="${secrets[k] ? '•••••• (configurado)' : 'não configurado'}"></label>`)}</div>
+${picker('sec', Object.keys(SIGNED), k => html`<label class="f" style="max-width:420px">${SIGNED[k]}<input name="secret_${k}" type="password" autocomplete="off" placeholder="${secrets[k] ? '•••••• (configurado)' : 'não configurado'}"></label>`)}
 <div><button>Salvar segredos</button></div></form></section>
 <section class="card"><h2>Últimos webhooks</h2>${d.logs.length ? html`<div class="tw"><table class="data txt"><thead><tr><th>Quando</th><th>Plataforma</th><th>Pedido</th><th>Resultado</th></tr></thead><tbody>${d.logs.map(l => html`<tr><td style="text-align:left">${time(l.ts)}</td><td>${PLATFORMS[l.platform] ?? l.platform}</td><td><code>${l.order_id || '-'}</code></td><td class="${l.ok ? '' : 'neg'}" style="white-space:normal">${l.message}</td></tr>`)}</tbody></table></div>` : html`<p class="empty">Nenhum webhook recebido ainda.</p>`}</section>`],
     ['custom', 'Webhook personalizado', 'plug', 'Qualquer checkout, CRM ou automação que mande JSON.', s.custom_map ? st(true, 'Mapa salvo') : st(null, 'Não configurado'), html`

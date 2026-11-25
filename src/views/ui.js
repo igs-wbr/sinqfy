@@ -317,6 +317,13 @@ pre{background:var(--surface2);border:1px solid var(--line);border-radius:8px;pa
 .member{display:grid;gap:10px;padding:16px 0;border-top:1px solid var(--line)}.member:first-of-type{border-top:0}
 details.data summary{cursor:pointer;display:inline-flex;align-items:center;min-height:32px;color:var(--muted);font:400 12px var(--sans);margin-top:6px}
 .platforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:12px}.platform{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--surface2)}.platform pre{background:var(--surface)}
+.pick .sr{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}.pick .pane,.pick summary .opt{display:none}.pick .pane{margin-top:12px;flex-direction:column}
+.pick details{position:relative;max-width:420px}.pick summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);cursor:pointer;font-weight:600}
+.pick summary::-webkit-details-marker{display:none}.pick summary .chev{transition:transform var(--d2) var(--ease)}.pick details[open] summary .chev{transform:rotate(90deg)}
+.pick .opt{display:flex;align-items:center;gap:10px}.pick [role=listbox]{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);display:grid;gap:2px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);max-height:60vh;overflow:auto}
+.pick [role=listbox] .opt{min-height:40px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:14px}.pick [role=listbox] .opt:hover{background:var(--surface2)}
+.pick:has(.sr:focus-visible) summary{outline:2px solid var(--ring);outline-offset:2px}
+.mono{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;color:var(--surface);font-size:11px;font-weight:700;line-height:1;flex:none}
 /* páginas sem barra (login, convite) */
 body.bare{background:var(--bg)}
 .auth{max-width:440px;margin:0 auto;padding:12vh 16px 40px}.auth>.brand{margin:0 0 20px;padding:0}.bare main{padding:0}.auth .card{padding:32px;border:0;box-shadow:var(--shadow)}
@@ -448,6 +455,7 @@ function dark(){return h.dataset.theme?h.dataset.theme==='dark':mq.matches}
 function meta(){var m=d.querySelector('meta[name=theme-color]');if(m)m.content=dark()?'#0F0F10':'#F4F4F5'}
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function side(){var b=d.querySelector('.collapse');if(!b)return;var mini=h.dataset.side==='mini';b.setAttribute('aria-expanded',String(!mini));b.setAttribute('aria-label',mini?'Expandir menu':'Recolher menu')}
+d.addEventListener('change',function(e){var p=e.target.closest&&e.target.closest('.pick');if(p&&p.querySelector('details'))p.querySelector('details').open=false});
 if(innerWidth<600)d.querySelectorAll('details.filters').forEach(function(x){x.open=false});side();if(mq.addEventListener)mq.addEventListener('change',meta);
 d.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;
 if(b.dataset.act==='copy'){var i=d.getElementById(b.dataset.for);if(i){i.select();try{navigator.clipboard.writeText(i.value)}catch(x){d.execCommand('copy')}b.textContent='Código copiado'}return}

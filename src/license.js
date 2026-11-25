@@ -7,7 +7,7 @@ const DB = () => import('./db.js');
 
 const PUBLIC_KEY = createPublicKey({ key: Buffer.from('MCowBQYDK2VwAyEASzabJd+MzqSHL49olmbn0F7+sIYU13+NNMPMzyidsHY=', 'base64'), format: 'der', type: 'spki' });
 export const TRIAL_DAYS = 7, FREE_SITES = 1;
-export const PRICE = 'R$ 97';
+export const PRICE = 'R$ 45';
 /** Página de venda do Pro. Vazia, o botão "Comprar licença" não aparece. */
 export const BUY_URL = 'https://pay.hub.la/g7FNkfPdKTNHTKrkSC7E';
 /** Onde o comprador pega a chave depois de pagar (src/routes/store.js, na instalação do autor). */

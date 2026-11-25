@@ -77,6 +77,7 @@ A tela Pedidos mostra a regra que valeu em cada venda (coluna Origem):
 | Shopify | (loja é o próprio site) `fbclid` e UTMs do `landing_site`, user agent do pedido | `orders/paid` e `orders/updated` (`financial_status`) | do `landing_site` |
 | WooCommerce | meta `rastro_rid`, se o tema gravar | `processing`/`completed` pago, `on-hold` pendente, `refunded`, `cancelled`/`failed` | atribuição nativa (`_wc_order_attribution_*`, WooCommerce 8.5+) |
 | Stripe (Checkout e Payment Links) | `client_reference_id` (o snippet preenche) | `checkout.session.completed`, `async_payment_*`, `charge.refunded`, `charge.dispute.created` | `metadata.utm_*` |
+| Hubla (Webhook 2.0) | `rid` no link `pay.hub.la` (o snippet preenche), lido de `paymentSession.url` | eventos `invoice.*`: `paid`, `unpaid`/`overdue` pendente, `canceled`, `refunded`, `chargeback` | `paymentSession.utm` e `params.sck` |
 
 > Confira cada plataforma com um pedido de teste: a linha em Últimos webhooks mostra se a venda casou pelo clique. O campo exato que algumas plataformas devolvem (`xcod` na Hotmart, `sck` na Kiwify) foi conferido pela documentação disponível, não com pedido real.
 
