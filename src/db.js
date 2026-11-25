@@ -213,6 +213,9 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS install(k TEXT PRIMARY KEY, v TEXT NOT NULL);
     -- Google Ads pela Data Manager API (ADR 0024): conta que recebe, MCC opcional, chave da conta de serviço e evento → ação de conversão.
     ALTER TABLE sites ADD COLUMN IF NOT EXISTS gads_customer TEXT, ADD COLUMN IF NOT EXISTS gads_login TEXT, ADD COLUMN IF NOT EXISTS gads_key TEXT, ADD COLUMN IF NOT EXISTS gads_actions TEXT;
+    -- Pedidos do Pro pagos na Hubla (ADR 0025, só na instalação que vende): e-mails em índice cego, chave cifrada com a DATA_KEY.
+    CREATE TABLE IF NOT EXISTS license_orders(id TEXT PRIMARY KEY, order_id TEXT NOT NULL DEFAULT '', emails TEXT NOT NULL DEFAULT '', license TEXT, status TEXT NOT NULL, created BIGINT NOT NULL, updated BIGINT NOT NULL);
+    CREATE INDEX IF NOT EXISTS license_orders_order ON license_orders(order_id);
   `);
   for (const { id } of await db.all('SELECT id FROM sites WHERE webhook_token IS NULL')) await db.run('UPDATE sites SET webhook_token=? WHERE id=?', [newToken(), id]);
 

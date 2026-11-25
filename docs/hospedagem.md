@@ -39,10 +39,10 @@ Escolha em `COMPOSE_PROFILES`, no `deploy/.env` ([modelo](../deploy/.env.example
 ## Passo a passo em qualquer VPS
 
 1. Crie a máquina no provedor (Ubuntu 24.04), com acesso por chave SSH. Exemplo detalhado: [Oracle](deploy-oracle.md).
-2. Instale o Docker: `curl -fsSL https://get.docker.com | sudo sh` e `sudo usermod -aG docker $USER` (saia e entre de novo).
-3. Baixe o projeto: `git clone https://github.com/igs-wbr/sinqfy.git && cd sinqfy/deploy`.
-4. `cp .env.example .env` e preencha (o que é cada variável: [guia da Oracle, parte 7](deploy-oracle.md#parte-7-as-configurações-env)).
-5. `docker compose up -d --build` e espere "Sinqfy rodando" em `docker compose logs -f app`.
+2. No servidor, rode o instalador ([deploy/instalar.sh](../deploy/instalar.sh)): `curl -fsSL https://github.com/igs-wbr/sinqfy/releases/latest/download/instalar.sh | bash`. Ele instala o Docker se faltar, baixa a versão mais recente em `~/sinqfy`, pergunta o e-mail do admin, o endereço do painel e o jeito de publicar, gera os segredos no `deploy/.env` e sobe tudo. Rodar de novo atualiza e mantém o `.env` e o banco.
+3. Sem o instalador: baixe o [pacote .zip](https://github.com/igs-wbr/sinqfy/releases/latest/download/sinqfy.zip) (ou `git clone`), e na pasta `deploy` faça `cp .env.example .env`, preencha (o que é cada variável: [guia da Oracle, parte 7](deploy-oracle.md#parte-7-as-configurações-env)) e rode `docker compose up -d --build`.
+4. Confira com `docker compose logs -f app` até aparecer "Sinqfy rodando".
+5. Pacote e instalador saem de cada tag `vX.Y.Z` pelo workflow `.github/workflows/release.yml`.
 6. Backup: `deploy/backup.sh` com o rclone apontando para qualquer armazenamento compatível com S3 (Cloudflare R2, Backblaze B2, AWS S3, Wasabi), em `BACKUP_REMOTE`.
 
 ## E a Vercel?

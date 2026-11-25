@@ -1,0 +1,22 @@
+name: Pacote
+# Cada tag vX.Y.Z vira uma versão no GitHub com o pacote pronto para instalar (ADR 0025):
+#   sinqfy.zip (download pelo site), sinqfy.tar.gz (usado pelo instalador) e instalar.sh.
+# Links fixos para a versão mais recente: https://github.com/igs-wbr/sinqfy/releases/latest/download/<arquivo>
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  pacote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git archive --format=zip --prefix=sinqfy/ -o sinqfy.zip HEAD
+          git archive --format=tar.gz --prefix=sinqfy/ -o sinqfy.tar.gz HEAD
+          cp deploy/instalar.sh instalar.sh
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" sinqfy.zip sinqfy.tar.gz instalar.sh --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

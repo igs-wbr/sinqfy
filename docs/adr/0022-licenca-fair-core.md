@@ -22,3 +22,4 @@ O Sinqfy vai ser distribuído para cada cliente instalar no próprio servidor (s
 - A proteção é jurídica: alguém pode alterar o código, mas isso viola a licença e permite derrubar um fork público.
 - Perder a chave privada impede emitir chaves novas; ela precisa de cópia de segurança (gerenciador de senhas).
 - O botão "Comprar licença" aparece quando `BUY_URL` em `src/license.js` tiver a página de venda.
+- Venda e entrega automática da chave pela Hubla: [ADR 0025](0025-venda-do-pro-pela-hubla.md).
