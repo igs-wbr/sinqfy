@@ -118,6 +118,11 @@ test('ingestão via HTTP: sem IP, sem query string, bots fora, origem herdada', 
   assert.equal(await beacon({ s: 'blog', u: 'https://blog.dev/a' }, 'Mozilla/5.0 (compatible; Googlebot/2.1)'), 202);
   assert.equal(await beacon({ s: 'blog', u: 'https://blog.dev/a' }, CHROME.replace('Chrome', 'HeadlessChrome')), 202);
   assert.equal(await beacon({ s: 'blog', u: 'https://blog.dev/a' }, ''), 202);
+  // Robô fingindo navegador: iPhone com tela de computador, e visita vinda de datacenter (rede informada pela borda).
+  assert.equal(await beacon({ s: 'blog', u: 'https://blog.dev/a', w: 1440 }, IPHONE), 202);
+  const viaBorda = net => fetch(base + '/e', { method: 'POST', body: JSON.stringify({ s: 'blog', u: 'https://blog.dev/a', w: 390 }),
+    headers: { 'user-agent': IPHONE, 'x-forwarded-for': '192.0.2.9', 'x-edge-secret': 'segredo-da-borda', 'x-rastro-net': encodeURIComponent(net) } }).then(r => r.status);
+  assert.deepEqual([await viaBorda('Facebook, Inc.'), await viaBorda('Amazon.com, Inc.')], [202, 202]);
   assert.equal(await beacon({ s: 'nope', u: 'https://blog.dev/a' }), 400);
   assert.equal(await beacon('not json'), 400);
 

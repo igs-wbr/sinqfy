@@ -75,6 +75,8 @@ async function collect(req, env, ctx) {
     'x-rastro-ip': req.headers.get('cf-connecting-ip') || '', 'cf-ipcountry': req.headers.get('cf-ipcountry') || '',
     // Cidade e UF pelo IP, para a correspondência da Meta (cabeçalho só aceita ASCII: vai codificado).
     'x-rastro-city': encodeURIComponent(req.cf?.city || ''), 'x-rastro-region': encodeURIComponent(req.cf?.regionCode || ''),
+    // Rede de origem (nome do ASN, ex.: "Amazon.com, Inc."): a origem descarta visitas de datacenter, que são robôs fingindo navegador.
+    'x-rastro-net': encodeURIComponent(req.cf?.asOrganization || ''),
     ...(consent && { 'x-rastro-rid': id.rid, 'x-rastro-fbp': id.fbp }),
     ...(id.fbc && { 'x-rastro-fbc': id.fbc }), // vem da URL; sem consentimento vai só para a origem, sem cookie
   };
