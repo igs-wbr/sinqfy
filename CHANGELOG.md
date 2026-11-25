@@ -4,6 +4,8 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+## [1.3.1] - 2026-11-25
+
 ### Mudou
 - O Pro agora é vitalício: pagamento único com atualizações e uso para sempre (antes eram 12 meses de atualizações). Chaves já emitidas passam a valer da mesma forma.
 
