@@ -68,7 +68,11 @@ const MSG = {
 async function integrationsView(r, msg, err, extra = {}) {
   const d = await awaitAll({
     accounts: db.all("SELECT id, account_id, name, currency, last_sync, last_error FROM ad_accounts WHERE site=? AND platform='meta' ORDER BY id", [r.site.id]),
-    logs: S.lastWebhooks(r.site.id), edgeUrl: edgeUrlFor(r.site, origin(r.req)), // domínio do cliente na borda, quando ativo
+    logs: S.lastWebhooks(r.site.id),
+    // Plataformas que já mandaram webhook: o log guarda só os 50 últimos, as vendas guardam para sempre.
+    hooked: db.all(`SELECT platform, MAX(ts) ts FROM (SELECT platform, ts FROM webhook_log WHERE site=? UNION ALL
+      SELECT platform, MAX(updated) FROM sales WHERE site=? GROUP BY platform) x GROUP BY platform`, [r.site.id, r.site.id]),
+    edgeUrl: edgeUrlFor(r.site, origin(r.req)), // domínio do cliente na borda, quando ativo
     // Saúde da fila nas últimas 24 h, por destino (etapa 2).
     deliveries: db.all(`SELECT dest, COUNT(*) FILTER (WHERE status='sent') sent, COUNT(*) FILTER (WHERE status='failed') failed,
       COUNT(*) FILTER (WHERE status IN ('pending','sending')) pending, MAX(sent_at) last_sent FROM deliveries WHERE site=? AND created>? GROUP BY dest`, [r.site.id, Date.now() - 864e5]),
