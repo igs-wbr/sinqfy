@@ -4,6 +4,23 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+## [1.3.3] - 2026-11-25
+
+### Novo
+- Integrações → Plataformas de venda: card **Plataformas conectadas** com as lojas que já mandaram webhook ou têm segredo salvo (estado do segredo e último webhook); clicar numa delas abre a configuração dela.
+- Logos oficiais de Hotmart, Kiwify, Eduzz, WooCommerce e Hubla na lista de plataformas; escolher uma loja nas URLs troca também o seletor dos segredos.
+- Integrações → Rastreamento no site: **Gerar UTMs orgânicas**, que monta o link com as cinco UTMs e parâmetros extras (xcod, sck…) para bio, stories e e-mail.
+
+### Mudou
+- "Eventos de conversão" explica o que o script já registra sozinho e quando usar `data-rastro` ou `rastro()`.
+
+### Corrigido
+- O botão de copiar não falha quando o navegador nega a área de transferência.
+
+### Segurança
+- Sugestão de coluna pela IA (WhatsApp): a conversa do cliente vai separada das instruções, entre marcadores, e o modelo é orientado a nunca seguir pedidos que estejam nela (proteção contra prompt injection). A sugestão continua só valendo depois de aceita no painel.
+- Todas as páginas do painel saem com `X-Robots-Tag: noindex, nofollow`, para não aparecerem em buscadores nem em IAs.
+
 ## [1.3.2] - 2026-11-25
 
 ### Novo

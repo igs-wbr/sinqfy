@@ -348,7 +348,7 @@ svg text { font-family: Figtree, sans-serif; }
   <ul>
     <li>Use sempre o modelo inteiro, com as cinco UTMs, em todos os anúncios.</li>
     <li>Não troque a ordem dos campos: <code>utm_medium</code> é o conjunto e <code>utm_content</code> é o anúncio.</li>
-    <li>Para tráfego orgânico (bio, stories, e-mail), use UTMs simples sem id: <code>utm_source=instagram&amp;utm_medium=bio&amp;utm_campaign=lancamento</code>.</li>
+    <li>Para tráfego orgânico (bio, stories, e-mail), use UTMs simples sem id: <code>utm_source=instagram&amp;utm_medium=bio&amp;utm_campaign=lancamento</code>. O painel monta esse link para você em <strong>Integrações → Rastreamento no site → Gerar UTMs orgânicas</strong>, com campos para as cinco UTMs e parâmetros extras como <code>sck</code>.</li>
     <li>O script do Sinqfy repassa as UTMs da página para o link do checkout sozinho. Na Hotmart, copia também <code>utm_source</code> para <code>src</code> e <code>utm_campaign</code> para <code>sck</code>, que são os campos que ela devolve.</li>
   </ul>
 </section>
@@ -374,6 +374,7 @@ svg text { font-family: Figtree, sans-serif; }
     <tr><td>Hotmart</td><td><code>xcod</code></td></tr>
     <tr><td>Kiwify e OnProfit</td><td><code>sck</code></td></tr>
     <tr><td>Stripe</td><td><code>client_reference_id</code></td></tr>
+    <tr><td>Hubla</td><td class="wrap"><code>rid</code> no link <code>pay.hub.la</code>, lido da sessão de pagamento</td></tr>
     <tr><td>Shopify</td><td class="wrap"><code>rid</code> na página de entrada (<code>landing_site</code>)</td></tr>
     <tr><td>Genérico e personalizado</td><td class="wrap">O campo que você indicar no mapa</td></tr>
   </table>
@@ -534,7 +535,7 @@ svg text { font-family: Figtree, sans-serif; }
 
 <section>
   <h2>Plataformas de venda</h2>
-  <p>Em <strong>Integrações → Plataformas de venda</strong> há uma URL de webhook para cada plataforma. Cadastre a URL na plataforma com os eventos de compra aprovada, pendente, reembolso e chargeback. O token na URL identifica o site; a URL de uma plataforma não serve para outra.</p>
+  <p>Em <strong>Integrações → Plataformas de venda</strong> há uma URL de webhook para cada plataforma: escolha a loja na lista (com o logo de cada uma) e a URL e o campo de segredo dela aparecem. As lojas que já mandaram webhook ou têm segredo salvo ficam no card <strong>Plataformas conectadas</strong>, com o último webhook recebido. Cadastre a URL na plataforma com os eventos de compra aprovada, pendente, reembolso e chargeback. O token na URL identifica o site; a URL de uma plataforma não serve para outra.</p>
   <table>
     <tr><th>Plataforma</th><th>Onde cadastrar</th><th>Assinatura</th></tr>
     <tr><td>Hotmart</td><td class="wrap">Ferramentas → Webhook (versão 2.0)</td><td class="wrap">Hottok, conferido pelo Sinqfy</td></tr>
@@ -543,6 +544,7 @@ svg text { font-family: Figtree, sans-serif; }
     <tr><td>Shopify</td><td class="wrap">Configurações → Notificações → Webhooks</td><td class="wrap">Segredo do webhook</td></tr>
     <tr><td>WooCommerce</td><td class="wrap">Configurações → Avançado → Webhooks</td><td class="wrap">Segredo do webhook</td></tr>
     <tr><td>Stripe</td><td class="wrap">Developers → Webhooks</td><td class="wrap">Segredo de assinatura (whsec_)</td></tr>
+    <tr><td>Hubla</td><td class="wrap">Integrações → Webhook (eventos de fatura, como <code>invoice.status_updated</code>)</td><td class="wrap">Token do webhook, conferido no cabeçalho</td></tr>
   </table>
 
   <h3>Webhook personalizado (exemplo: OnProfit)</h3>
@@ -714,7 +716,7 @@ svg text { font-family: Figtree, sans-serif; }
 <!-- ============ 12. PLANOS ============ -->
 <section class="chapter">
   <div class="kicker"><span class="n">12</span>Planos e licença<span class="trail"></span></div>
-  <h1>Comece grátis, <em>cresça quando precisar</em></h1>
+  <h1>Comece grátis, <em>cresça com a gente</em></h1>
   <div class="grid2">
     <div class="card"><h3>Lite</h3><p><span class="tag">grátis, para sempre</span></p><ul><li>1 site (1 funil)</li><li>Todos os recursos do painel</li><li>Meta, GA4 e Google Ads pelo servidor</li><li>CRM, WhatsApp e checkout com Pix</li></ul></div>
     <div class="card"><h3>Pro</h3><p><span class="tag blue">R$ 45, pagamento único</span></p><ul><li>Sites ilimitados</li><li>Visão por cliente, com todos os funis somados</li><li>Vitalício: atualizações e uso para sempre</li><li>Até 2 instalações e 7 dias de teste grátis</li></ul></div>
