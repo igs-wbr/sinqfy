@@ -188,7 +188,7 @@ async function behavior(site, e, url, now) {
     ON CONFLICT(site, date, path, device) DO UPDATE SET views=page_reads.views+EXCLUDED.views, active_ms=page_reads.active_ms+EXCLUDED.active_ms,
     d25=page_reads.d25+EXCLUDED.d25, d50=page_reads.d50+EXCLUDED.d50, d75=page_reads.d75+EXCLUDED.d75, d100=page_reads.d100+EXCLUDED.d100`, [...key, views, ms, hit(1), hit(2), hit(3), hit(4)]]);
   const cells = new Map(), targets = new Map(), add = (m, k) => m.set(k, (m.get(k) || 0) + 1);
-  for (const c of e.k.slice(0, 50)) {
+  for (const c of e.k.slice(0, 200)) { // o snippet manda o resumo antes de 2500 bytes de cliques: até ~100 cliques curtos
     if (!Array.isArray(c)) continue;
     add(cells, `${int(c[0], 0, 99) / 5 | 0},${int(c[1], 0, 99) / 2 | 0}`); // grade de 20 colunas (5% da largura) por 50 linhas (2% da altura)
     const label = clickLabel(c[5]), dest = clickDest(c[6]); // só a, button ou [role=button] sem data-rastro trazem texto ou destino

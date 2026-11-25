@@ -17,18 +17,18 @@ await req('/sites/lp/integrations', { cookie: admin, form: { action: 'capi', pix
 const beacon = (body, ua = CHROME) => fetch(base + '/e', { method: 'POST', body: JSON.stringify({ s: 'lp', ...body }), headers: { 'user-agent': ua } });
 
 function runSnippet() {
-  const beacons = [], on = {}, doc = { scrollHeight: 4000 };
+  const beacons = [], sizes = [], on = {}, doc = { scrollHeight: 4000 };
   const g = {
     document: { currentScript: { src: 'https://t.lp.dev/s.js', dataset: { site: 'lp' } }, referrer: '', cookie: '', hidden: false, documentElement: doc, addEventListener: (t, fn) => (on[t] = fn) },
     window: { addEventListener: (t, fn) => (on['w' + t] = fn) }, history: { pushState() {} },
     location: { href: 'https://lp.dev/oferta?utm_source=x', origin: 'https://lp.dev', pathname: '/oferta', search: '?utm_source=x', host: 'lp.dev', hostname: 'lp.dev' },
-    screen: { width: 390 }, innerWidth: 390, innerHeight: 800, scrollY: 0, localStorage: {}, URL, URLSearchParams, JSON, Math, Date,
-    navigator: { sendBeacon: (u, b) => beacons.push(JSON.parse(b)) },
+    screen: { width: 390 }, innerWidth: 390, innerHeight: 800, scrollY: 0, localStorage: {}, URL, URLSearchParams, JSON, Math, Date, Blob,
+    navigator: { sendBeacon: (u, b) => { sizes.push(Buffer.byteLength(b)); beacons.push(JSON.parse(b)); } },
   };
   vm.runInNewContext(readFileSync(new URL('../public/s.js', import.meta.url), 'utf8'), g);
   const hide = () => { g.document.hidden = true; on.visibilitychange(); };
   const show = () => { g.document.hidden = false; on.visibilitychange(); };
-  return { beacons, on, g, doc, hide, show };
+  return { beacons, sizes, on, g, doc, hide, show };
 }
 const node = (tagName, { id = '', cls, text, href, rastro, parent } = {}) => {
   const el = { tagName, id, classList: cls ? [cls] : [], textContent: text, href, attributes: [], dataset: { rastro }, parent };
@@ -53,9 +53,9 @@ test('snippet: resumo de saída com rolagem, tempo ativo e cliques; data-rastro 
   s.on.click({ target: node('DIV', { cls: 'hero' }), clientX: 300, pageY: 50 });
   s.hide();
   const b = s.beacons.at(-1);
-  assert.deepEqual([b.s, b.u, b.w, b.d], ['lp', 'https://lp.dev/oferta?utm_source=x', 390, [-1, 2]]);
+  assert.deepEqual([b.s, b.u, b.w, b.d], ['lp', 'https://lp.dev/oferta', 390, [-1, 2]], 'sem query string');
   assert.ok(b.a >= 0 && !b.n && !b.i, 'beacon de comportamento não é evento');
-  assert.deepEqual(b.k[0], [50, 50, 'BUTTON', 'comprar', null, 'Quero  comprar', null], 'clique dentro do botão conta para o botão');
+  assert.deepEqual(b.k[0], [50, 50, 'BUTTON', 'comprar', '', 'Quero  comprar', null], 'clique dentro do botão conta para o botão');
   assert.deepEqual(b.k[1].slice(0, 6), [2, 99, 'A', '', 'cta', 'Fale conosco']);
   assert.ok(!b.k[2][5] && !b.k[2][6], 'com data-rastro: só a posição');
   assert.deepEqual([b.k[3][2], b.k[3][4], !b.k[3][5]], ['DIV', 'hero', true]);
@@ -73,7 +73,7 @@ test('snippet: na troca de rota (SPA) o resumo vai com o endereço da página qu
   Object.assign(s.g.location, { href: 'https://lp.dev/precos', pathname: '/precos', search: '' });
   s.g.history.pushState({}, '', '/precos');
   const [flush, pv] = s.beacons.slice(1);
-  assert.deepEqual([flush.u, flush.d[0], flush.k.length], ['https://lp.dev/oferta?utm_source=x', -1, 1]);
+  assert.deepEqual([flush.u, flush.d[0], flush.k.length], ['https://lp.dev/oferta', -1, 1]);
   assert.equal(pv.u, 'https://lp.dev/precos');
   s.hide();
   assert.deepEqual([s.beacons.at(-1).u, s.beacons.at(-1).d[0], s.beacons.at(-1).k.length], ['https://lp.dev/precos', -1, 0], 'página nova começa do zero');
@@ -128,4 +128,18 @@ test('tela Comportamento: páginas, mapa, elementos e retorno só com _rid', asy
   assert.doesNotMatch(desk.text, /Quero comprar/, 'lista por aparelho');
   assert.match((await req('/sites/lp/behavior?device=__proto__&page=/nada', { cookie: admin })).text, /Nenhum clique/);
   assert.match((await req('/sites/lp/traffic', { cookie: admin })).text, /href="\/sites\/lp\/behavior[^"]*"/, 'item no menu de Tráfego');
+});
+
+test('snippet: o resumo nunca passa de 4096 bytes (limite do Worker e do app); cliques demais saem em mais de um envio', () => {
+  const s = runSnippet(), big = 'ção"\u0001\n'.repeat(400), id = 'x'.repeat(500);
+  const href = 'https://pay.hotmart.com/' + 'ç'.repeat(300) + '?off=abc&utm_source=' + 'y'.repeat(800) + '#topo';
+  for (let i = 0; i < 300; i++) s.on.click({ target: node(i % 2 ? 'A' : 'BUTTON', { id, cls: id, text: big, href }), clientX: 1, pageY: 1 });
+  s.hide();
+  const reads = s.beacons.filter(b => b.k), sizes = s.sizes.filter((_, i) => s.beacons[i].k);
+  assert.ok(reads.length > 1, 'mandou antes de encher');
+  assert.ok(Math.max(...sizes) < 4096, `maior resumo com ${Math.max(...sizes)} bytes`);
+  assert.equal(reads.reduce((n, b) => n + b.k.length, 0), 300, 'nenhum clique perdido');
+  assert.deepEqual(reads.map(b => b.d[0]), [-1, ...reads.slice(1).map(() => 0)], 'a leitura conta uma vez só');
+  const a = reads[0].k.find(c => c[2] === 'A');
+  assert.ok(!a[6].includes('?') && !a[6].includes('#') && a[6].length <= 150 && a[5].length <= 60 && a[3].length <= 60, 'destino sem query string; texto, id e destino cortados');
 });

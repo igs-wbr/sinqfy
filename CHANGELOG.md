@@ -16,7 +16,7 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 - Google Ads em Integrações: compras aprovadas e eventos escolhidos vão ao Google Ads como conversões, pela Data Manager API, com `gclid`/`gbraid`/`wbraid` e e-mail e telefone em SHA-256. Order bump e upsell do mesmo comprador viram uma conversão só, como na Meta, e quem clicou em anúncio da Meta e do Google tem a compra enviada só para o último clique. Login por conta de serviço do Google Cloud, com a chave cifrada no banco (ADR 0024).
 
 ### Mudou
-- O snippet `s.js` passa a ter até 4 KB (era 3,25 KB): 3913 bytes, ou 2105 com gzip (eram 1783). Tudo continua num arquivo só, sem mudança no Worker da borda.
+- O snippet `s.js` passa a ter até 4 KB (era 3,25 KB): 4030 bytes, ou 2165 com gzip (eram 1783). Tudo continua num arquivo só, sem mudança no Worker da borda.
 
 ### Melhorou
 - Purchase na Meta: quando a venda não traz endereço e não há local do clique no checkout, a UF vai pelo DDD do celular brasileiro (em hash), o que melhora a qualidade da correspondência das compras sem clique.
