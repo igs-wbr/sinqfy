@@ -9,7 +9,7 @@ const PUBLIC_KEY = createPublicKey({ key: Buffer.from('MCowBQYDK2VwAyEASzabJd+Mz
 export const TRIAL_DAYS = 7, FREE_SITES = 1;
 export const PRICE = 'R$ 97';
 /** Página de venda do Pro. Vazia, o botão "Comprar licença" não aparece. */
-export const BUY_URL = '';
+export const BUY_URL = 'https://pay.hub.la/g7FNkfPdKTNHTKrkSC7E';
 /** Onde o comprador pega a chave depois de pagar (src/routes/store.js, na instalação do autor). */
 export const REDEEM_URL = 'https://painel.sinqfy.app/licenca';
 /** Pacote da versão mais recente (.github/workflows/release.yml) e instalador de um comando (deploy/instalar.sh). */
