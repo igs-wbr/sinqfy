@@ -323,7 +323,7 @@ details.data summary{cursor:pointer;display:inline-flex;align-items:center;min-h
 .pick .opt{display:flex;align-items:center;gap:10px}.pick [role=listbox]{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);display:grid;gap:2px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);max-height:60vh;overflow:auto}
 .pick [role=listbox] .opt{min-height:40px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:14px}.pick [role=listbox] .opt:hover{background:var(--surface2)}
 .pick:has(.sr:focus-visible) summary{outline:2px solid var(--ring);outline-offset:2px}
-.mono{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;color:var(--surface);font-size:11px;font-weight:700;line-height:1;flex:none}
+.pick img,.conn img{border-radius:4px;flex:none}.conn{display:grid;gap:8px;margin-top:12px}.conn label{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);cursor:pointer}.conn label:hover{border-color:var(--muted)}.conn .muted{margin-left:auto;font-size:13px}@media (prefers-color-scheme:dark){:root:not([data-theme=light]) img.inv{filter:invert(1)}}:root[data-theme=dark] img.inv{filter:invert(1)}
 /* páginas sem barra (login, convite) */
 body.bare{background:var(--bg)}
 .auth{max-width:440px;margin:0 auto;padding:12vh 16px 40px}.auth>.brand{margin:0 0 20px;padding:0}.bare main{padding:0}.auth .card{padding:32px;border:0;box-shadow:var(--shadow)}
@@ -455,7 +455,9 @@ function dark(){return h.dataset.theme?h.dataset.theme==='dark':mq.matches}
 function meta(){var m=d.querySelector('meta[name=theme-color]');if(m)m.content=dark()?'#0F0F10':'#F4F4F5'}
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function side(){var b=d.querySelector('.collapse');if(!b)return;var mini=h.dataset.side==='mini';b.setAttribute('aria-expanded',String(!mini));b.setAttribute('aria-label',mini?'Expandir menu':'Recolher menu')}
-d.addEventListener('change',function(e){var p=e.target.closest&&e.target.closest('.pick');if(p&&p.querySelector('details'))p.querySelector('details').open=false});
+d.addEventListener('change',function(e){var p=e.target.closest&&e.target.closest('.pick');if(!p)return;if(p.querySelector('details'))p.querySelector('details').open=false;
+// A mesma loja nos outros seletores da página (URL do webhook e segredo), quando ela existe lá.
+d.querySelectorAll('.pick input[data-k="'+e.target.dataset.k+'"]').forEach(function(x){x.checked=true})});
 if(innerWidth<600)d.querySelectorAll('details.filters').forEach(function(x){x.open=false});side();if(mq.addEventListener)mq.addEventListener('change',meta);
 d.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;
 if(b.dataset.act==='copy'){var i=d.getElementById(b.dataset.for);if(i){i.select();try{navigator.clipboard.writeText(i.value)}catch(x){d.execCommand('copy')}b.textContent='Código copiado'}return}
