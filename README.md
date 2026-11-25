@@ -118,7 +118,7 @@ O que mudou em cada versão está no [CHANGELOG](CHANGELOG.md) e nos [releases](
 ## Planos
 
 - **Grátis, para sempre:** 1 site (1 funil) com todos os recursos.
-- **Pro, R$ 97 em pagamento único:** sites ilimitados, visão somada por cliente, até 2 instalações, atualizações por 12 meses e 7 dias de teste grátis. A chave é ativada em Plano, no menu da conta, e validada sem depender de internet.
+- **Pro, R$ 97 em pagamento único:** sites ilimitados, visão somada por cliente, até 2 instalações, vitalício (atualizações e uso para sempre, sem mensalidade) e 7 dias de teste grátis. A chave é ativada em Plano, no menu da conta, e validada sem depender de internet.
 
 ## Licença
 

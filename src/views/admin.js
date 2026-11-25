@@ -124,11 +124,11 @@ ${notice(err, true)}${inviteLink ? notice(html`Agência <b>${agency}</b> criada.
 // ---------- plano (ADR 0022) ----------
 const FREE_FEATURES = ['1 site (funil)', 'Rastreamento sem cookies de terceiros', 'Conversions API da Meta e GA4', 'Webhooks de vendas (Hotmart, Kiwify, Eduzz e outros)',
   'Campanhas, funis, caminhos e atribuição', 'CRM, contatos e WhatsApp', 'Recuperação de venda e públicos', 'Painel no celular', 'Todos os recursos incluídos'];
-const PRO_FEATURES = ['Tudo do Grátis, mais:', 'Sites ilimitados', 'Visão somada por cliente e comparação de funis', 'Use em até 2 instalações', 'Atualizações por 12 meses, uso para sempre', '7 dias grátis, depois pague uma vez'];
+const PRO_FEATURES = ['Tudo do Grátis, mais:', 'Sites ilimitados', 'Visão somada por cliente e comparação de funis', 'Use em até 2 instalações', 'Vitalício: atualizações e uso para sempre', '7 dias grátis, depois pague uma vez'];
 const day = ts => new Date(Number(ts)).toLocaleDateString('pt-BR');
 
 export function planPage(ctx, plan, { price, buyUrl, redeemUrl, sites, free, msg, err }) {
-  const status = plan.license ? html`Plano <b>Pro</b>${plan.license.to ? html`, licenciado para <b>${plan.license.to}</b>` : ''}${plan.license.updates ? html`. Atualizações até ${day(plan.license.updates)}` : ''}.`
+  const status = plan.license ? html`Plano <b>Pro</b>${plan.license.to ? html`, licenciado para <b>${plan.license.to}</b>` : ''}.`
     : plan.trial ? html`Teste do <b>Pro</b> até ${day(plan.trialEnds)}. Depois disso, o painel volta a abrir só o primeiro site (${free?.name || '-'}), e os outros continuam coletando.`
       : html`Plano <b>Grátis</b>: o painel abre 1 site (${free?.name || '-'}). ${sites > 1 ? `Os outros ${sites - 1} continuam coletando visitas e vendas, só o painel deles fica bloqueado.` : ''}`;
   return layout(ctx, 'Plano', html`${pageHead('Instalação · Plano', raw('Pague <em>uma vez</em>'), status)}
