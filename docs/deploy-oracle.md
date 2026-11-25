@@ -209,10 +209,10 @@ O banco é copiado todo dia, cifrado, para o R2 da Cloudflare (grátis até 10 G
    Crie dois "remotes":
    - `r2`: tipo **s3**, provider **Cloudflare**, as chaves do token do R2, endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`.
    - `r2crypt`: tipo **crypt**, apontando para `r2:sinqfy-backups`, com uma senha forte **guardada fora da máquina**.
-3. Teste e agende para as 4h da manhã:
+3. Teste e agende para as 4h da manhã (com `bash` na frente, o agendamento não depende da permissão de execução, que se perde quando o código é copiado sem ela):
    ```bash
-   chmod +x ~/sinqfy/deploy/backup.sh && ~/sinqfy/deploy/backup.sh
-   (crontab -l 2>/dev/null; echo "0 4 * * * $HOME/sinqfy/deploy/backup.sh") | crontab -
+   bash ~/sinqfy/deploy/backup.sh
+   (crontab -l 2>/dev/null; echo "0 4 * * * bash $HOME/sinqfy/deploy/backup.sh") | crontab -
    ```
 
 **Restaurar um backup:** `rclone copy r2crypt:sinqfy-AAAA-MM-DD.sql.gz .` e depois `gunzip -c sinqfy-AAAA-MM-DD.sql.gz | docker compose exec -T postgres psql -U rastro rastro`.
