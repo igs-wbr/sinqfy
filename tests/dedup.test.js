@@ -56,8 +56,8 @@ function snippet({ mirror = false, cookie = '' } = {}) {
   let clock = 1_800_000_000_000;
   const win = { addEventListener() {}, ...(mirror && { fbq: (...a) => pixel.push(a) }) };
   const ctx = {
-    document: { currentScript: { src: 'https://t.dd.dev/s.js', dataset: { site: 'dd', ...(mirror && { pixel: 'mirror' }) } }, referrer: '', cookie, addEventListener: (t, fn) => (on[t] = fn) },
-    window: win, location: { href: 'https://dd.dev/', pathname: '/', search: '', host: 'dd.dev', hostname: 'dd.dev' }, history: { pushState() {} },
+    document: { currentScript: { src: 'https://t.dd.dev/s.js', dataset: { site: 'dd', ...(mirror && { pixel: 'mirror' }) } }, referrer: '', cookie, documentElement: { scrollHeight: 800 }, addEventListener: (t, fn) => (on[t] = fn) },
+    window: win, scrollY: 0, innerHeight: 800, location: { href: 'https://dd.dev/', origin: 'https://dd.dev', pathname: '/', search: '', host: 'dd.dev', hostname: 'dd.dev' }, history: { pushState() {} },
     screen: { width: 390 }, localStorage: {}, URL, URLSearchParams, JSON, Math, Date: { now: () => clock },
     navigator: { sendBeacon: (u, b) => beacons.push(JSON.parse(b)) }, fbq: win.fbq,
   };
@@ -98,7 +98,8 @@ test('navegador: pageview de rotas diferentes nunca é segurada', () => {
   const s = snippet();
   Object.assign(s.loc, { pathname: '/b', href: 'https://dd.dev/b' }); s.hist.pushState();
   Object.assign(s.loc, { pathname: '/c', href: 'https://dd.dev/c' }); s.hist.pushState();
-  assert.equal(s.beacons.filter(b => !b.n).length, 3);
+  assert.equal(s.beacons.filter(b => !b.n && !b.k).length, 3);
+  assert.deepEqual(s.beacons.filter(b => b.k).map(b => b.u), ['https://dd.dev/', 'https://dd.dev/b'], 'resumo de saída de cada rota que ficou para trás');
 });
 
 // ---------- servidor: eventos do site ----------

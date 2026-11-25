@@ -81,6 +81,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
   let url;
   try { url = new URL(e.u); } catch { return 400; }
   if (!allowedHost(site, url.hostname)) return 403; // beacon de um domínio que não é do site
+  if (Array.isArray(e.k)) return behavior(site, e, url, now);
   const name = e.n == null || e.n === 'pageview' ? 'pageview' : String(e.n).trim().slice(0, 64);
   if (!name) return 400;
   if (/^video_\d+$/.test(name) && !enabled(site, 'video')) return 202; // retenção de vídeo desligada: o snippet manda, o painel ignora
@@ -98,8 +99,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
     s.channel = channel(s);
   }
 
-  let path = url.pathname; // query string nunca é gravada (só as UTMs acima)
-  try { path = decodeURI(path); } catch {}
+  const path = pathOf(url);
   let props = null;
   if (e.p && typeof e.p === 'object' && !Array.isArray(e.p)) {
     const entries = Object.entries(e.p).slice(0, 20).map(([k, v]) => [String(k).slice(0, 50), String(v).slice(0, 200)]);
@@ -115,7 +115,7 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
   const ev = { name, ts: now, rid: consent && edge?.rid || null, visitor, event_id: eventId,
     fbc: consent && (edge?.fbc || fbcOf(q.get('fbclid'), now)) || null, fbp: consent && edge?.fbp || null,
     revenue: v >= 0 && v < 1e9 ? Math.round(v * 100) / 100 : null, country };
-  await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path.slice(0, 512), s.referrer, s.channel,
+  await db.run(INSERT, [site.id, localDate(now, site.timezone), now, visitor, s.session, name, path, s.referrer, s.channel,
     ...UTM.map(k => s[k]), screenClass(Number(e.w)), browser, os,
     /^[A-Z]{2}$/.test(country) && country !== 'XX' ? country : '??', props, ev.revenue, ev.rid, eventId, ev.fbc, ev.fbp, ...CLICKS.map(k => consent ? click(k) : null),
     consent ? ua.slice(0, 300) : null, url.host.slice(0, 253), consent ? clientId : null]);
@@ -140,5 +140,62 @@ export async function record({ body, ua, ip, country, edge, geo }, now = Date.no
     await upsertContact(site, { ...l, rid: ev.rid, fbc: ev.fbc, fbp: ev.fbp, source: 'site', utm: { source: s.utm_source, campaign: s.utm_campaign },
       campaign_key: adKey(s.utm_campaign), adset_key: adKey(s.utm_medium), ad_key: adKey(s.utm_content), note: 'Formulário do site' }, now);
   }
+  return 202;
+}
+
+/** Caminho sem query string (nunca gravada; só as UTMs vão para o evento). */
+function pathOf(url) {
+  let path = url.pathname;
+  try { path = decodeURI(path); } catch {}
+  return path.slice(0, 512);
+}
+
+// ---------- comportamento (ADR 0025): rolagem, tempo ativo e cliques, só em somas ----------
+const int = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.trunc(Number(v)) || 0));
+/** Texto do botão ou link, sem nada que pareça e-mail ou telefone. */
+export const clickLabel = t => typeof t !== 'string' ? '' : t.replace(/\s+/g, ' ').trim().replace(/\S+@\S+/g, '…').replace(/\+?\(?\d[\d\s().-]{6,}\d/g, '…').slice(0, 60);
+/** Destino do link sem query string; e-mail, telefone e WhatsApp só pelo tipo, nunca o endereço ou o número. */
+export function clickDest(href) {
+  if (typeof href !== 'string' || !href) return '';
+  if (/^mailto:/i.test(href)) return 'e-mail';
+  if (/^tel:/i.test(href)) return 'telefone';
+  try {
+    const u = new URL(href);
+    if (!/^https?:$/.test(u.protocol)) return '';
+    const host = u.hostname.replace(/^www\./, '');
+    if (/(^|\.)(wa\.me|whatsapp\.com)$/.test(host)) return 'WhatsApp';
+    let p = u.pathname;
+    try { p = decodeURI(p); } catch {}
+    return (host + (p === '/' ? '' : p)).slice(0, 200);
+  } catch { return ''; }
+}
+const NAME_RE = /^[\w-]{1,40}$/;
+/** Seletor curto: tag mais #id ou .classe, se passarem no filtro. */
+export function clickSel(tag, id, cls) {
+  if (typeof tag !== 'string' || !/^[a-z][a-z0-9-]{0,19}$/i.test(tag)) return '';
+  return tag.toLowerCase() + (typeof id === 'string' && NAME_RE.test(id) ? '#' + id : typeof cls === 'string' && NAME_RE.test(cls) ? '.' + cls : '');
+}
+/**
+ * Beacon de comportamento, que o snippet manda quando a aba some ou a rota muda:
+ * { d: [faixa já enviada (-1 na primeira vez), faixa máxima 0..4], a: ms com a aba visível, k: [[x%, y%, tag, id, classe, texto, destino], …] }.
+ * Vira só somas por dia, página e aparelho: nada por visitante, então vale com ou sem consentimento.
+ */
+async function behavior(site, e, url, now) {
+  const path = pathOf(url), w = Number(e.w), key = [site.id, localDate(now, site.timezone), path, w > 0 && w < 768 ? 'm' : 'd'], ops = [];
+  const [from, to] = Array.isArray(e.d) ? [int(e.d[0], -1, 4), int(e.d[1], 0, 4)] : [0, 0];
+  const hit = t => from < t && t <= to ? 1 : 0, ms = int(e.a, 0, 30 * 60e3), views = from < 0 ? 1 : 0;
+  if (views || ms || to > from) ops.push([`INSERT INTO page_reads(site, date, path, device, views, active_ms, d25, d50, d75, d100) VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(site, date, path, device) DO UPDATE SET views=page_reads.views+EXCLUDED.views, active_ms=page_reads.active_ms+EXCLUDED.active_ms,
+    d25=page_reads.d25+EXCLUDED.d25, d50=page_reads.d50+EXCLUDED.d50, d75=page_reads.d75+EXCLUDED.d75, d100=page_reads.d100+EXCLUDED.d100`, [...key, views, ms, hit(1), hit(2), hit(3), hit(4)]]);
+  const cells = new Map(), targets = new Map(), add = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  for (const c of e.k.slice(0, 50)) {
+    if (!Array.isArray(c)) continue;
+    add(cells, `${int(c[0], 0, 99) / 5 | 0},${int(c[1], 0, 99) / 2 | 0}`); // grade de 20 colunas (5% da largura) por 50 linhas (2% da altura)
+    const label = clickLabel(c[5]), dest = clickDest(c[6]); // só a, button ou [role=button] sem data-rastro trazem texto ou destino
+    if (label || dest) add(targets, JSON.stringify([clickSel(c[2], c[3], c[4]), label, dest]));
+  }
+  for (const [k, n] of cells) ops.push(['INSERT INTO click_cells(site, date, path, device, x, y, n) VALUES (?,?,?,?,?,?,?) ON CONFLICT(site, date, path, device, x, y) DO UPDATE SET n=click_cells.n+EXCLUDED.n', [...key, ...k.split(',').map(Number), n]]);
+  for (const [k, n] of targets) ops.push(['INSERT INTO click_targets(site, date, path, device, sel, label, dest, n) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(site, date, path, device, sel, label, dest) DO UPDATE SET n=click_targets.n+EXCLUDED.n', [...key, ...JSON.parse(k), n]]);
+  if (ops.length) await db.batch(ops);
   return 202;
 }

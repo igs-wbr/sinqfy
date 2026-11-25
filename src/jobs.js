@@ -20,7 +20,8 @@ export async function runJobs() {
   // Retenção (ADR 0013): contatos sem atualização e eventos com mais de 13 meses; histórico de contato apagado junto.
   const old = Date.now() - 395 * 864e5;
   await db.batch([['DELETE FROM crm_log WHERE contact_id IN (SELECT id FROM contacts WHERE updated<?)', [old]], ['DELETE FROM contacts WHERE updated<?', [old]],
-    ['DELETE FROM events WHERE ts<?', [old]], ['DELETE FROM messages WHERE ts<?', [Date.now() - 90 * 864e5]], ['DELETE FROM wa_clicks WHERE ts<?', [old]]]); // mensagens: 90 dias
+    ['DELETE FROM events WHERE ts<?', [old]], ['DELETE FROM messages WHERE ts<?', [Date.now() - 90 * 864e5]], ['DELETE FROM wa_clicks WHERE ts<?', [old]],
+    ...['page_reads', 'click_cells', 'click_targets'].map(t => [`DELETE FROM ${t} WHERE date<?`, [new Date(old).toISOString().slice(0, 10)]])]); // mensagens: 90 dias; comportamento: 13 meses, como os eventos
   if (cfReady()) for (const s of [...sites.values()].filter(s => s.edge_host && (s.edge_status === 'dns' || s.edge_status === 'ssl'))) await checkHost(s); // erro só com Verificar agora
   // Gasto a cada rodada (5 min); contas com erro também tentam de novo a cada rodada.
   // Conta que bateu no limite da Meta fica parada até sync_after.

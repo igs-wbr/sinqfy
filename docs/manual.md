@@ -61,6 +61,7 @@ O menu da esquerda muda conforme os recursos ligados no site (veja [Recursos](#r
 | **Tempo real** | Acompanhar um lançamento ou uma live | Quem está no site nos últimos 5 minutos e a atividade minuto a minuto |
 | **Funis** | Descobrir em qual etapa as pessoas desistem | Funis que você monta com páginas (`/checkout`) ou eventos (`evento:Lead`, `evento:video_50`) |
 | **Caminhos** | Ver o trajeto real das visitas | As 5 primeiras páginas de cada visita, em fluxo |
+| **Comportamento** | Saber se a página é lida e onde clicam | Rolagem (25/50/75/100%) e tempo ativo por página, mapa de cliques por celular e computador, links e botões mais clicados e o retorno em 1, 7 e 30 dias (só visitantes com cookie) |
 | **Atribuição** | Comparar quem leva o crédito pela conversão | Primeiro clique contra último clique, por canal e campanha |
 
 ### Relacionamento

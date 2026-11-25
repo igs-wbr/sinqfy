@@ -5,6 +5,7 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 ## [Não lançado]
 
 ### Novo
+- Tráfego → Comportamento: até onde cada página é lida (25, 50, 75 e 100% da rolagem), tempo com a aba visível, mapa de cliques por celular e computador, links e botões mais clicados (captura automática, sem virar evento de conversão) e o retorno em 1, 7 e 30 dias dos visitantes com cookie. Tudo em somas por dia, página e aparelho, sem nada por visitante (ADR 0025). O snippet passa a ter até 4 KB.
 - Google Ads em Integrações: compras aprovadas e eventos escolhidos vão ao Google Ads como conversões, pela Data Manager API, com `gclid`/`gbraid`/`wbraid` e e-mail e telefone em SHA-256. Order bump e upsell do mesmo comprador viram uma conversão só, como na Meta, e quem clicou em anúncio da Meta e do Google tem a compra enviada só para o último clique. Login por conta de serviço do Google Cloud, com a chave cifrada no banco (ADR 0024).
 
 ### Melhorou
