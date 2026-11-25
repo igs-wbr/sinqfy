@@ -16,8 +16,8 @@ Um painel único para quem vende online e anuncia, com três perguntas respondid
 
 | Área | O que faz | Código |
 |---|---|---|
-| Rastreamento | Snippet de ~1,4 KB: pageviews, eventos, receita, SPA, propagação de UTMs para o checkout | `public/s.js`, `src/tracking/ingest.js` |
-| Tráfego | Visão geral, tempo real, funis, jornadas, atribuição de eventos | `src/tracking/stats.js`, `src/views/traffic.js` |
+| Rastreamento | Snippet de até 4 KB: pageviews, eventos, receita, SPA, propagação de UTMs para o checkout, rolagem, tempo ativo e cliques | `public/s.js`, `src/tracking/ingest.js` |
+| Tráfego | Visão geral, tempo real, funis, jornadas, comportamento (rolagem, tempo ativo, mapa de cliques, retorno), atribuição de eventos | `src/tracking/stats.js`, `src/views/traffic.js` |
 | Vendas | Webhooks da Hotmart, Kiwify, Eduzz e formato genérico; status atualizado a cada evento | `src/sales/webhooks.js` |
 | Métricas de venda | Faturamento, lucro, ROAS, ROI, CPA, margem, reembolso, chargeback, meios de pagamento | `src/sales/stats.js` |
 | Anúncios | Sync da Meta Marketing API (somente leitura), de hora em hora via `/cron` | `src/ads/meta.js` |
@@ -61,6 +61,7 @@ Banco libSQL (dialeto SQLite): Turso em produção e arquivo local em desenvolvi
 | Tabela | Uma linha por… |
 |---|---|
 | `events` | pageview ou evento do snippet (sem IP, sem query string) |
+| `page_reads`, `click_cells`, `click_targets` | dia × página × aparelho: somas de rolagem e tempo ativo, cliques na grade 20 × 50 e cliques por link ou botão ([ADR 0025](adr/0025-comportamento-agregado.md)) |
 | `sales` | pedido de uma plataforma (`UNIQUE(site, platform, order_id)`), sem dados pessoais |
 | `ad_spend` | dia × campanha × conjunto × anúncio × plataforma |
 | `ad_entities` | campanha, conjunto ou anúncio da Meta (nome, status, orçamento) |
@@ -81,5 +82,5 @@ Cada item tem um motivo:
 ## Critérios de aceite
 
 - `npm test` passa: 20 testes cobrindo snippet, ingestão, sessões, webhooks das 4 plataformas, CAPI, sync da Meta (simulada), métricas, campanhas, papéis, link público, auto-refresh, cron e segurança.
-- O snippet tem menos de 2 KB.
+- O snippet tem menos de 4 KB (ADR 0025).
 - Nenhuma linha do banco contém IP, e-mail ou telefone.

@@ -18,22 +18,22 @@ await req('/sites', { cookie: admin, form: { id: 'sess', name: 'Sess', timezone:
 
 function runSnippet({ search = '', referrer = 'https://google.com/', cookie = '', consent } = {}) {
   const src = readFileSync(new URL('../public/s.js', import.meta.url), 'utf8');
-  const beacons = [], ids = [], on = {}, store = {};
-  const loc = { href: `https://blog.dev/a${search}`, pathname: '/a', search, host: 'blog.dev', hostname: 'blog.dev' };
+  const beacons = [], ids = [], on = {}, store = {}, reads = [];
+  const loc = { href: `https://blog.dev/a${search}`, origin: 'https://blog.dev', pathname: '/a', search, host: 'blog.dev', hostname: 'blog.dev' };
   const hist = { pushState() {} }, win = { addEventListener: (t, fn) => (on['w' + t] = fn) };
   vm.runInNewContext(src, {
-    document: { currentScript: { src: 'https://stats.dev/s.js', dataset: { site: 'blog', ...(consent && { consent }) } }, referrer, cookie, addEventListener: (t, fn) => (on[t] = fn) },
-    window: win, location: loc, history: hist, screen: { width: 1280 }, localStorage: store, URL, URLSearchParams, JSON,
-    navigator: { sendBeacon: (u, b) => { const o = JSON.parse(b); ids.push(o.i); delete o.i; beacons.push([u, o]); } },
+    document: { currentScript: { src: 'https://stats.dev/s.js', dataset: { site: 'blog', ...(consent && { consent }) } }, referrer, cookie, documentElement: { scrollHeight: 800 }, addEventListener: (t, fn) => (on[t] = fn) },
+    window: win, location: loc, history: hist, screen: { width: 1280 }, scrollY: 0, innerHeight: 800, localStorage: store, URL, URLSearchParams, JSON,
+    navigator: { sendBeacon: (u, b) => { const o = JSON.parse(b); if (o.k) return reads.push(o); ids.push(o.i); delete o.i; beacons.push([u, o]); } }, // resumo de saída: tests/behavior.test.js
   });
-  return { src, beacons, ids, on, store, loc, hist, win };
+  return { src, beacons, ids, on, store, loc, hist, win, reads };
 }
 const el = (attrs, tagName = 'BUTTON') => ({ tagName, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })), dataset: { rastro: attrs['data-rastro'] }, closest(sel) { return sel === '[data-rastro]' && attrs['data-rastro'] ? this : null; } });
 const anchor = (href, attrs = {}) => ({ tagName: 'A', href, hasAttribute: n => Object.hasOwn(attrs, n), closest(sel) { return sel === 'a[href]' ? this : null; } });
 
-test('snippet: < 3,25 KB, pageview, SPA, eventos, opt-out', () => {
+test('snippet: < 4 KB, pageview, SPA, eventos, opt-out', () => {
   const { src, beacons, on, store, loc, hist, win } = runSnippet();
-  assert.ok(Buffer.byteLength(src) < 3328, `snippet com ${Buffer.byteLength(src)} bytes`);
+  assert.ok(Buffer.byteLength(src) < 4096, `snippet com ${Buffer.byteLength(src)} bytes`);
   assert.deepEqual(beacons[0], ['https://stats.dev/e', { s: 'blog', u: loc.href, r: 'https://google.com/', w: 1280 }]);
   Object.assign(loc, { href: 'https://blog.dev/b', pathname: '/b', search: '' });
   hist.pushState({}, '', '/b'); hist.pushState({}, '', '/b');

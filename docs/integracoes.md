@@ -25,6 +25,7 @@ O snippet:
 - dispara eventos em qualquer elemento com `data-rastro="nome"`. Atributos `data-rastro-*` viram propriedades, e `data-rastro-revenue` vira receita. Em `<form>`, o evento conta no submit;
 - expõe a API `rastro('evento', { prop: 'valor' }, 97.90)`, e `rastro()` força uma pageview;
 - **propaga as UTMs**: ao clicar num link para outro domínio, ele copia as `utm_*` da página atual para o link (sem sobrescrever as que já existem). Para a Hotmart, que só repassa `src` e `sck`, também preenche `src = utm_source` e `sck = utm_campaign`;
+- **mede o comportamento** sem guardar nada por visitante: quando a aba some ou a rota muda, manda um resumo com a rolagem máxima, o tempo com a aba visível e os cliques (posição, tag, id ou classe e, em links e botões sem `data-rastro`, o texto e o destino). Vira só somas por dia, página e aparelho na tela Tráfego → Comportamento; não é evento de conversão e não vai para Meta, GA4 nem Google Ads. Valor de campo nunca sai do navegador ([ADR 0025](adr/0025-comportamento-agregado.md));
 - ignora `localhost` e navegadores automatizados. Para excluir as suas próprias visitas, rode `localStorage.rastro_ignore = 1`.
 
 ## 2. Template de UTM

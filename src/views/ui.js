@@ -291,6 +291,9 @@ td small,.events small{color:var(--muted)}.left th,.left td{text-align:left;whit
 .funnel .step{display:grid;grid-template-columns:32px 1fr auto;gap:8px 14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}.funnel .step:first-child{border-top:0}
 .funnel .n{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;font:600 12px var(--sans);background:var(--surface2);border:1px solid var(--line2);color:var(--ink2)}
 .funnel .track{grid-column:2/4;height:10px;border-radius:6px;background:var(--surface3);overflow:hidden}.funnel .fill{height:100%;border-radius:6px;background:var(--s1)}.funnel .meta{color:var(--muted);font:12px var(--sans);text-align:right}.funnel .meta b{color:var(--ink)}
+.heatwrap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start;margin-top:12px}@media (max-width:719px){.heatwrap{grid-template-columns:1fr}table.list.mcards td{width:auto}}
+.heat{position:relative;margin:0 auto;border:1px solid var(--line2);border-radius:12px;background:repeating-linear-gradient(180deg,var(--surface2) 0 18px,transparent 18px 30px);overflow:hidden}.heat.phone{width:200px;aspect-ratio:9/19}.heat.desk{width:320px;max-width:100%;aspect-ratio:4/5}
+.heat i{position:absolute;width:5%;height:2%;border-radius:2px;background:var(--s2)}.heat hr{position:absolute;left:0;right:0;margin:0;border:0;border-top:1px dashed var(--field)}.heat .q{position:absolute;right:6px;transform:translateY(-120%);font:11px var(--sans);color:var(--muted);background:var(--surface);padding:0 4px;border-radius:4px}
 .scroll{overflow-x:auto}.node{fill:var(--surface2);stroke:var(--line2)}.node.other{opacity:.6}.lnk{fill:var(--s1);opacity:.16}.lnk:hover{opacity:.38}.sankey text{fill:var(--ink);font:500 12px var(--sans)}.sankey text.c{fill:var(--muted);font:500 11px var(--sans)}
 .feed{list-style:none;margin:0;padding:0;max-height:540px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}.feed li{display:grid;grid-template-columns:72px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.feed li:first-child{border-top:0}.feed time{color:var(--muted);font:12px var(--mono)}.feed .ev{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-weight:500}.feed small{color:var(--muted);display:block;font-size:12px}
 .live{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font:400 13px var(--sans);color:var(--ink2);text-decoration:none}a.live:hover{border-color:var(--line2);color:var(--ink)}
@@ -537,12 +540,12 @@ const shareBar = ctx => html`<header class="sbar">${brand('?')}<strong>${ctx.sit
 const NAV = [
   { label: 'Visão', items: [['', 'Resumo', 'house'], ['/events', 'Eventos', 'activity', 'ao vivo']] },
   { label: 'Vendas', items: [['/campaigns', 'Campanhas', 'megaphone'], ['/orders', 'Pedidos', 'list'], ['/checkout', 'Checkout Pix', 'qr-code', null, 'checkout'], ['/recovery', 'Recuperação', 'refresh-cw', null, 'recovery']] },
-  { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/attribution', 'Atribuição', 'target']] },
+  { label: 'Tráfego', items: [['/traffic', 'Visão geral', 'chart-column'], ['/realtime', 'Tempo real', 'radio'], ['/funnels', 'Funis', 'funnel'], ['/journeys', 'Caminhos', 'route'], ['/behavior', 'Comportamento', 'click'], ['/attribution', 'Atribuição', 'target']] },
   { label: 'Relacionamento', items: [['/crm', 'CRM', 'square-kanban', null, 'crm'], ['/contacts', 'Contatos', 'users', null, 'crm'], ['/conversations', 'Conversas', 'message-circle', null, 'whatsapp'], ['/audiences', 'Públicos', 'target', null, 'audiences', true]] },
   { label: 'Configurar', edit: true, items: [['/setup', 'Primeiros passos', 'route'], ['/integrations', 'Integrações', 'plug'], ['/whatsapp', 'WhatsApp', 'phone', null, 'whatsapp'], ['/settings', 'Configurações', 'settings']] },
 ];
 const CLIENT_TABS = new Set(['', '/campaigns', '/orders']);
-const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/attribution']);
+const KEEP_PERIOD = new Set(['', '/campaigns', '/orders', '/traffic', '/funnels', '/journeys', '/behavior', '/attribution']);
 
 const item = (href, text, ic, cur, badge) => html`<a class="it${cur ? ' on' : ''}" href="${href}"${cur ? raw(' aria-current="page"') : ''}>${icon(ic)}<span class="t">${text}</span>${badge ? html`<span class="cnt"><i></i>${badge}</span>` : ''}</a>`;
 
