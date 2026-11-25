@@ -19,6 +19,6 @@ A chave do Pro ([ADR 0022](0022-licenca-fair-core.md)) era emitida à mão com `
 - **Pacote**: cada tag `vX.Y.Z` gera, por `.github/workflows/release.yml`, `sinqfy.zip`, `sinqfy.tar.gz` e `instalar.sh` na versão do GitHub (testes, `.github`, `.claude` e `CLAUDE.md` ficam fora, por `export-ignore`). `deploy/instalar.sh` instala o Docker se faltar, baixa a versão mais recente, gera os segredos e sobe o painel; rodar de novo atualiza. O comprador nunca precisa abrir o GitHub: o site e a página `/licenca` apontam para os links `releases/latest/download`.
 
 ## Consequências
-- A chave é validada offline: um reembolso só a desliga na versão seguinte, e quem não atualiza continua com ela (sem as atualizações). Por R$ 97 isso é aceitável; quem pedir reembolso e continuar usando viola a licença.
+- A chave é validada offline: um reembolso só a desliga na versão seguinte, e quem não atualiza continua com ela (sem as atualizações). Por R$ 45 isso é aceitável; quem pedir reembolso e continuar usando viola a licença.
 - O servidor que vende guarda a emissora, não a raiz. Quem roubar a emissora pode emitir chaves (inclusive com data antiga) até a versão que a revoga; quem não atualiza continua com elas.
 - O plano hospedado por assinatura (agência criada pelo pagamento) pode reaproveitar este webhook, com o plano por `agency_id` em vez da tabela `install`.

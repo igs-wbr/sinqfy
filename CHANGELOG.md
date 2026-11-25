@@ -4,6 +4,9 @@ Mudanças de cada versão do Sinqfy. O formato segue o [Keep a Changelog](https:
 
 ## [Não lançado]
 
+### Mudou
+- O Pro passa a custar R$ 45, em pagamento único e vitalício (era R$ 97).
+
 ## [1.3.1] - 2026-11-25
 
 ### Mudou

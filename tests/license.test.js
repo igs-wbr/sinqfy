@@ -40,7 +40,7 @@ test('Grátis: 1 site; o segundo é bloqueado no painel, o teste de 7 dias liber
   assert.equal((await req('/sites/extra/settings', { cookie: admin })).status, 200, 'configurações livres para voltar a 1 site');
 
   const plan = await req('/plano', { cookie: admin });
-  assert.match(plan.text, /R\$ 97<small>pagamento único/);
+  assert.match(plan.text, /R\$ 45<small>pagamento único/);
   assert.match(plan.text, /Teste grátis por 7 dias/);
   assert.equal((await req('/plano', { cookie: admin, form: { action: 'trial' } })).status, 303);
   assert.equal((await req('/sites/extra', { cookie: admin })).status, 200, 'teste libera');

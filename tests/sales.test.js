@@ -107,6 +107,14 @@ test('Conversions API: compra aprovada vai em hash, uma vez só', async () => {
   assert.ok(graphCalls.at(-1).pathname.endsWith('/555001/events'));
   assert.ok((await S.lastWebhooks('loja')).some(l => l.message.includes('Conversions API')));
 
+  // Hubla (webhook 2.0): valor em centavos, líquido do vendedor, rid na URL do checkout e token no cabeçalho.
+  const rid = 'abcdefghijklmnopqrstuv';
+  const hb = W.PARSERS.hubla({ type: 'invoice.payment_succeeded', event: { product: { name: 'Curso' }, user: { email: 'a@b.com' }, invoice: { id: 'inv1', status: 'paid',
+    paymentMethod: 'pix', amount: { totalCents: 9700 }, receivers: [{ role: 'seller', totalCents: 8500 }], paymentSession: { url: `https://pay.hub.la/x?rid=${rid}`, utm: { campaign: 'C|1' } } } } });
+  assert.deepEqual([hb.status, hb.gross, hb.net, hb.method, hb.rid, hb.utm.campaign], ['paid', 97, 85, 'pix', rid, 'C|1']);
+  assert.equal(W.PARSERS.hubla({ type: 'subscription.activated', event: {} }), null);
+  assert.deepEqual([W.verify('hubla', 't', '', { 'x-hubla-token': 't' }), !!W.verify('hubla', 't', '', {})], [null, true]);
+
   // Endereço do comprador da Hotmart reforça a correspondência (em hash), mesmo sem clique.
   const h = v => createHash('sha256').update(v).digest('hex');
   const addr = W.PARSERS.hotmart({ ...hotmart('HPA'), data: { ...hotmart('HPA').data, buyer: { email: 'a@b.com', address: { city: 'São Paulo', state: 'SP', zipcode: '01310-100', country_iso: 'BR' } } } });
