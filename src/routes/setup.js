@@ -13,7 +13,7 @@ export async function setupState(site, now = Date.now()) {
   const [first, cookie, sale, sent] = await Promise.all([
     db.get('SELECT ts, host FROM events WHERE site=? ORDER BY ts LIMIT 1', [site.id]),
     db.get('SELECT ts FROM events WHERE site=? AND rid IS NOT NULL ORDER BY ts DESC LIMIT 1', [site.id]),
-    db.get("SELECT ts, platform, message FROM webhook_log WHERE site=? AND ok=1 AND order_id<>'' ORDER BY id DESC LIMIT 1", [site.id]),
+    db.get("SELECT ts, platform, message FROM webhook_log WHERE site=? AND ok=1 AND order_id<>'' AND platform NOT IN ('events','leads','meta-leads','whatsapp') ORDER BY id DESC LIMIT 1", [site.id]),
     db.get("SELECT COUNT(*) n, MAX(sent_at) last FROM deliveries WHERE site=? AND dest='meta' AND status='sent' AND sent_at>?", [site.id, now - 7 * DAY]),
   ]);
   const steps = {

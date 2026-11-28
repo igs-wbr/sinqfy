@@ -96,7 +96,7 @@ export async function online(site, now = Date.now()) {
 export function browserCheckout(site, range, f) {
   const [w, a] = scope(site, range, f);
   return all(`SELECT k, COUNT(*) n, COUNT(*) FILTER (WHERE co) co FROM (SELECT MAX(browser) k, BOOL_OR(${CHECKOUT_SQL}) co
-    FROM events WHERE ${w} GROUP BY session) x GROUP BY k ORDER BY n DESC LIMIT 12`, a);
+    FROM events WHERE ${w} AND session IS NOT NULL GROUP BY session) x WHERE k<>'' GROUP BY k ORDER BY n DESC LIMIT 12`, a);
 }
 
 export const VISIT_LOOKBACK = 90;
@@ -109,7 +109,7 @@ export function visitNumber(site, range, f = {}) {
   const [w, a] = scope(site, range, f);
   const only = Object.keys(f).length ? ` AND session IN (SELECT session FROM events WHERE ${w})` : '';
   return all(`WITH s AS (SELECT rid, session, MIN(ts) t0, MIN(date) d0, BOOL_OR(${CHECKOUT_SQL}) co FROM events
-      WHERE site=? AND rid IS NOT NULL AND date BETWEEN ? AND ? GROUP BY rid, session),
+      WHERE site=? AND rid IS NOT NULL AND session IS NOT NULL AND date BETWEEN ? AND ? GROUP BY rid, session),
     n AS (SELECT *, LEAST(ROW_NUMBER() OVER (PARTITION BY rid ORDER BY t0), 4) k FROM s),
     v AS (SELECT k, COUNT(*) n, COUNT(*) FILTER (WHERE co) co FROM n WHERE d0 BETWEEN ? AND ?${only} GROUP BY k),
     b AS (SELECT k, COUNT(*) sales FROM (SELECT x.id, MAX(n.k) k FROM sales x JOIN n ON n.rid=x.rid AND n.t0<=x.ts
@@ -177,7 +177,7 @@ export function parseSteps(text) {
 export async function funnel(site, range, f, steps) {
   const [w, a] = scope(site, range, f);
   // ponytail: varre os eventos do período em JS; ok para tráfego pessoal, migrar para SQL se ficar lento.
-  const rows = await all(`SELECT session, name, path FROM events WHERE ${w} ORDER BY session, ts`, a);
+  const rows = await all(`SELECT session, name, path FROM events WHERE ${w} AND session IS NOT NULL ORDER BY session, ts`, a);
   const match = steps.map(s => {
     if (s.event) return r => r.name === s.event;
     const re = globRe(s.path);
@@ -236,7 +236,7 @@ export const ATTR_DIMS = { channel: 'Canal', referrer: 'Referência', utm_source
  */
 export async function attribution(site, range, f, event, dim) {
   const [w, a] = scope(site, range, f);
-  const [sessions, conv, [t]] = await Promise.all([all(`SELECT * FROM (SELECT DISTINCT ON (session) visitor, session, ts start, ${dim} k, channel FROM events WHERE ${w} ORDER BY session, ts) x ORDER BY visitor, start`, a),
+  const [sessions, conv, [t]] = await Promise.all([all(`SELECT * FROM (SELECT DISTINCT ON (session) visitor, session, ts start, ${dim} k, channel FROM events WHERE ${w} AND session IS NOT NULL ORDER BY session, ts) x ORDER BY visitor, start`, a),
     all(`SELECT visitor, ts, revenue FROM events WHERE ${w} AND name=?`, [...a, event]),
     all(`SELECT COUNT(DISTINCT visitor) n FROM events WHERE ${w}`, a)]);
   const byVisitor = new Map();

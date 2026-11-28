@@ -38,6 +38,38 @@ test('funil: sem período anterior ou com base pequena, não aponta gargalo', ()
   assert.ok(!compareFunnel(buildFunnel(small, { visits: 1 }, { n: 0 }, on), buildFunnel(small, { visits: 9 }, { n: 0 }, on)).some(s => s.gargalo));
 });
 
+test('funil self-serve: cadastro, 1º app e publicação no lugar de interação e checkout', () => {
+  const m = { ...meta, ic: 0, reg: 300, build: 120, pub: 40 };
+  const st = buildFunnel(m, { visits: 900, regs: 320, builds: 100, pubs: 30 }, { n: 7 }, on);
+  const by = Object.fromEntries(st.map(s => [s.k, s]));
+  assert.deepEqual(st.map(s => s.k), ['imp', 'click', 'visit', 'reg', 'build', 'pub', 'buy']);
+  assert.deepEqual([by.reg.v, by.reg.src, by.reg.alt], [320, 'sinqfy', 300], 'cadastro pelo nosso evento, Meta como comparação');
+  assert.equal(by.reg.rate, 320 / 900, 'cadastro ÷ visita');
+  assert.equal(by.reg.cost, 1000 / 320, 'custo por cadastro');
+  assert.equal(by.build.rate, 100 / 320, 'ativação: 1º app ÷ cadastro');
+  assert.equal(by.build.cost, 1000 / 100, 'custo por 1º app');
+  assert.equal(by.pub.rate, 30 / 100, 'publicado ÷ 1º app');
+  assert.equal(by.buy.rate, 7 / 30, 'compra ÷ publicado');
+  assert.ok(!by.engage && !by.checkout, 'sem InitiateCheckout, o self-serve não mostra etapa de checkout');
+  // Com InitiateCheckout (modal de paywall quando acabam os créditos), o checkout entra entre a publicação e a compra:
+  const withCo = buildFunnel({ ...m, ic: 15 }, { visits: 900, regs: 320, builds: 100, pubs: 30, checkout: 18 }, { n: 7 }, on);
+  assert.deepEqual(withCo.map(s => s.k), ['imp', 'click', 'visit', 'reg', 'build', 'pub', 'checkout', 'buy']);
+  // Cliente tradicional que só usa CompleteRegistration (sem first_build nem app_published) não vê colunas vazias de app:
+  const onlyReg = buildFunnel({ ...meta, reg: 50 }, { visits: 900, regs: 60, checkout: 20 }, { n: 7 }, on);
+  assert.deepEqual(onlyReg.map(s => s.k), ['imp', 'click', 'visit', 'reg', 'checkout', 'buy']);
+});
+
+test('funil completo self-serve: mesmas etapas na tela de Funis, sem interação e checkout', () => {
+  const { stages } = siteStages({ ...meta, reg: 300, build: 120, pub: 40 }, { visits: 900, ads: 480, regs: 280, builds: 90, pubs: 25 },
+    { buyers: 12, orders: 15, revenue: 1500 });
+  const by = Object.fromEntries(stages.map(s => [s.k, s]));
+  assert.deepEqual(stages.map(s => s.k), ['imp', 'click', 'visit', 'reg', 'build', 'pub', 'buy']);
+  assert.deepEqual([by.reg.v, by.reg.src, by.reg.cost, by.reg.costT], [280, 'Script', 1000 / 280, 'Custo por cadastro']);
+  assert.equal(by.build.rate, 90 / 280);
+  assert.equal(by.pub.rate, 25 / 90);
+  assert.equal(by.buy.rate, 12 / 25);
+});
+
 test('funil completo: todas as origens, taxa da visita só com quem veio do anúncio e compradores sem contar o order bump', () => {
   const { stages, spend, metaBuys } = siteStages(meta, { visits: 900, ads: 480, engaged: 300, checkout: 60 }, { buyers: 12, orders: 15, revenue: 1500 });
   const by = Object.fromEntries(stages.map(s => [s.k, s]));

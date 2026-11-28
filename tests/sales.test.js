@@ -27,7 +27,9 @@ globalThis.fetch = async (url, opts) => {
   if (p === '/insights') {
     const day = JSON.parse(u.searchParams.get('time_range')).until;
     return json({ data: [{ date_start: day, campaign_id: 'c1', campaign_name: 'Black Friday', adset_id: 's1', adset_name: 'Lookalike', ad_id: 'a1', ad_name: 'Video 1', spend: '100.50', impressions: '1000', clicks: '50',
-      actions: [{ action_type: 'link_click', value: '50' }, { action_type: 'omni_purchase', value: '3' }, { action_type: 'purchase', value: '3' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '3' }, { action_type: 'lead', value: '5' }],
+      actions: [{ action_type: 'link_click', value: '50' }, { action_type: 'omni_purchase', value: '3' }, { action_type: 'purchase', value: '3' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '3' }, { action_type: 'lead', value: '5' },
+        { action_type: 'omni_complete_registration', value: '4' }, { action_type: 'offsite_conversion.fb_pixel_custom.first_build', value: '2' },
+        { action_type: 'offsite_conversion.fb_pixel_custom.app_published', value: '1' }],
       action_values: [{ action_type: 'omni_purchase', value: '591' }, { action_type: 'purchase', value: '591' }] }] });
   }
   return json({ error: { message: 'rota não simulada ' + p } }, 404);
@@ -152,6 +154,8 @@ test('Meta: sincroniza contas, entidades e gasto (com paginação) e registra er
   assert.equal((await db.get("SELECT budget FROM ad_entities WHERE id='c1'")).budget, 100);
   assert.deepEqual(await db.get("SELECT date, spend, clicks, meta_purchases, meta_purchase_value, meta_leads FROM ad_spend WHERE platform='meta'"),
     { date: today, spend: 100.5, clicks: 50, meta_purchases: 3, meta_purchase_value: 591, meta_leads: 5 }, 'conversões da Meta sem contar a mesma compra 3x');
+  assert.deepEqual(await db.get("SELECT meta_registrations, meta_first_builds, meta_app_published FROM ad_spend WHERE platform='meta'"),
+    { meta_registrations: 4, meta_first_builds: 2, meta_app_published: 1 }, 'cadastro e eventos personalizados do self-serve');
   assert.equal(action([{ action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' }], ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase']), 2, 'cai para o tipo do pixel');
   assert.equal(action(undefined, ['lead']), 0);
   assert.ok(!(await req('/sites/loja/integrations', { cookie: admin })).text.includes('TOKEN'), 'token nunca é exibido');

@@ -111,6 +111,7 @@ Use com Zapier, Make, n8n ou um sistema próprio:
   "rid": "id do visitante (parâmetro rid do link), opcional",
   "utm_source": "FB",
   "utm_campaign": "Black Friday|120200000",
+  "kind": "opcional: subscription_create, subscription_cycle ou credits",
   "email": "opcional, só para a Conversions API",
   "phone": "opcional"
 }
@@ -119,8 +120,36 @@ Use com Zapier, Make, n8n ou um sistema próprio:
 - `status`: `paid`, `pending`, `refused`, `refunded` ou `chargeback`.
 - `method`: `pix`, `card`, `boleto` ou `other`.
 - `amount` e `net`: aceitam número ou texto como `"R$ 1.234,56"`.
+- `kind`: em assinatura, `subscription_cycle` (renovação automática) grava em Vendas, mas **não** envia `Purchase` à Meta nem ao Google Ads, porque não é aquisição de um anúncio de hoje. `subscription_create`, `credits` ou vazio contam como compra normal. Na Stripe, o mesmo vale para `invoice.paid` com `billing_reason`.
 
 Reenvios do mesmo `order_id` atualizam a venda existente. O status muda e os valores só são substituídos quando o novo é maior que zero.
+
+### Eventos do produto (funil self-serve)
+
+Para produtos em que o cadastro grátis (ou os créditos iniciais) vem antes da compra, o backend avisa o Sinqfy das etapas que só ele conhece:
+
+```
+POST https://app.seudominio.com.br/hooks/<token>/events
+Content-Type: application/json
+
+{
+  "event_name": "CompleteRegistration",
+  "user_id": "usr_9f8a7b",
+  "rid": "AbCdEfGhIjKlMnOpQrStUv",
+  "email": "cliente@empresa.com.br",
+  "phone": "11999998888",
+  "name": "João Silva",
+  "url": "https://programe.studio/signup",
+  "created_at": "2026-11-28T18:20:00-03:00",
+  "props": { "credits_used": 10 }
+}
+```
+
+- `event_name`: `CompleteRegistration` (cadastro), `first_build` (primeiro app) e `app_published` (app publicado), ou outro nome no formato `[A-Za-z][A-Za-z0-9_]{0,39}`. `Purchase` é recusado aqui: a compra vem do webhook de vendas.
+- `user_id`: cada usuário conta **uma vez por evento**. O `event_id` é `${event_name}_${user_id}`; reenviar o mesmo evento responde `200` sem duplicar na Meta.
+- `rid`, `email` e `phone` ligam o evento ao clique do anúncio. Sem `rid`, o contato do CRM é achado pelo e-mail ou telefone e devolve o clique original.
+- O evento também entra na aba Tráfego → Eventos e nos funis, com as UTMs herdadas do clique. E-mail, telefone e nome só seguem à Meta em SHA-256.
+- Com o segredo salvo em Integrações, Segredos de assinatura, Eventos do produto, a chamada precisa de `X-Rastro-Signature: sha256=<HMAC-SHA256 do corpo>`.
 
 ### Webhook personalizado
 
@@ -144,8 +173,8 @@ Status aceitos: pago, aprovado, confirmado (ou vazio) como aprovada; pendente, a
 
 O que acontece depois:
 
-- A sincronização busca campanhas, conjuntos, anúncios (status e orçamento), o gasto diário por anúncio e as **conversões que a Meta reporta**: compras, valor de compra e leads, na janela de atribuição configurada na conta.
-- Essas conversões aparecem como **Compras (Meta)** e **ROAS (Meta)** ao lado das vendas reais dos webhooks. A diferença entre os dois mostra o quanto a Meta está atribuindo a mais (ou a menos) do que realmente entrou.
+- A sincronização busca campanhas, conjuntos, anúncios (status e orçamento), o gasto diário por anúncio e as **conversões que a Meta reporta**: compras, valor de compra, leads, cadastros (`CompleteRegistration`), `first_build` e `app_published`, na janela de atribuição configurada na conta.
+- Essas conversões aparecem como **Compras (Meta)** e **ROAS (Meta)** ao lado das vendas reais dos webhooks. A diferença entre os dois mostra o quanto a Meta está atribuindo a mais (ou a menos) do que realmente entrou. Com eventos do produto, o funil dos anúncios mostra também cadastro, 1º app e app publicado, com custo por cadastro, taxa de ativação e custo por 1º app por anúncio.
 - A primeira traz 90 dias. Depois disso, roda a cada 5 minutos (o próprio servidor agenda; na instalação antiga da Vercel, pela rota `/cron`) e refaz os últimos 3 dias, porque a Meta ainda ajusta gastos recentes. O botão **Sincronizar agora** força na hora.
 - A versão da API é configurável em `META_API_VERSION` (padrão `v23.0`).
 - O gasto é somado como está, sem conversão de moeda. Se a moeda da conta for diferente da moeda do site, a tela mostra um aviso.
@@ -157,7 +186,8 @@ O que acontece depois:
 A partir daí:
 
 - **Todo evento do site** (PageView, Lead, InitiateCheckout, eventos próprios) entra na fila e vai para os destinos configurados, com `fbc`, `fbp`, IP, user agent e o id do visitante em hash (`external_id`). O Lead de formulário leva também e-mail, telefone e nome em SHA-256; depois dele, os eventos do mesmo visitante levam os dados do contato do CRM (achado pelo `rid`), também só em hash.
-- **Cada venda aprovada** via webhook vira um `Purchase` com `event_id` = `plataforma-pedido`, e-mail e telefone **apenas em SHA-256**. Pedidos sem e-mail e sem telefone não vão, porque a Meta exige ao menos um identificador.
+- **Cada venda aprovada** via webhook vira um `Purchase` com `event_id` = `plataforma-pedido`, e-mail e telefone **apenas em SHA-256**. Pedidos sem e-mail e sem telefone não vão, porque a Meta exige ao menos um identificador. Renovação automática de assinatura (`subscription_cycle`) fica só em Vendas: não vira `Purchase` na Meta nem no Google Ads.
+- **Eventos do produto** (`CompleteRegistration`, `first_build`, `app_published`) entram na mesma fila como `website` quando o clique foi casado (com `fbc`, `fbp`, IP e user agent), ou `system_generated` quando só há e-mail, telefone ou `rid`.
 - A fila tenta de novo em 1 min, 5 min, 30 min e 6 h. Depois disso, a entrega aparece como falha na aba Eventos, com o motivo e um botão **Reenviar**.
 - IP e user agent saem do banco assim que o envio termina ([ADR 0014](adr/0014-fila-de-envio-server-side.md)).
 - A tela Integrações mostra quantos eventos foram enviados, estão na fila ou falharam nas últimas 24 h.

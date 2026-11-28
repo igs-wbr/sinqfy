@@ -8,6 +8,7 @@ import { siteCtx } from '../auth.js';
 import * as S from '../sales/stats.js';
 import { edgeUrlFor } from '../cloudflare.js';
 import { handleWebhook, handleSheet, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, parseCustom, secretsOf } from '../sales/webhooks.js';
+import { handleProductEvent } from '../sales/events.js';
 import { syncMeta } from '../ads/meta.js';
 import { clientSites } from '../clients.js';
 import { compareFunnel } from '../sales/funnel.js';
@@ -209,6 +210,12 @@ route('POST', '/sites/:id/integrations', { site: 'edit' }, async r => {
 // --- webhooks das plataformas (público; o token na URL identifica o site) ---
 route('POST', '/hooks/:token/sheets', { auth: false }, async r => { // Apps Script da planilha (lote de linhas)
   const out = await handleSheet(r.params.token, await readBody(r.req, 1024 * 1024));
+  r.res.writeHead(out.status, { 'content-type': 'application/json' }).end(JSON.stringify(out.body || { ok: out.status === 200 }));
+});
+// Eventos do produto (cadastro, primeiro app, aplicativo publicado): vêm do backend do site, não do navegador.
+// Registrado antes da rota genérica de plataformas, que também casaria /hooks/:token/events.
+route('POST', '/hooks/:token/events', { auth: false }, async r => {
+  const out = await handleProductEvent(r.params.token, await readBody(r.req, 64 * 1024), Date.now(), { headers: r.req.headers });
   r.res.writeHead(out.status, { 'content-type': 'application/json' }).end(JSON.stringify(out.body || { ok: out.status === 200 }));
 });
 route('POST', '/hooks/:token/:platform', { auth: false }, async r => {
