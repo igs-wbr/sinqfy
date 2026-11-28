@@ -91,7 +91,8 @@ export async function adFunnel(site, range, campaign = null) {
   const only = campaign ? ' AND campaign_id=?' : '';
   const base = [ids(site), range.from, range.to, ...(campaign ? [campaign] : [])];
   const [meta, camps, tracking, webhooks] = await Promise.all([
-    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_lpv) lpv, SUM(meta_checkouts) ic, SUM(meta_purchases) buy, SUM(spend) spend
+    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_lpv) lpv, SUM(meta_checkouts) ic, SUM(meta_purchases) buy, SUM(spend) spend,
+        SUM(meta_registrations) reg, SUM(meta_first_builds) build, SUM(meta_app_published) pub
       FROM ad_spend WHERE site = ANY(?::text[]) AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
     db.all(`SELECT DISTINCT campaign_id, campaign_name FROM ad_spend WHERE site = ANY(?::text[]) AND platform='meta' AND date BETWEEN ? AND ?${only}`, base),
     db.get('SELECT 1 FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? LIMIT 1', [ids(site), range.from, range.to]),
@@ -99,7 +100,7 @@ export async function adFunnel(site, range, campaign = null) {
   ]);
   // Venda e visita casam com a campanha pelo id da UTM ou, sem id, pelo nome.
   const keys = [...new Set(camps.flatMap(c => [c.campaign_id, c.campaign_name]).filter(Boolean))];
-  const [own, sales] = keys.length ? await Promise.all([
+  const [own, sales, self] = keys.length ? await Promise.all([
     db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout
       FROM (SELECT visitor, COUNT(*) FILTER (WHERE name='pageview') pv, COUNT(*) FILTER (WHERE name<>'pageview') ev,
         COUNT(*) FILTER (WHERE ${CHECKOUT_SQL}) co
@@ -107,8 +108,13 @@ export async function adFunnel(site, range, campaign = null) {
           AND visitor IN (SELECT visitor FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND name='pageview' AND ${UTM_KEY} = ANY(?))
         GROUP BY visitor) x`, [ids(site), range.from, range.to, ids(site), range.from, range.to, keys]),
     db.get(`SELECT COUNT(*) n FROM sales WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND status='paid' AND campaign_key = ANY(?)${once(site)[0]}`, [ids(site), range.from, range.to, keys, ...once(site)[1]]),
-  ]) : [{}, {}];
-  return { stages: buildFunnel(meta || {}, own, sales, { tracking: !!tracking, webhooks: !!webhooks }), spend: Number(meta?.spend) || 0 };
+    // Etapas do self-serve: o evento carrega a campanha herdada do clique (matchSale), então a UTM da própria linha basta.
+    db.get(`SELECT COUNT(DISTINCT visitor) FILTER (WHERE name='CompleteRegistration') regs, COUNT(DISTINCT visitor) FILTER (WHERE name='first_build') builds,
+        COUNT(DISTINCT visitor) FILTER (WHERE name='app_published') pubs
+      FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND ${UTM_KEY} = ANY(?)
+        AND name IN ('CompleteRegistration','first_build','app_published')`, [ids(site), range.from, range.to, keys]),
+  ]) : [{}, {}, {}];
+  return { stages: buildFunnel(meta || {}, { ...own, ...self }, sales, { tracking: !!tracking, webhooks: !!webhooks }), spend: Number(meta?.spend) || 0 };
 }
 
 /** Funil completo do site no período (tela Funis). Ver siteStages em src/sales/funnel.js. */
@@ -118,11 +124,15 @@ export async function siteFunnel(site, range) {
   const since = first && first > range.from && first <= range.to ? first : null;
   const a = [site.id, since || range.from, range.to];
   const [meta, own, sales] = await Promise.all([
-    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_purchases) buy, SUM(spend) spend
+    db.get(`SELECT SUM(impressions) imp, SUM(clicks) clicks, SUM(meta_link_clicks) link, SUM(meta_purchases) buy, SUM(spend) spend,
+        SUM(meta_registrations) reg, SUM(meta_first_builds) build, SUM(meta_app_published) pub
       FROM ad_spend WHERE site=? AND platform='meta' AND date BETWEEN ? AND ?`, a),
-    db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE ad > 0) ads, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout
+    db.get(`SELECT COUNT(*) visits, COUNT(*) FILTER (WHERE ad > 0) ads, COUNT(*) FILTER (WHERE pv > 1 OR ev > 0) engaged, COUNT(*) FILTER (WHERE co > 0) checkout,
+        COUNT(*) FILTER (WHERE reg > 0) regs, COUNT(*) FILTER (WHERE build > 0) builds, COUNT(*) FILTER (WHERE pub > 0) pubs
       FROM (SELECT visitor, COUNT(*) FILTER (WHERE name='pageview') pv, COUNT(*) FILTER (WHERE name<>'pageview') ev,
-        COUNT(*) FILTER (WHERE ${CHECKOUT_SQL}) co, COUNT(*) FILTER (WHERE utm_campaign<>'') ad
+        COUNT(*) FILTER (WHERE ${CHECKOUT_SQL}) co, COUNT(*) FILTER (WHERE utm_campaign<>'') ad,
+        COUNT(*) FILTER (WHERE name='CompleteRegistration') reg, COUNT(*) FILTER (WHERE name='first_build') build,
+        COUNT(*) FILTER (WHERE name='app_published') pub
         FROM events WHERE site=? AND date BETWEEN ? AND ? GROUP BY visitor) x`, a),
     db.get(`SELECT COUNT(DISTINCT COALESCE(rid, platform || '-' || order_id)) buyers, COUNT(*) orders, SUM(gross) revenue
       FROM sales WHERE site=? AND date BETWEEN ? AND ? AND status='paid'`, a),
@@ -247,10 +257,11 @@ export async function campaigns(site, range, level = 'campaign', { campaign = nu
   const allowed = scope && await inScope(ids(site), L, scope, campaign);
   const [o, oa] = once(site), [ox] = once(site, 'x.');
   const U = LEVEL_UTM[L], W = `x.site = ANY(?::text[]) AND x.date BETWEEN ? AND ? AND x.status='paid'${ox}`, wa = [ids(site), range.from, range.to, ...oa];
-  const [entities, spends, salesRows, firstRows, touchRows] = await Promise.all([
+  const [entities, spends, salesRows, firstRows, touchRows, selfRows] = await Promise.all([
     db.all('SELECT * FROM ad_entities WHERE site = ANY(?::text[]) AND level=?', [ids(site), L]),
     db.all(`SELECT platform, ${L}_id id, MAX(${L}_name) name, SUM(spend) spend, SUM(impressions) imp, SUM(clicks) clicks,
-        SUM(meta_purchases) mp, SUM(meta_purchase_value) mv, SUM(meta_leads) ml
+        SUM(meta_purchases) mp, SUM(meta_purchase_value) mv, SUM(meta_leads) ml,
+        SUM(meta_registrations) mreg, SUM(meta_first_builds) mbuild, SUM(meta_app_published) mpub
       FROM ad_spend WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND ${L}_id<>'' GROUP BY platform, ${L}_id`, [ids(site), range.from, range.to]),
     db.all(`SELECT ${L}_key k, COUNT(*) n, SUM(net) net, SUM(gross) gross FROM sales WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND status='paid'${o} GROUP BY k`,
       [ids(site), range.from, range.to, ...oa]),
@@ -260,11 +271,17 @@ export async function campaigns(site, range, level = 'campaign', { campaign = nu
     db.all(`SELECT t.k, COUNT(*) n FROM sales x CROSS JOIN LATERAL (
         SELECT ${keyOf('e.utm_' + U)} k FROM events e WHERE e.site=x.site AND e.rid=x.rid AND e.ts BETWEEN x.ts - ${30 * 864e5} AND x.ts + 60000 AND e.utm_campaign<>''
         UNION SELECT x.${L}_key) t WHERE ${W} AND t.k<>'' GROUP BY t.k`, wa),
+    // Funil self-serve por campanha, conjunto e anúncio: o evento de produto carrega a UTM herdada do clique.
+    db.all(`SELECT ${keyOf('utm_' + U)} k, COUNT(DISTINCT visitor) FILTER (WHERE name='CompleteRegistration') regs,
+        COUNT(DISTINCT visitor) FILTER (WHERE name='first_build') builds, COUNT(DISTINCT visitor) FILTER (WHERE name='app_published') pubs
+      FROM events WHERE site = ANY(?::text[]) AND date BETWEEN ? AND ? AND utm_campaign<>''
+        AND name IN ('CompleteRegistration','first_build','app_published') GROUP BY k`, [ids(site), range.from, range.to]),
   ]);
   const rows = new Map();
   const row = (plat, id) => {
     const k = plat + '\n' + id;
-    if (!rows.has(k)) rows.set(k, { platform: plat, id, name: id, status: '', budget: null, spend: 0, impressions: 0, clicks: 0, sales: 0, net: 0, gross: 0, metaPurchases: 0, metaValue: 0, metaLeads: 0 });
+    if (!rows.has(k)) rows.set(k, { platform: plat, id, name: id, status: '', budget: null, spend: 0, impressions: 0, clicks: 0, sales: 0, net: 0, gross: 0, metaPurchases: 0, metaValue: 0, metaLeads: 0,
+      regs: 0, builds: 0, pubs: 0, metaRegs: 0, metaBuilds: 0, metaPubs: 0 });
     return rows.get(k);
   };
   for (const e of entities) {
@@ -273,30 +290,38 @@ export async function campaigns(site, range, level = 'campaign', { campaign = nu
   }
   for (const s of spends) {
     const r = row(s.platform, s.id);
-    Object.assign(r, { spend: s.spend, impressions: s.imp, clicks: s.clicks, metaPurchases: s.mp, metaValue: s.mv, metaLeads: s.ml });
+    Object.assign(r, { spend: s.spend, impressions: s.imp, clicks: s.clicks, metaPurchases: s.mp, metaValue: s.mv, metaLeads: s.ml,
+      metaRegs: s.mreg, metaBuilds: s.mbuild, metaPubs: s.mpub });
     if (r.name === r.id && s.name) r.name = s.name;
   }
   // Só mostra entidades com gasto no período ou ativas (pausadas sem gasto são ruído); com campanha ou conjunto escolhido, só os de dentro.
   for (const [k, r] of rows) if ((!r.spend && r.status !== 'ACTIVE') || (allowed && !allowed.has(r.id))) rows.delete(k);
 
   const byKey = new Map(salesRows.map(s => [s.k, s])), firstBy = new Map(firstRows.map(s => [s.k, s.n])), touchBy = new Map(touchRows.map(s => [s.k, s.n]));
+  const selfBy = new Map(selfRows.map(s => [s.k, s]));
   const used = new Set();
   for (const r of rows.values()) {
     const s = byKey.get(r.id) || byKey.get(r.name);
     if (s) { used.add(s.k); Object.assign(r, { sales: s.n, net: s.net, gross: s.gross }); }
     r.first = firstBy.get(r.id) ?? firstBy.get(r.name) ?? 0;
     r.touched = touchBy.get(r.id) ?? touchBy.get(r.name) ?? 0;
+    const t = selfBy.get(r.id) || selfBy.get(r.name);
+    if (t) Object.assign(r, { regs: t.regs, builds: t.builds, pubs: t.pubs });
   }
   const out = [...rows.values()];
   for (const s of byKey.values()) {
     if (used.has(s.k) || allowed) continue; // venda sem anúncio conhecido não pertence a campanha nenhuma
     out.push({ platform: '', id: s.k, name: s.k || 'Sem UTM (orgânico, direto ou não rastreado)', unmatched: true, status: '', budget: null,
-      spend: 0, impressions: 0, clicks: 0, sales: s.n, net: s.net, gross: s.gross, metaPurchases: 0, metaValue: 0, metaLeads: 0, first: firstBy.get(s.k) ?? 0, touched: touchBy.get(s.k) ?? 0 });
+      spend: 0, impressions: 0, clicks: 0, sales: s.n, net: s.net, gross: s.gross, metaPurchases: 0, metaValue: 0, metaLeads: 0, first: firstBy.get(s.k) ?? 0, touched: touchBy.get(s.k) ?? 0,
+      regs: 0, builds: 0, pubs: 0, metaRegs: 0, metaBuilds: 0, metaPubs: 0 });
   }
   const rate = (site.tax_rate || 0) / 100;
   for (const r of out) {
     r.profit = r.net - r.spend - r.gross * rate;
     Object.assign(r, { cpa: r.spend ? div(r.spend, r.sales) : null, roas: div(r.net, r.spend), roi: div(r.profit, r.spend), ctr: div(r.clicks, r.impressions), metaRoas: div(r.metaValue, r.spend), statusPt: STATUS_PT(r.status) });
+    // Cadastro e ativação: o nosso evento quando existe; a Meta como reserva (o mesmo critério do funil).
+    const regs = r.regs || r.metaRegs, builds = r.builds || r.metaBuilds;
+    Object.assign(r, { costReg: div(r.spend, regs), activation: div(builds, regs), costBuild: div(r.spend, builds) });
   }
   // Anúncios: os que mais venderam primeiro. Campanhas e conjuntos: os que mais gastaram.
   return out.sort(L === 'ad' ? (x, y) => y.sales - x.sales || y.net - x.net || y.spend - x.spend : (x, y) => y.spend - x.spend || y.net - x.net);

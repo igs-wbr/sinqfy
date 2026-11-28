@@ -107,7 +107,8 @@ export function eventsPage(ctx, rows) {
 <script nonce="${ctx.nonce}">setInterval(function(){var ev=document.getElementById('ev');if(document.hidden||ev.querySelector('details[open]')||ev.contains(document.activeElement))return;fetch(location.pathname+'?partial=1').then(function(r){return r.ok?r.text():''}).then(function(h){if(h)rastroSwap(document.getElementById('ev'),h)})},5000)</script>`);
 }
 
-const RATE_T = { click: 'clicaram (CTR)', visit: 'dos cliques chegaram ao site', engage: 'interagiram', checkout: 'foram ao checkout', buy: 'compraram' };
+const RATE_T = { click: 'clicaram (CTR)', visit: 'dos cliques chegaram ao site', engage: 'interagiram', checkout: 'foram ao checkout',
+  reg: 'dos que chegaram criaram conta', build: 'das contas geraram o 1º app', pub: 'dos 1º apps foram publicados', buy: 'compraram' };
 /** Funil completo, em pé: largura decrescente fixa (forma, não escala) e os números de cada etapa ao lado. */
 function siteFunnel(ctx, p, fn) {
   const st = fn.stages, m = v => money(v, ctx.site.currency), n = st.length, last = st.at(-1), visit = st.find(s => s.k === 'visit');

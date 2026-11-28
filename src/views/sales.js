@@ -1,5 +1,5 @@
 // Páginas de vendas: resumo (dashboard principal), campanhas, pedidos e integrações.
-import { PLATFORMS, STATUSES, METHODS, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, MATCH_PT, hookToken } from '../sales/webhooks.js';
+import { PLATFORMS, ORDER_PLATFORMS, STATUSES, METHODS, SIGNED, CUSTOM_FIELDS, CUSTOM_STATUSES, MATCH_PT, hookToken } from '../sales/webhooks.js';
 import { SALE_FILTERS, LEVEL_PT } from '../sales/stats.js';
 import { html, raw, icon, brDate, layout, pageHead, toolbar, kpi, list, tabs, chart, share, tone, notice, num, pct, ratio, money, link, on, hiddenInputs } from './ui.js';
 import { BRANDS, brandSvg } from './icons.js';
@@ -65,6 +65,9 @@ const CAUSE = {
   click: 'O anúncio é visto e pouco clicado: teste outro criativo, gancho ou público.',
   visit: 'A pessoa clica e não chega à página (ou chega sem ser reconhecida): confira a velocidade da página e se o anúncio usa o template de UTM.',
   engage: 'A pessoa chega e sai logo: título, primeira dobra, oferta ou velocidade no celular.',
+  reg: 'Chega e não cria conta: login social, formulário, oferta ou preço.',
+  build: 'Cria conta e não gera o primeiro app: créditos iniciais, onboarding ou o prompt.',
+  pub: 'Gera o app e não publica: fluxo de publicação, domínio ou plano.',
   checkout: 'A página não leva ao checkout: oferta, preço, prova social ou o botão de compra.',
   buy: 'O checkout perde gente: meio de pagamento, preço final, frete ou confiança. Vale ligar a recuperação de venda pendente.',
 };
@@ -90,7 +93,7 @@ function adFunnel(ctx, fn, m) {
   const tip = s => [s.t, `${num(s.v)} ${s.d.toLowerCase()}`, `Fonte: ${SRC[s.src]} (${why(s)})`,
     ...(s.alt != null && s.alt !== s.v ? [`${SRC[s.altSrc]} registrou ${num(s.alt)}`] : []),
     ...(s.rate != null ? [`Passaram da etapa anterior: ${pct(s.rate)}${s.before != null ? ` (antes ${pct(s.before)})` : ''}`] : []),
-    ...(s.cost ? [`Custo por pessoa: ${m(s.cost)}`] : [])].join('|');
+    ...(s.cost ? [`${s.costT || 'Custo por pessoa'}: ${m(s.cost)}`] : [])].join('|');
   return html`<section class="card" id="funil"><div class="row between"><h2>Funil dos anúncios</h2>
 <form method="get" action="#funil" class="row">${hiddenInputs(ctx.q, ['fc'])}<label class="sr" for="fc">Campanha</label><select id="fc" name="fc" data-submit><option value="">Todas as campanhas da Meta</option>${metas.map(r => html`<option value="${r.id}"${fn.fc === r.id ? raw(' selected') : ''}>${r.name}</option>`)}</select><button class="auto-btn">Ver</button></form></div>
 ${!imp.v ? html`<p class="empty">Sem dados da Meta neste período. Conecte a conta em ${integLink(ctx, '#meta')}.</p>` : html`
@@ -121,19 +124,24 @@ export function campaignsPage(ctx, p, level, rows, lastSync, funnel = null, nav 
   const site = ctx.site, m = v => money(v, site.currency);
   const sum = k => rows.reduce((s, r) => s + (r[k] || 0), 0);
   const spend = sum('spend'), net = sum('net'), sales = sum('sales'), profit = sum('profit'), metaP = sum('metaPurchases'), metaV = sum('metaValue'), leads = sum('metaLeads');
+  // Funil self-serve (cadastro, primeiro app, publicação): colunas só quando o site manda esses eventos.
+  const self = rows.some(r => r.regs || r.builds || r.pubs || r.metaRegs || r.metaBuilds || r.metaPubs);
+  const hasBuilds = rows.some(r => r.builds || r.metaBuilds), hasPubs = rows.some(r => r.pubs || r.metaPubs);
+  const sumOf = f => rows.reduce((s, r) => s + (f(r) || 0), 0);
+  const regTotal = sumOf(r => r.regs || r.metaRegs), buildTotal = sumOf(r => r.builds || r.metaBuilds), pubTotal = sumOf(r => r.pubs || r.metaPubs);
   return layout(ctx, `Campanhas · ${site.name}`, html`
-${pageHead(`${site.name} · Campanhas`, raw('Cada real <em>investido</em>'), raw('<b>Vendas</b> e <b>ROAS</b> vêm dos webhooks (dinheiro confirmado, ligado pela UTM). <b>Compras</b> e <b>ROAS (Meta)</b> são o que a própria Meta atribui ao anúncio, na janela de atribuição da conta. <b>Abriu</b> conta o primeiro anúncio do lead; <b>Participou</b>, todo anúncio que ele viu antes de comprar.'), synced(ctx, lastSync))}
+${pageHead(`${site.name} · Campanhas`, raw('Cada real <em>investido</em>'), raw('<b>Vendas</b> e <b>ROAS</b> vêm dos webhooks (dinheiro confirmado, ligado pela UTM). <b>Compras</b> e <b>ROAS (Meta)</b> são o que a própria Meta atribui ao anúncio, na janela de atribuição da conta. <b>Abriu</b> conta o primeiro anúncio do lead; <b>Participou</b>, todo anúncio que ele viu antes de comprar. <b>Cadastros</b>, <b>1º app</b> e <b>Publicados</b> vêm do webhook de eventos do produto.'), synced(ctx, lastSync))}
 ${toolbar(ctx, p, {}, { compare: false })}
 <div class="toolbar"><nav class="seg" aria-label="Nível">${Object.entries(LEVEL_PT).map(([k, t]) => html`<a href="${link(ctx.q, { level: k === 'campaign' ? null : k, ...(k === 'campaign' && { campaign: null, adset: null, fc: null }), ...(k === 'adset' && { adset: null }) })}"${on(level === k)}>${t}</a>`)}</nav>${drill(ctx, level, nav)}</div>
 <div class="hero">${kpi('c-net', 'Faturamento', net, null, m, { feature: true })}${kpi('c-spend', 'Gastos', spend, null, m)}${kpi('c-roas', 'ROAS', spend ? net / spend : null, null, sx, { tone: tone(spend ? net / spend : null, 1) })}${kpi('c-profit', 'Lucro', profit, null, m, { tone: tone(profit) })}</div>
 ${funnel ? adFunnel(ctx, funnel, m) : ''}
-${rows.length ? html`<section class="card"><div class="tw"><table class="data mcards"><thead><tr><th>Status</th><th style="text-align:left">${LEVEL_PT[level].slice(0, -1)}</th><th>Orçamento</th><th>Gastos</th><th>Vendas</th><th title="Vendas em que este foi o primeiro anúncio clicado pelo lead (primeiro toque pago)">Abriu</th><th title="Vendas em que este anúncio aparece em alguma visita do lead nos 30 dias antes da compra">Participou</th><th>CPA</th><th>Faturamento</th><th>ROAS</th><th>Compras (Meta)</th><th>ROAS (Meta)</th>${leads ? html`<th>Leads (Meta)</th>` : ''}<th>Lucro</th><th>ROI</th><th>CTR</th></tr></thead>
+${rows.length ? html`<section class="card"><div class="tw"><table class="data mcards"><thead><tr><th>Status</th><th style="text-align:left">${LEVEL_PT[level].slice(0, -1)}</th><th>Orçamento</th><th>Gastos</th><th>Vendas</th><th title="Vendas em que este foi o primeiro anúncio clicado pelo lead (primeiro toque pago)">Abriu</th><th title="Vendas em que este anúncio aparece em alguma visita do lead nos 30 dias antes da compra">Participou</th>${self ? html`<th title="Contas criadas (CompleteRegistration) pelo script ou pelo webhook de eventos do produto">Cadastros</th><th title="Gastos ÷ cadastros">Custo/cadastro</th>${hasBuilds ? html`<th title="Contas que geraram o 1º app (first_build)">1º app</th><th title="1º app ÷ cadastros">Ativação</th>` : ''}${hasPubs ? html`<th title="Aplicativos publicados (app_published)">Publicados</th>` : ''}` : ''}<th>CPA</th><th>Faturamento</th><th>ROAS</th><th>Compras (Meta)</th><th>ROAS (Meta)</th>${leads ? html`<th>Leads (Meta)</th>` : ''}<th>Lucro</th><th>ROI</th><th>CTR</th></tr></thead>
 <tbody>${rows.map(r => html`<tr><td style="text-align:left">${r.unmatched ? html`<span class="badge st-paused">sem gasto</span>` : html`<span class="badge st-${/PAUSED/.test(r.status) ? 'paused' : r.status || 'paused'}">${r.statusPt}</span>`}</td>
 <td class="c-main" style="text-align:left;white-space:normal;min-width:220px">${level === 'ad' && !r.unmatched ? html`<span class="ad-name">${r.thumb ? html`<img class="ad-thumb" src="${r.thumb}" alt="" width="48" height="48" loading="lazy" referrerpolicy="no-referrer">` : html`<span class="ad-thumb none" aria-hidden="true">${icon('image')}</span>`}<span>${r.name}</span></span>` : level === 'campaign' && r.platform === 'meta' ? html`<a href="${link(ctx.q, { level: 'adset', campaign: r.id, adset: null, fc: null })}" title="Ver os conjuntos desta campanha">${r.name}</a>`
   : level === 'adset' && r.platform === 'meta' && (nav.campaign || r.parent) ? html`<a href="${link(ctx.q, { level: 'ad', campaign: nav.campaign || r.parent, adset: r.id, fc: null })}" title="Ver os anúncios deste conjunto">${r.name}</a>` : r.name}${r.platform && r.platform !== 'meta' ? html` <small class="muted">· ${r.platform}</small>` : ''}</td>
-<td>${r.budget != null ? m(r.budget) : '-'}</td><td>${m(r.spend)}</td><td>${num(r.sales)}</td><td>${num(r.first)}</td><td>${num(r.touched)}</td><td>${r.cpa != null ? m(r.cpa) : '-'}</td><td>${m(r.net)}</td>
+<td>${r.budget != null ? m(r.budget) : '-'}</td><td>${m(r.spend)}</td><td>${num(r.sales)}</td><td>${num(r.first)}</td><td>${num(r.touched)}</td>${self ? html`<td title="Meta: ${num(r.metaRegs)}">${num(r.regs || r.metaRegs)}</td><td>${r.costReg != null ? m(r.costReg) : '-'}</td>${hasBuilds ? html`<td title="Meta: ${num(r.metaBuilds)}">${num(r.builds || r.metaBuilds)}</td><td>${pct(r.activation)}</td>` : ''}${hasPubs ? html`<td title="Meta: ${num(r.metaPubs)}">${num(r.pubs || r.metaPubs)}</td>` : ''}` : ''}<td>${r.cpa != null ? m(r.cpa) : '-'}</td><td>${m(r.net)}</td>
 <td>${sx(r.roas)}</td><td>${num(r.metaPurchases)}</td><td>${sx(r.metaRoas)}</td>${leads ? html`<td>${num(r.metaLeads)}</td>` : ''}<td class="${r.profit < 0 ? 'neg' : r.profit > 0 ? 'pos' : ''}">${m(r.profit)}</td><td>${pct(r.roi)}</td><td>${pct(r.ctr)}</td></tr>`)}</tbody>
-<tfoot><tr><th style="text-align:left">Total</th><th></th><th></th><th>${m(spend)}</th><th>${num(sales)}</th><th>${num(sum('first'))}</th><th></th><th>${sales ? m(spend / sales) : '-'}</th><th>${m(net)}</th><th>${sx(spend ? net / spend : null)}</th><th>${num(metaP)}</th><th>${sx(spend ? metaV / spend : null)}</th>${leads ? html`<th>${num(leads)}</th>` : ''}<th>${m(profit)}</th><th>${pct(spend ? profit / spend : null)}</th><th></th></tr></tfoot></table></div></section>`
+<tfoot><tr><th style="text-align:left">Total</th><th></th><th></th><th>${m(spend)}</th><th>${num(sales)}</th><th>${num(sum('first'))}</th><th></th>${self ? html`<th>${num(regTotal)}</th><th>${regTotal ? m(spend / regTotal) : '-'}</th>${hasBuilds ? html`<th>${num(buildTotal)}</th><th>${pct(regTotal ? buildTotal / regTotal : null)}</th>` : ''}${hasPubs ? html`<th>${num(pubTotal)}</th>` : ''}` : ''}<th>${sales ? m(spend / sales) : '-'}</th><th>${m(net)}</th><th>${sx(spend ? net / spend : null)}</th><th>${num(metaP)}</th><th>${sx(spend ? metaV / spend : null)}</th>${leads ? html`<th>${num(leads)}</th>` : ''}<th>${m(profit)}</th><th>${pct(spend ? profit / spend : null)}</th><th></th></tr></tfoot></table></div></section>`
     : notice(html`Nenhum gasto ou venda com UTM no período. Conecte a conta de anúncios da Meta em ${integLink(ctx)}.`)}`, AUTO);
 }
 
@@ -143,7 +151,7 @@ export function ordersPage(ctx, p, f, d, page) {
   const more = d.rows.length > 50, rows = d.rows.slice(0, 50);
   return layout(ctx, `Pedidos · ${site.name}`, html`
 ${pageHead(`${site.name} · Pedidos`, raw('Pedido a <em>pedido</em>'), 'Tudo o que as plataformas enviaram, com status atualizado a cada webhook. Sem dados pessoais do comprador.')}
-${toolbar(ctx, p, f, { compare: false, filters: SALE_FILTERS, label: saleLabel, extra: html`<nav class="seg" aria-label="Status"><a href="${link(ctx.q, { f_status: null, page: null })}"${on(!f.status)}>Todos</a>${Object.entries(STATUSES).map(([k, t]) => html`<a href="${link(ctx.q, { f_status: k, page: null })}"${on(f.status === k)}>${t}</a>`)}</nav>${selects(ctx, { platform: Object.entries(PLATFORMS), product: d.products.map(x => [x, x]), method: Object.entries(METHODS) })}` })}
+${toolbar(ctx, p, f, { compare: false, filters: SALE_FILTERS, label: saleLabel, extra: html`<nav class="seg" aria-label="Status"><a href="${link(ctx.q, { f_status: null, page: null })}"${on(!f.status)}>Todos</a>${Object.entries(STATUSES).map(([k, t]) => html`<a href="${link(ctx.q, { f_status: k, page: null })}"${on(f.status === k)}>${t}</a>`)}</nav>${selects(ctx, { platform: Object.entries(ORDER_PLATFORMS), product: d.products.map(x => [x, x]), method: Object.entries(METHODS) })}` })}
 <section class="card">${rows.length ? html`<div class="tw"><table class="data txt mcards"><thead><tr><th>Data</th><th>Pedido</th><th>Produto</th><th>Plataforma</th><th>Pagamento</th><th>Status</th><th class="num">Bruto</th><th class="num">Líquido</th><th>Origem</th></tr></thead>
 <tbody>${rows.map(s => html`<tr><td style="text-align:left">${time(s.ts)}</td><td style="text-align:left"><code>${s.order_id}</code></td><td style="text-align:left;white-space:normal">${s.product || '-'}</td>
 <td>${PLATFORMS[s.platform] ?? s.platform}</td><td>${METHODS[s.method]}</td><td><span class="badge st-${s.status}">${STATUSES[s.status]}</span></td><td class="num">${m(s.gross)}</td><td class="num">${m(s.net)}</td>
@@ -198,7 +206,8 @@ export const INTEG_SECTION = { rotate: 'plataformas', secrets: 'plataformas', cu
 // Logo de cada loja: marca do Simple Icons (icons.js) ou ícone oficial do site da loja (store-logos.js).
 const storeLogo = k => Object.hasOwn(BRANDS, k) ? raw(brandSvg(k, 18)) : Object.hasOwn(STORE_LOGOS, k)
   ? html`<img src="${STORE_LOGOS[k]}" width="18" height="18" alt=""${k === 'hubla' ? raw(' class="inv"') : ''}>` : icon('plug', 18);
-const HOOK_KEYS = Object.keys(PLATFORMS).filter(k => k !== 'custom' && k !== 'sheets');
+// 'events' tem URL e segredo próprios, mostrados no bloco do funil self-serve, não na lista de plataformas de venda.
+const HOOK_KEYS = Object.keys(PLATFORMS).filter(k => !['custom', 'sheets', 'events'].includes(k));
 /** Lista suspensa com o logo de cada loja; mostra só o painel da escolhida (rádio + :has, funciona sem JavaScript). */
 const picker = (id, keys, panel, sel = keys[0]) => html`<div class="pick" style="margin-top:12px"><style>${raw(keys.map(k => `.pick:has(#pk-${id}-${k}:checked) [data-k=${k}]{display:flex}`).join(''))}</style>
 ${keys.map(k => html`<input type="radio" name="pk-${id}" id="pk-${id}-${k}" data-k="${k}" class="sr"${k === sel ? raw(' checked') : ''}>`)}
@@ -239,7 +248,24 @@ export function integrationsPage(ctx, originUrl, d, msg, err) {
 <div><button type="button" class="primary" data-act="copy" data-for="utm-out" data-done="Link copiado">Copiar link</button></div></form></section>
 <section class="card"><h2>Eventos de conversão</h2><p class="muted">Opcional. O snippet já registra sozinho visitas, cliques no checkout (InitiateCheckout) e formulários (Lead). Use isto para contar uma ação a mais com o nome que quiser: no botão ou link pelo atributo <code>data-rastro</code> (os <code>data-rastro-*</code> viram detalhes do evento e <code>data-rastro-revenue</code> o valor), ou pelo JavaScript com <code>rastro('nome', detalhes, valor)</code>. A venda de verdade vem do webhook da plataforma; isto não a substitui.</p><pre><code>${`<button data-rastro="cadastro" data-rastro-plano="pro">Assinar</button>
 <a data-rastro="compra" data-rastro-revenue="97.90" href="/checkout">Comprar</a>
-rastro('compra', { plano: 'pro' }, 97.90)`}</code></pre></section>`],
+rastro('compra', { plano: 'pro' }, 97.90)`}</code></pre></section>
+<section class="card"><h2>Eventos do produto (backend)</h2><p class="muted">Para o funil self-serve: o backend avisa quando a pessoa cria conta (<code>CompleteRegistration</code>), gera o primeiro app (<code>first_build</code>) e publica o app (<code>app_published</code>). Cada usuário conta uma vez por evento (<code>user_id</code>), e o evento é ligado ao clique pelo <code>rid</code> ou, sem ele, pelo e-mail ou telefone do contato. <code>Purchase</code> continua vindo do webhook de vendas.</p>
+<pre><code>${originUrl}/hooks/${hookToken(s, 'events')}/events</code></pre>
+<pre class="code"><code>${`POST /hooks/${hookToken(s, 'events')}/events
+Content-Type: application/json
+
+{
+  "event_name": "CompleteRegistration",
+  "user_id": "usr_9f8a7b",
+  "rid": "AbCdEfGhIjKlMnOpQrStUv",
+  "email": "cliente@empresa.com.br",
+  "phone": "11999998888",
+  "name": "João Silva",
+  "url": "https://programe.studio/signup",
+  "created_at": "2026-11-28T18:20:00-03:00",
+  "props": { "credits_used": 10 }
+}`}</code></pre>
+<p class="muted" style="margin:0">Assinatura opcional: <code>X-Rastro-Signature: sha256=HMAC-SHA256(corpo)</code> com o segredo em <a href="#plataformas">Segredos de assinatura</a>, no campo Eventos do produto.</p></section>`],
     ['plataformas', 'Plataformas de venda', 'link', 'Webhooks de Hotmart, Kiwify, Shopify, Stripe e outras.', lastHook ? st(!!lastHook.ok, `Último webhook: ${time(lastHook.ts)}`) : st(false, 'Nenhum webhook ainda'), html`
 <section class="card"><h2>Plataformas conectadas</h2>${conn.length ? html`<div class="conn">${conn.map(k => html`<label for="pk-hook-${k}">${storeLogo(k)}<b>${PLATFORMS[k]}</b>
 ${SIGNED[k] ? html`<span class="tag ${secrets[k] ? 'ok' : 'warn'}">${secrets[k] ? 'segredo salvo' : 'sem segredo'}</span>` : ''}<span class="muted">${hooked[k] ? `último webhook ${time(hooked[k])}` : 'aguardando o primeiro webhook'}</span></label>`)}</div>`

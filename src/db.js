@@ -175,6 +175,9 @@ async function migrate() {
     -- Funil dos anúncios: etapas que a Meta reporta entre o clique e a compra (cliques no link, página de destino, carrinho, checkout).
     ALTER TABLE ad_spend ADD COLUMN IF NOT EXISTS meta_link_clicks BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_lpv BIGINT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS meta_atc BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_checkouts BIGINT NOT NULL DEFAULT 0;
+    -- Funil self-serve (cadastro, primeiro app, aplicativo publicado): o que a Meta atribui a cada anúncio nessas etapas.
+    ALTER TABLE ad_spend ADD COLUMN IF NOT EXISTS meta_registrations BIGINT NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS meta_first_builds BIGINT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS meta_app_published BIGINT NOT NULL DEFAULT 0;
     -- Primeiro toque pago da venda (ADR 0018): o anúncio que trouxe o lead pela primeira vez, mesmo que a compra saia por outro caminho.
     ALTER TABLE sales ADD COLUMN IF NOT EXISTS ft_source ${T}, ADD COLUMN IF NOT EXISTS ft_medium ${T},
       ADD COLUMN IF NOT EXISTS ft_campaign ${T}, ADD COLUMN IF NOT EXISTS ft_content ${T};

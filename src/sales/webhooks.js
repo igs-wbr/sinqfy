@@ -8,9 +8,10 @@ import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open, metaEmail, metaPhone, sha } from '../pii.js';
 import { trackPending } from '../recovery.js';
 
-export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', hubla: 'Hubla', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets' };
+export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', hubla: 'Hubla', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets', events: 'Eventos do produto' };
 /** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
-export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)', hubla: 'Token do webhook (Integrações, Webhook)' };
+export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)', hubla: 'Token do webhook (Integrações, Webhook)', events: 'Eventos do produto (X-Rastro-Signature)' };
+export const ORDER_PLATFORMS = Object.fromEntries(Object.entries(PLATFORMS).filter(([k]) => k !== 'events'));
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
 export const METHODS = { pix: 'Pix', card: 'Cartão', boleto: 'Boleto', other: 'Outros' };
 
@@ -122,6 +123,8 @@ export const PARSERS = {
       currency: str(b.currency || 'BRL', 3), product: str(b.product), ts: time(b.created_at),
       utm: utm({ source: b.utm_source, medium: b.utm_medium, campaign: b.utm_campaign, content: b.utm_content, term: b.utm_term }),
       email: b.email, phone: b.phone, name: b.name, rid: ridOf(b.rid),
+      // Assinatura: 'subscription_create' e 'credits' são aquisição; 'subscription_cycle' é renovação (não vira Purchase na Meta).
+      kind: str(b.kind || b.billing_reason, 40).toLowerCase(),
     };
   },
   // Pix do checkout próprio (src/checkout.js): o banco ou o painel confirmam no mesmo formato do genérico, com o id do pedido.
@@ -158,6 +161,23 @@ export const PARSERS = {
   // Stripe (Checkout e Payment Links). O snippet põe o rid em client_reference_id; o pedido é o payment_intent.
   stripe(b) {
     const o = b.data?.object || {};
+    // Assinatura: a cobrança do mês seguinte chega como fatura (invoice.paid), com o motivo em billing_reason.
+    // 'subscription_cycle' é renovação, não aquisição: grava em sales, mas não vira Purchase novo na Meta.
+    if (/^invoice\.(paid|payment_succeeded|payment_failed|voided)$/.test(String(b.type))) {
+      if (!o.id) return null;
+      const zero = /^(bif|clp|djf|gnf|jpy|kmf|krw|mga|pyg|rwf|ugx|vnd|vuv|xaf|xof|xpf)$/.test(String(o.currency).toLowerCase());
+      const status = /payment_failed|voided/.test(String(b.type)) ? 'refused' : o.status === 'paid' ? 'paid' : 'pending';
+      const gross = num(o.amount_paid ?? o.total ?? o.amount_due) / (zero ? 1 : 100), md = o.metadata || o.subscription_details?.metadata || {};
+      return {
+        order_id: str(o.id), status, method: method(o.payment_method_types?.[0] || o.payment_method_details?.type), gross, net: gross,
+        currency: str(o.currency || 'brl', 3).toUpperCase(), product: str(md.product || o.lines?.data?.[0]?.description),
+        ts: o.created ? o.created * 1000 : time(o.status_transitions?.paid_at),
+        utm: utm({ source: md.utm_source, medium: md.utm_medium, campaign: md.utm_campaign, content: md.utm_content, term: md.utm_term }),
+        email: o.customer_email || o.customer_details?.email, phone: o.customer_phone || o.customer_details?.phone,
+        name: o.customer_name || o.customer_details?.name, rid: ridOf(o.client_reference_id || md.rid),
+        kind: str(o.billing_reason || md.kind, 40).toLowerCase(),
+      };
+    }
     const status = { 'checkout.session.completed': o.payment_status === 'paid' ? 'paid' : 'pending', 'checkout.session.async_payment_succeeded': 'paid',
       'checkout.session.async_payment_failed': 'refused', 'charge.refunded': o.amount_refunded >= o.amount ? 'refunded' : null, 'charge.dispute.created': 'chargeback' }[b.type];
     const id = o.payment_intent || o.id;
@@ -169,6 +189,7 @@ export const PARSERS = {
       currency: str(o.currency || 'brl', 3).toUpperCase(), product: str(md.product), ts: o.created ? o.created * 1000 : null,
       utm: utm({ source: md.utm_source, medium: md.utm_medium, campaign: md.utm_campaign, content: md.utm_content, term: md.utm_term }),
       email: o.customer_details?.email || o.billing_details?.email, phone: o.customer_details?.phone || o.billing_details?.phone, name: o.customer_details?.name, rid: ridOf(o.client_reference_id || md.rid),
+      kind: str(md.kind || o.billing_reason, 40).toLowerCase(),
     };
   },
   // Hubla (webhook 2.0, eventos invoice.*). O link pay.hub.la recebe o rid do snippet; UTMs e params ficam em paymentSession.
@@ -214,6 +235,7 @@ export function verify(platform, secret, raw, h, now = Date.now()) {
 // ---------- webhook personalizado (mapa de campos) ----------
 export const CUSTOM_FIELDS = { order_id: 'Id do pedido', status: 'Status', amount: 'Valor pago', net: 'Valor líquido', currency: 'Moeda', method: 'Forma de pagamento',
   product: 'Produto', created_at: 'Data', email: 'E-mail', phone: 'Telefone', name: 'Nome do comprador', lastname: 'Sobrenome do comprador', rid: 'Id do visitante (rid)',
+  kind: 'Tipo (subscription_create, subscription_cycle, credits)',
   utm_source: 'utm_source', utm_medium: 'utm_medium', utm_campaign: 'utm_campaign', utm_content: 'utm_content', utm_term: 'utm_term',
   city: 'Cidade do comprador', state: 'UF do comprador', zipcode: 'CEP do comprador', country: 'País do comprador' };
 export const CUSTOM_STATUSES = ['paid', 'pending', 'refused', 'refunded', 'chargeback'];
@@ -231,6 +253,7 @@ export function parseCustom(b, map) {
     currency: str(v('currency') || 'BRL', 3).toUpperCase(), product: str(v('product')), ts: time(v('created_at')),
     utm: utm({ source: v('utm_source'), medium: v('utm_medium'), campaign: v('utm_campaign'), content: v('utm_content'), term: v('utm_term') }),
     email: v('email'), phone: v('phone'), name: [v('name'), v('lastname')].filter(x => x != null && x !== '').join(' ') || undefined, rid: ridOf(v('rid')),
+    kind: str(v('kind'), 40).toLowerCase(),
     // Sobrenome à parte (OnProfit V2: customer.lastname) completa o nome; país por extenso "Brasil" vira BR.
     addr: { city: v('city'), state: v('state'), zipcode: v('zipcode'), country_iso: /^bra[sz]il$/i.test(String(v('country') ?? '').trim()) ? 'BR' : v('country') },
   };
@@ -294,7 +317,7 @@ const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gros
  * não serve para criar venda pelo /generic. "Gerar novo token" troca todos.
  */
 export const hookToken = (site, platform) => createHash('sha256').update(`${site.webhook_token}:${platform}`).digest('base64url').slice(0, 32);
-const siteByToken = (token, platform) => {
+export const siteByToken = (token, platform) => {
   const t = Buffer.from(String(token));
   return [...sites.values()].find(x => { if (!x.webhook_token) return false; const w = Buffer.from(hookToken(x, platform)); return w.length === t.length && timingSafeEqual(w, t); });
 };
@@ -394,6 +417,9 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     // Compra que só chega agora, dias depois de aprovada (ex.: PURCHASE_COMPLETE da Hotmart no fim da garantia, de venda
     // feita antes do webhook existir): não é conversão nova. Enviada, a Meta a contaria hoje e daria o crédito a um anúncio de hoje.
     const paidAt = s.paid_at ?? ts, late = now - paidAt > LATE_PURCHASE;
+    // Renovação automática (Stripe invoice.paid, kind/billing_reason 'subscription_cycle'): é receita recorrente de cliente
+    // antigo, não conversão de um anúncio de hoje. Fica em sales (LTV), mas não vai à Meta nem ao Google Ads.
+    const renewal = /^(subscription_cycle|renewal|renewal_cycle|recurring)$/.test(String(s.kind || '').toLowerCase());
     let sent = false;
     // Último clique (ADR 0024): quem clicou em anúncio da Meta e do Google tem a compra enviada só para o clique mais recente.
     // Só com os dois destinos ativos: sem o Google Ads configurado, a compra não pode deixar de ir à Meta (e vice-versa).
@@ -401,6 +427,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     if (late) await log(site.id, platform, s, true, `Aprovada em ${localDate(paidAt, site.timezone)}, chegou ${Math.floor((now - paidAt) / 864e5)} dias depois: gravada, mas não enviada à Meta nem ao GA4`);
     else if (twin) await log(site.id, platform, s, true, `Compra já recebida por ${PLATFORMS[twin.platform] ?? twin.platform}: não reenviada à Meta nem ao GA4`);
     else if (byCrm) await log(site.id, platform, s, true, 'Purchase já enviado pelo quadro do CRM: não reenviado à Meta');
+    else if (renewal) { await log(site.id, platform, s, true, 'Renovação automática: venda gravada, mas o Purchase não vai à Meta nem ao Google Ads (não é aquisição de anúncio)'); sent = true; }
     else if (last === 'gads' && metaReady(site)) { await skip('compra não enviada à Meta'); sent = true; } // sent: o quadro do CRM também não reenvia
     else if (metaReady(site)) {
       const ev = metaPurchase(site, sale, { email: s.email, phone: s.phone, name: s.name, click: m.click }, now);
@@ -417,7 +444,7 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
     const g = !twin && !late && ga4Ready(site) && ga4Purchase(site, sale, m.click, now);
     if (g) await enqueue(site.id, 'ga4', `${platform}-${s.order_id}`, 'Purchase', g, now);
     // Google Ads: uma conversão por checkout, como na Meta (order bump e upsell do mesmo comprador somam no valor).
-    const action = !twin && !late && gadsReady(site) && gadsAction(site, 'Purchase');
+    const action = !twin && !late && !renewal && gadsReady(site) && gadsAction(site, 'Purchase');
     if (action && last === 'meta') await skip('compra não enviada ao Google Ads');
     const ga = action && last !== 'meta' && gadsEvent({ ts: Math.min(ts, now), value: s.gross, currency: s.currency.toUpperCase() || site.currency, id: `${platform}-${s.order_id}`,
       click: m.click, email: s.email, phone: s.phone, web: !!m.click?.rid });

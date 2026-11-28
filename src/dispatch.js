@@ -95,6 +95,34 @@ export function metaPurchase(site, sale, { email, phone, name, click } = {}, now
   };
 }
 
+/**
+ * Evento de produto vindo do backend do site (cadastro, primeiro app, aplicativo publicado). E-mail, telefone e nome
+ * seguem só em SHA-256. Com o clique casado (user agent e página), vai como 'website'; sem eles, 'system_generated',
+ * porque a Meta recusa 'website' sem user agent.
+ */
+export function metaProductEvent(site, { name, eventId, ts, url, email, phone, person, click, rid }, now = Date.now()) {
+  const user_data = {};
+  const em = metaEmail(email), ph = metaPhone(phone);
+  if (em) user_data.em = [em];
+  if (ph) user_data.ph = [ph];
+  if (click?.fbc) user_data.fbc = click.fbc;
+  if (click?.fbp) user_data.fbp = click.fbp;
+  const id = click?.rid || rid;
+  if (id) user_data.external_id = [sha(id)];
+  addHashed(user_data, names(person));
+  if (click?.country) addHashed(user_data, { country: code2(click.country) });
+  if (!Object.keys(user_data).length) return null; // a Meta exige ao menos um identificador
+  const web = !!(click?.ua && url);
+  if (web) {
+    user_data.client_user_agent = click.ua;
+    if (click?.ip) user_data.client_ip_address = click.ip;
+  }
+  return {
+    event_name: name, event_time: Math.floor(Math.min(ts, now) / 1000), event_id: eventId,
+    action_source: web ? 'website' : 'system_generated', ...(web && { event_source_url: url }), user_data,
+  };
+}
+
 /** Compra para o GA4: só com o clique casado (sem client_id do navegador, a venda viraria um usuário inventado). */
 export function ga4Purchase(site, sale, click, now = Date.now()) {
   if (!click?.rid) return null;

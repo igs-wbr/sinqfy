@@ -28,6 +28,10 @@ async function getAll(url) {
 // offsite_conversion.fb_pixel_purchase). Usa o primeiro presente, na ordem, para não contar duas vezes.
 const PURCHASE = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
 const LEAD = ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'];
+// Funil self-serve: CompleteRegistration é evento padrão; first_build e app_published são personalizados.
+const REGISTRATION = ['omni_complete_registration', 'complete_registration', 'offsite_conversion.fb_pixel_complete_registration'];
+const FIRST_BUILD = ['offsite_conversion.fb_pixel_custom.first_build', 'first_build'];
+const APP_PUBLISHED = ['offsite_conversion.fb_pixel_custom.app_published', 'app_published'];
 const LPV = ['omni_landing_page_view', 'landing_page_view'];
 const ATC = ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
 const CHECKOUT = ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
@@ -98,11 +102,13 @@ export async function syncMeta(acc, { full = !acc.last_full || Date.now() - Numb
     // Só imagem da CDN da Meta (é o que a CSP do painel libera).
     const thumb = a => [a.creative?.thumbnail_url, a.creative?.image_url].find(u => /^https:\/\/[\w.-]+\.fbcdn\.net\//.test(u || '')) || null;
     const SPEND = `INSERT INTO ad_spend(site, platform, date, campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name, spend, impressions, clicks,
-      meta_purchases, meta_purchase_value, meta_leads, meta_link_clicks, meta_lpv, meta_atc, meta_checkouts, source) VALUES (?,'meta',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'api')
+      meta_purchases, meta_purchase_value, meta_leads, meta_link_clicks, meta_lpv, meta_atc, meta_checkouts, meta_registrations, meta_first_builds, meta_app_published, source)
+      VALUES (?,'meta',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'api')
       ON CONFLICT(site, platform, date, campaign_id, adset_id, ad_id) DO UPDATE SET campaign_name=excluded.campaign_name, adset_name=excluded.adset_name,
       ad_name=excluded.ad_name, spend=excluded.spend, impressions=excluded.impressions, clicks=excluded.clicks, meta_purchases=excluded.meta_purchases,
       meta_purchase_value=excluded.meta_purchase_value, meta_leads=excluded.meta_leads, meta_link_clicks=excluded.meta_link_clicks, meta_lpv=excluded.meta_lpv,
-      meta_atc=excluded.meta_atc, meta_checkouts=excluded.meta_checkouts, source=excluded.source`;
+      meta_atc=excluded.meta_atc, meta_checkouts=excluded.meta_checkouts, meta_registrations=excluded.meta_registrations,
+      meta_first_builds=excluded.meta_first_builds, meta_app_published=excluded.meta_app_published, source=excluded.source`;
     // Site de cada campanha (regra pelo nome), conjunto e anúncio. A rodada leve só traz o ativo: nomes e hierarquia já gravados completam.
     const known = group.length > 1 ? await db.all("SELECT level, id, name, parent FROM ad_entities WHERE site = ANY(?::text[]) AND platform='meta' AND level IN ('campaign','adset')", [group]) : [];
     const campName = new Map(known.filter(e => e.level === 'campaign').map(e => [e.id, e.name])), setParent = new Map(known.filter(e => e.level === 'adset').map(e => [e.id, e.parent]));
@@ -129,7 +135,8 @@ export async function syncMeta(acc, { full = !acc.last_full || Date.now() - Numb
       ...insights.map(i => [SPEND, [to(i.campaign_id, i.campaign_name), i.date_start, i.campaign_id || '', i.campaign_name || '', i.adset_id || '', i.adset_name || '', i.ad_id || '', i.ad_name || '',
         Number(i.spend) || 0, Number(i.impressions) || 0, Number(i.clicks) || 0,
         action(i.actions, PURCHASE), action(i.action_values, PURCHASE), action(i.actions, LEAD),
-        Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT)]]),
+        Number(i.inline_link_clicks) || 0, action(i.actions, LPV), action(i.actions, ATC), action(i.actions, CHECKOUT),
+        action(i.actions, REGISTRATION), action(i.actions, FIRST_BUILD), action(i.actions, APP_PUBLISHED)]]),
       ['UPDATE ad_accounts SET last_sync=?, last_full=COALESCE(?, last_full), last_error=NULL, sync_after=NULL, name=?, currency=? WHERE id=?',
         [Date.now(), full ? Date.now() : null, info.name || '', info.currency || '', acc.id]],
     ]);
