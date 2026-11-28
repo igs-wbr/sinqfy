@@ -76,8 +76,9 @@ A tela Pedidos mostra a regra que valeu em cada venda (coluna Origem):
 | Eduzz | não repassa: vale a UTM | webhook novo e legado | `utm.*` |
 | Shopify | (loja é o próprio site) `fbclid` e UTMs do `landing_site`, user agent do pedido | `orders/paid` e `orders/updated` (`financial_status`) | do `landing_site` |
 | WooCommerce | meta `rastro_rid`, se o tema gravar | `processing`/`completed` pago, `on-hold` pendente, `refunded`, `cancelled`/`failed` | atribuição nativa (`_wc_order_attribution_*`, WooCommerce 8.5+) |
-| Stripe (Checkout e Payment Links) | `client_reference_id` (o snippet preenche) | `checkout.session.completed`, `async_payment_*`, `charge.refunded`, `charge.dispute.created` | `metadata.utm_*` |
+| Stripe (Checkout e Payment Links) | `client_reference_id` (o snippet preenche) | `checkout.session.completed`, `async_payment_*`, `charge.refunded`, `charge.dispute.created`, `invoice.paid` | `metadata.utm_*` |
 | Hubla (Webhook 2.0) | `rid` no link `pay.hub.la` (o snippet preenche), lido de `paymentSession.url` | eventos `invoice.*`: `paid`, `unpaid`/`overdue` pendente, `canceled`, `refunded`, `chargeback` | `paymentSession.utm` e `params.sck` |
+| Asaas (Webhook de cobranças) | `payment.externalReference` (envie o `rid` ou o e-mail do comprador ao criar a cobrança ou assinatura) | `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` pago, `PAYMENT_CREATED`/`PAYMENT_OVERDUE` pendente, `PAYMENT_REFUNDED` reembolso, `PAYMENT_CHARGEBACK_*` chargeback | herdadas do clique (`rid`) ou do contato no CRM |
 
 > Confira cada plataforma com um pedido de teste: a linha em Últimos webhooks mostra se a venda casou pelo clique. O campo exato que algumas plataformas devolvem (`xcod` na Hotmart, `sck` na Kiwify) foi conferido pela documentação disponível, não com pedido real.
 
@@ -91,6 +92,7 @@ Com o segredo cadastrado em Integrações, Segredos de assinatura, o Sinqfy recu
 | Shopify | `X-Shopify-Hmac-Sha256` (HMAC-SHA256 do corpo, base64) | Configurações, Notificações, Webhooks |
 | WooCommerce | `X-WC-Webhook-Signature` (HMAC-SHA256 do corpo, base64) | WooCommerce, Configurações, Avançado, Webhooks |
 | Stripe | `Stripe-Signature` (`t` e `v1`, até 5 min) | Desenvolvedores, Webhooks, Segredo de assinatura (`whsec_...`) |
+| Asaas | cabeçalho `asaas-access-token` | Integrações, Webhooks, Token de autenticação (`authToken`) |
 
 A Kiwify e a Eduzz não têm assinatura documentada para o webhook de vendas; nelas vale o token da URL.
 

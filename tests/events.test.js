@@ -136,8 +136,85 @@ test('isolamento: eventos do produto não alteram visitas da Visão geral, o ass
   const ov2 = await T.overview(o, { from: today, to: today, days: 1 }, {});
   assert.equal(ov2.cur.visits, 1, 'evento sem sessão de navegador não infla visitas');
   assert.deepEqual(ov2.apps.map(a => [a.k, a.n]), [['Chrome', 1]]);
-  // 4. Filtro de plataformas na tela de Pedidos não exibe "Eventos do produto":
+  // Filtro de plataformas na tela de Pedidos não exibe "Eventos do produto", mas exibe Asaas:
   const ordersHtml = (await req('/sites/outro/orders', { cookie: admin })).text;
-  assert.ok(!ordersHtml.includes('Eventos do produto'), 'Pedidos só lista plataformas de venda');
+  assert.ok(!ordersHtml.includes('Eventos do produto') && ordersHtml.includes('Asaas'), 'Pedidos lista Asaas e não lista Eventos do produto');
 });
+
+test('Asaas nativo: token asaas-access-token, casamento pelo rid do CRM e renovação automática de subscription', async () => {
+  const hook = (body, headers = {}) => req(`/hooks/${W.hookToken(DB.sites.get('ps'), 'asaas')}/asaas`, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', ...headers },
+  });
+  // Configura o authToken do Asaas no site ps:
+  const curSecrets = W.secretsOf(DB.sites.get('ps'));
+  await db.run("UPDATE sites SET hook_secrets=? WHERE id='ps'", [JSON.stringify({ ...curSecrets, asaas: 'asaas-segredo-32-chars-programe' })]);
+  await DB.loadSites();
+
+  const pay1 = {
+    id: 'evt_asaas_1',
+    event: 'PAYMENT_CONFIRMED',
+    dateCreated: `${today} 14:20:00`,
+    payment: {
+      object: 'payment',
+      id: 'pay_001',
+      customer: 'cus_G7Dvo4iphUNk',
+      subscription: 'sub_plano_solo_1',
+      value: 149,
+      netValue: 144.51,
+      description: 'Plano Solo',
+      externalReference: rid, // o backend mandou só o rid (sem e-mail no payload do Asaas!)
+      billingType: 'PIX',
+      status: 'CONFIRMED',
+      confirmedDate: today,
+    },
+  };
+  assert.equal((await hook(pay1)).status, 401, 'sem asaas-access-token, recusa com 401');
+  assert.equal((await hook(pay1, { 'asaas-access-token': 'errado' })).status, 401);
+  assert.equal((await hook(pay1, { 'asaas-access-token': 'asaas-segredo-32-chars-programe' })).status, 200);
+
+  const s1 = await db.get("SELECT * FROM sales WHERE site='ps' AND platform='asaas' AND order_id='pay_001'");
+  assert.deepEqual([s1.status, s1.method, s1.gross, s1.net, s1.product, s1.rid, s1.match_rule, s1.campaign_key, s1.ad_key, s1.subscription_id],
+    ['paid', 'pix', 149, 144.51, 'Plano Solo', rid, 'rid', '111', '222', 'sub_plano_solo_1']);
+
+  // E-mail e telefone não vieram no JSON do Asaas, mas foram recuperados do contato no CRM (criado no CompleteRegistration)
+  // e entraram em SHA-256 no Purchase da Meta CAPI:
+  const d1 = await db.get("SELECT payload FROM deliveries WHERE site='ps' AND dest='meta' AND name='Purchase' ORDER BY id DESC LIMIT 1");
+  const p1 = JSON.parse(d1.payload);
+  assert.deepEqual([p1.event_name, p1.action_source, p1.custom_data.value], ['Purchase', 'website', 149]);
+  assert.equal(p1.user_data.em[0], sha('cliente@empresa.com.br'), 'recuperou o e-mail do CRM pelo rid');
+  assert.equal(p1.user_data.ph[0], sha('5511999998888'), 'recuperou o telefone do CRM pelo rid');
+  assert.equal(p1.user_data.fbc, CLICK_FBC);
+
+  // Quando o Asaas manda PAYMENT_RECEIVED da mesma cobrança pay_001 dias depois, não duplica nada:
+  assert.equal((await hook({ ...pay1, id: 'evt_asaas_1b', event: 'PAYMENT_RECEIVED', payment: { ...pay1.payment, status: 'RECEIVED' } },
+    { 'asaas-access-token': 'asaas-segredo-32-chars-programe' })).status, 200);
+
+  // Mês 2 da mesma assinatura (sub_plano_solo_1), com novo payment.id (pay_002) e até sem externalReference:
+  // A Sinqfy detecta que sub_plano_solo_1 já teve cobrança paga anterior, herda o rid e marca como renovação (não envia Purchase para a Meta!).
+  const pay2 = {
+    id: 'evt_asaas_2',
+    event: 'PAYMENT_CONFIRMED',
+    dateCreated: `${today} 15:00:00`,
+    payment: {
+      object: 'payment',
+      id: 'pay_002',
+      customer: 'cus_G7Dvo4iphUNk',
+      subscription: 'sub_plano_solo_1',
+      value: 149,
+      netValue: 144.51,
+      description: 'Plano Solo',
+      externalReference: null,
+      billingType: 'CREDIT_CARD',
+      status: 'CONFIRMED',
+    },
+  };
+  assert.equal((await hook(pay2, { 'asaas-access-token': 'asaas-segredo-32-chars-programe' })).status, 200);
+  const s2 = await db.get("SELECT * FROM sales WHERE site='ps' AND platform='asaas' AND order_id='pay_002'");
+  assert.deepEqual([s2.status, s2.method, s2.gross, s2.rid, s2.campaign_key], ['paid', 'card', 149, rid, '111'], '2ª mensalidade entra no LTV com a campanha original');
+  assert.ok(!(await db.get("SELECT 1 FROM deliveries WHERE site='ps' AND event_id='asaas-pay_002'")), '2ª mensalidade da mesma subscription não dispara Purchase na Meta');
+  const lastLog = await db.get("SELECT message FROM webhook_log WHERE site='ps' AND platform='asaas' AND order_id='pay_002' ORDER BY id DESC LIMIT 1");
+  assert.match(lastLog.message, /Renovação automática/);
+});
+
 

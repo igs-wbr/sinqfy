@@ -8,9 +8,9 @@ import { findContact, saleToCrm, recentPurchase } from '../crm.js';
 import { hashEmail, hashPhone, piiReady, open, metaEmail, metaPhone, sha } from '../pii.js';
 import { trackPending } from '../recovery.js';
 
-export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', hubla: 'Hubla', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets', events: 'Eventos do produto' };
+export const PLATFORMS = { hotmart: 'Hotmart', kiwify: 'Kiwify', eduzz: 'Eduzz', asaas: 'Asaas', shopify: 'Shopify', woocommerce: 'WooCommerce', stripe: 'Stripe', hubla: 'Hubla', pix: 'Pix (checkout próprio)', generic: 'Genérico', custom: 'Personalizado', sheets: 'Google Sheets', events: 'Eventos do produto' };
 /** Plataformas que assinam o webhook: o segredo é configurado em Integrações (sem segredo, vale só o token da URL). */
-export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)', hubla: 'Token do webhook (Integrações, Webhook)', events: 'Eventos do produto (X-Rastro-Signature)' };
+export const SIGNED = { hotmart: 'Hottok (Webhook, Autenticação)', asaas: 'Token de autenticação do Webhook (asaas-access-token)', shopify: 'Segredo do webhook (Notificações)', woocommerce: 'Segredo do webhook', stripe: 'Segredo de assinatura (whsec_...)', hubla: 'Token do webhook (Integrações, Webhook)', events: 'Eventos do produto (X-Rastro-Signature)' };
 export const ORDER_PLATFORMS = Object.fromEntries(Object.entries(PLATFORMS).filter(([k]) => k !== 'events'));
 export const STATUSES = { paid: 'Aprovada', pending: 'Pendente', refused: 'Recusada', refunded: 'Reembolsada', chargeback: 'Chargeback' };
 export const METHODS = { pix: 'Pix', card: 'Cartão', boleto: 'Boleto', other: 'Outros' };
@@ -210,6 +210,52 @@ export const PARSERS = {
       fbclid: ps.cookies?.fbclid, ua: ps.userAgent,
     };
   },
+  // Asaas (webhook de cobranças, eventos PAYMENT_*). O backend grava o rid (ou e-mail) do comprador em externalReference
+  // ao criar a cobrança ou assinatura. Para assinatura (payment.subscription), da 2ª cobrança paga em diante é renovação.
+  asaas(b) {
+    const p = b.payment || {}, ev = String(b.event || '').toUpperCase(), st = String(p.status || '').toUpperCase();
+    const status = {
+      PAYMENT_CONFIRMED: 'paid', PAYMENT_RECEIVED: 'paid', PAYMENT_APPROVED_BY_RISK_ANALYSIS: 'paid', PAYMENT_RECEIVED_IN_CASH: 'paid',
+      PAYMENT_CREATED: 'pending', PAYMENT_UPDATED: 'pending', PAYMENT_OVERDUE: 'pending', PAYMENT_AWAITING_RISK_ANALYSIS: 'pending',
+      PAYMENT_AUTHORIZED: 'pending', PAYMENT_RESTORED: 'pending',
+      PAYMENT_REPROVED_BY_RISK_ANALYSIS: 'refused', PAYMENT_CREDIT_CARD_CAPTURE_REFUSED: 'refused', PAYMENT_DELETED: 'refused',
+      PAYMENT_REFUNDED: 'refunded', PAYMENT_PARTIALLY_REFUNDED: 'refunded', PAYMENT_REFUND_IN_PROGRESS: 'refunded',
+      PAYMENT_CHARGEBACK_REQUESTED: 'chargeback', PAYMENT_CHARGEBACK_DISPUTE: 'chargeback', PAYMENT_AWAITING_CHARGEBACK_REVERSAL: 'chargeback',
+    }[ev] || {
+      CONFIRMED: 'paid', RECEIVED: 'paid', RECEIVED_IN_CASH: 'paid', PENDING: 'pending', OVERDUE: 'pending', AWAITING_RISK_ANALYSIS: 'pending',
+      REFUNDED: 'refunded', REFUND_REQUESTED: 'refunded', REFUND_IN_PROGRESS: 'refunded',
+      CHARGEBACK_REQUESTED: 'chargeback', CHARGEBACK_DISPUTE: 'chargeback', AWAITING_CHARGEBACK_REVERSAL: 'chargeback',
+    }[st];
+    if (!status || !p.id) return null;
+    const gross = num(p.value), net = p.netValue != null ? num(p.netValue) : gross;
+    // externalReference é texto livre (até 100 chars): aceita o rid puro, um e-mail, query string ("rid=...&email=...") ou JSON.
+    const ref = String(p.externalReference || '').trim();
+    const refObj = ref.startsWith('{') ? (() => { try { return JSON.parse(ref) || {}; } catch { return {}; } })() : {};
+    const refQs = /[=&]/.test(ref) ? new URLSearchParams(ref) : null;
+    const tokens = ref.split(/[|;,\s]+/).filter(Boolean);
+    const rid = ridOf(p.rid) || ridOf(refObj.rid) || ridOf(refQs?.get('rid')) || tokens.map(ridOf).find(Boolean) || null;
+    const email = p.email || p.customerEmail || refObj.email || refQs?.get('email') || tokens.find(t => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) || undefined;
+    const phone = p.phone || p.mobilePhone || refObj.phone || refQs?.get('phone') || undefined;
+    const name = p.name || p.customerName || refObj.name || refQs?.get('name') || undefined;
+    const kind = str(p.kind || refObj.kind || refQs?.get('kind') || tokens.find(t => /^(subscription_create|subscription_cycle|credits|renewal)$/i.test(t)), 40).toLowerCase();
+    // Asaas manda "2024-06-12 16:45:03" em dateCreated do evento (horário de Brasília) e "YYYY-MM-DD" na cobrança.
+    const dateOf = v => {
+      if (!v) return null;
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return Date.parse(`${s}T12:00:00-03:00`);
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return Date.parse(`${s.replace(' ', 'T')}-03:00`);
+      return time(s);
+    };
+    const ts = dateOf(b.dateCreated) || dateOf(p.dateCreated);
+    const paid_at = status === 'paid' ? (dateOf(p.confirmedDate) || dateOf(p.clientPaymentDate) || dateOf(p.paymentDate) || ts) : null;
+    return {
+      order_id: str(p.id), status, method: method(p.billingType), gross, net,
+      currency: 'BRL', product: str(p.description), ts, paid_at,
+      utm: utm({ source: refObj.utm_source || refQs?.get('utm_source'), medium: refObj.utm_medium || refQs?.get('utm_medium'),
+        campaign: refObj.utm_campaign || refQs?.get('utm_campaign'), content: refObj.utm_content || refQs?.get('utm_content'), term: refObj.utm_term || refQs?.get('utm_term') }),
+      email, phone, name, rid, kind, subscription_id: str(p.subscription, 64) || null,
+    };
+  },
 };
 
 // ---------- assinatura dos webhooks ----------
@@ -219,6 +265,7 @@ const hmac = (alg, key, data, enc) => createHmac(alg, key).update(data).digest(e
 export function verify(platform, secret, raw, h, now = Date.now()) {
   if (!secret) return null;
   if (platform === 'hotmart') return eq(h['x-hotmart-hottok'], secret) ? null : 'Hottok não confere';
+  if (platform === 'asaas') return eq(h['asaas-access-token'], secret) ? null : 'Token do Asaas não confere';
   if (platform === 'hubla') return eq(h['x-hubla-token'], secret) ? null : 'Token da Hubla não confere';
   if (platform === 'shopify') return eq(h['x-shopify-hmac-sha256'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura da Shopify não confere';
   if (platform === 'woocommerce') return eq(h['x-wc-webhook-signature'], hmac('sha256', secret, raw, 'base64')) ? null : 'Assinatura do WooCommerce não confere';
@@ -296,8 +343,8 @@ const log = (site, platform, s, ok, message) => db.batch([
 // Ordem de status: um evento atrasado (pendente depois de pago, pago depois de reembolso) não desfaz o que já aconteceu.
 const RANK = c => `CASE ${c} WHEN 'chargeback' THEN 4 WHEN 'refunded' THEN 3 WHEN 'paid' THEN 2 ELSE 1 END`;
 const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gross, net, currency, product, ts, date, updated,
-    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key, rid, match_rule, ft_source, ft_medium, ft_campaign, ft_content)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    utm_source, utm_medium, utm_campaign, utm_content, utm_term, campaign_key, adset_key, ad_key, rid, match_rule, ft_source, ft_medium, ft_campaign, ft_content, subscription_id)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(site, platform, order_id) DO UPDATE SET status=CASE WHEN ${RANK('excluded.status')} >= ${RANK('sales.status')} THEN excluded.status ELSE sales.status END, updated=excluded.updated,
     method=CASE WHEN excluded.method<>'other' THEN excluded.method ELSE sales.method END,
     gross=CASE WHEN excluded.gross>0 THEN excluded.gross ELSE sales.gross END, net=CASE WHEN excluded.net>0 THEN excluded.net ELSE sales.net END,
@@ -308,7 +355,8 @@ const UPSERT = `INSERT INTO sales(site, platform, order_id, status, method, gros
     adset_key=COALESCE(NULLIF(sales.adset_key,''), excluded.adset_key), ad_key=COALESCE(NULLIF(sales.ad_key,''), excluded.ad_key),
     rid=COALESCE(sales.rid, excluded.rid), match_rule=CASE WHEN sales.match_rule IN ('rid','email') THEN sales.match_rule ELSE excluded.match_rule END,
     ft_source=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_source ELSE excluded.ft_source END, ft_medium=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_medium ELSE excluded.ft_medium END,
-    ft_content=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_content ELSE excluded.ft_content END, ft_campaign=COALESCE(NULLIF(sales.ft_campaign,''), excluded.ft_campaign)
+    ft_content=CASE WHEN sales.ft_campaign<>'' THEN sales.ft_content ELSE excluded.ft_content END, ft_campaign=COALESCE(NULLIF(sales.ft_campaign,''), excluded.ft_campaign),
+    subscription_id=COALESCE(sales.subscription_id, excluded.subscription_id)
   RETURNING status`;
 
 /** Processa um webhook. Retorna o status HTTP para a plataforma. `now` é injetável para testes. */
@@ -396,12 +444,27 @@ export async function ingestSale(site, platform, s, now = Date.now()) {
   }
   const ts = s.ts ?? now;
   const before = await db.get('SELECT status FROM sales WHERE site=? AND platform=? AND order_id=?', [site.id, platform, s.order_id]);
+  // Assinatura no Asaas (payment.subscription): o webhook não traz billing_reason nem o rid nas cobranças geradas nos meses
+  // seguintes. Se já houve cobrança paga da mesma assinatura com outro order_id, é renovação ('subscription_cycle') e herda
+  // o rid da 1ª cobrança para manter o histórico do cliente sem disparar outro Purchase na Meta.
+  if (s.subscription_id) {
+    const prevSub = await db.get(`SELECT order_id, rid FROM sales WHERE site=? AND platform=? AND subscription_id=? AND order_id<>?
+      AND status IN ('paid','refunded','chargeback') ORDER BY ts ASC LIMIT 1`, [site.id, platform, s.subscription_id, s.order_id]);
+    if (prevSub) s = { ...s, rid: s.rid || prevSub.rid || null, kind: s.kind || 'subscription_cycle' };
+  }
   const m = await matchSale(site, { ...s, ts }), u = m.utm;
+  // Webhook sem e-mail nem telefone (Asaas manda só customer="cus_..."): se casou pelo rid e o contato já existe no CRM
+  // (criado no CompleteRegistration ou num formulário), recupera e-mail, telefone e nome para a Conversions API e para mover o card.
+  const matchedRid = s.rid || m.click?.rid || null;
+  if (!s.email && !s.phone && matchedRid && piiReady()) {
+    const c = await db.get('SELECT email_enc, phone_enc, name_enc FROM contacts WHERE site=? AND rid=? ORDER BY id LIMIT 1', [site.id, matchedRid]);
+    if (c) s = { ...s, email: open(c.email_enc) || s.email, phone: open(c.phone_enc) || s.phone, name: open(c.name_enc) || s.name };
+  }
   // Sem visita paga registrada, o único toque conhecido é o da própria venda: ele abriu e fechou.
   const ft = m.first || (u.campaign ? u : utm({}));
   const { rows: [saved] } = await db.run(UPSERT, [site.id, platform, s.order_id, s.status, s.method, Math.max(0, s.gross), Math.max(0, s.net), s.currency.toUpperCase() || site.currency,
-    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), s.rid || m.click?.rid || null, m.rule,
-    ft.source, ft.medium, ft.campaign, ft.content]);
+    s.product, ts, localDate(ts, site.timezone), now, u.source, u.medium, u.campaign, u.content, u.term, adKey(u.campaign), adKey(u.medium), adKey(u.content), matchedRid, m.rule,
+    ft.source, ft.medium, ft.campaign, ft.content, s.subscription_id || null]);
   const message = `${before ? `Atualizada: ${STATUSES[before.status]} → ${STATUSES[saved.status]}` : 'Nova venda'} · origem: ${MATCH_PT[m.rule]}`;
   await log(site.id, platform, s, true, message);
   await trackPending(site, platform, { ...s, status: saved.status, ts, utm: u, rid: s.rid || m.click?.rid || null }, now); // públicos e recuperação
